@@ -7,6 +7,56 @@ const api = axios.create({
   },
 });
 
+// ─── Native fetch wrapper (more reliable than axios in some environments) ───
+
+class FetchError extends Error {
+  status: number;
+  data: unknown;
+  constructor(status: number, data: unknown) {
+    super(`HTTP ${status}`);
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/**
+ * Native fetch-based API helper. Uses the same transport as the health check,
+ * bypassing any potential XMLHttpRequest issues in cloud/proxy environments.
+ */
+export async function fetchApi<T = unknown>(
+  path: string,
+  options?: { method?: string; body?: unknown; params?: Record<string, string | number | undefined> },
+): Promise<T> {
+  let url = `/api/v1${path}`;
+  if (options?.params) {
+    const qs = Object.entries(options.params)
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join("&");
+    if (qs) url += `?${qs}`;
+  }
+
+  const init: RequestInit = {
+    method: options?.method || "GET",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+  };
+  if (options?.body) {
+    init.body = JSON.stringify(options.body);
+  }
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  if (token) {
+    (init.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(url, init);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new FetchError(res.status, data);
+  }
+  return data as T;
+}
+
 // Request interceptor for auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");

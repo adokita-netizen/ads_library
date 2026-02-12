@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { rankingsApi } from "@/lib/api";
+import { fetchApi } from "@/lib/api";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
 type TrendCategory = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
@@ -92,8 +92,8 @@ export default function TrendView() {
         if (period) params.period = period;
         if (category !== "all") params.genre = category;
 
-        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.rankings || response.data?.results;
+        const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params });
+        const items = data?.items || data?.rankings || data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
             rank: (item.rank as number) || idx + 1,
