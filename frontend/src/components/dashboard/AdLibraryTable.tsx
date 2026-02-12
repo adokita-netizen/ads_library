@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { rankingsApi } from "@/lib/api";
+import { rankingsApi, lpAnalysisApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -470,13 +470,31 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
                 {/* Destination */}
                 <td>
-                  <button
-                    className="text-[#4A7DFF] hover:underline text-[11px] max-w-[100px] truncate block"
-                    onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank"); }}
-                    title={ad.destination}
-                  >
-                    遷移先
-                  </button>
+                  {ad.destination ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="text-[#4A7DFF] hover:underline text-[11px] max-w-[80px] truncate"
+                        onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank"); }}
+                        title={ad.destination}
+                      >
+                        遷移先
+                      </button>
+                      <button
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          lpAnalysisApi.crawl({ url: ad.destination, ad_id: ad.id, auto_analyze: true })
+                            .then(() => { alert("LP分析を開始しました"); })
+                            .catch(() => { alert("LP分析の開始に失敗しました"); });
+                        }}
+                        title="遷移先LPを分析"
+                      >
+                        LP分析
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-gray-300">-</span>
+                  )}
                 </td>
               </tr>
             ))}

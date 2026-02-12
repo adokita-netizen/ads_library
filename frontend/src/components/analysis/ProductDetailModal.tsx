@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { adsApi, predictionsApi } from "@/lib/api";
+import { adsApi, predictionsApi, lpAnalysisApi } from "@/lib/api";
 
 interface ProductDetailModalProps {
   adId: number;
@@ -35,6 +35,25 @@ interface AnalysisData {
   scenes?: Array<Record<string, unknown>>;
 }
 
+interface LPAnalysisData {
+  id: number;
+  url: string;
+  domain: string;
+  title: string;
+  qualityScore: number;
+  conversionScore: number;
+  trustScore: number;
+  primaryAppeal: string;
+  secondaryAppeal: string;
+  ctaCount: number;
+  testimonialCount: number;
+  wordCount: number;
+  hasPricing: boolean;
+  priceText: string;
+  heroHeadline: string;
+  status: string;
+}
+
 const platformLabels: Record<string, string> = {
   youtube: "YT", shorts: "S", tiktok: "TT", facebook: "FB",
   instagram: "IG", line: "L", yahoo: "Y!", x: "X",
@@ -65,6 +84,9 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
   const [product, setProduct] = useState<ProductData | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lpData, setLpData] = useState<LPAnalysisData | null>(null);
+  const [lpAnalyzing, setLpAnalyzing] = useState(false);
+  const [lpSearched, setLpSearched] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -103,6 +125,104 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
     };
     fetchData();
   }, [adId]);
+
+  // Fetch existing LP analysis when LP tab is activated
+  useEffect(() => {
+    if (activeTab !== "lp-analysis" || !product?.destination || lpSearched) return;
+    const fetchLPData = async () => {
+      try {
+        const response = await lpAnalysisApi.list({ url: product.destination });
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          const lp = items[0] as Record<string, unknown>;
+          setLpData({
+            id: (lp.id as number) || 0,
+            url: (lp.url as string) || product.destination,
+            domain: (lp.domain as string) || "",
+            title: (lp.title as string) || "",
+            qualityScore: (lp.quality_score as number) || 0,
+            conversionScore: (lp.conversion_score as number) || 0,
+            trustScore: (lp.trust_score as number) || 0,
+            primaryAppeal: (lp.primary_appeal as string) || "",
+            secondaryAppeal: (lp.secondary_appeal as string) || "",
+            ctaCount: (lp.cta_count as number) || 0,
+            testimonialCount: (lp.testimonial_count as number) || 0,
+            wordCount: (lp.word_count as number) || 0,
+            hasPricing: (lp.has_pricing as boolean) || false,
+            priceText: (lp.price_text as string) || "",
+            heroHeadline: (lp.hero_headline as string) || "",
+            status: (lp.status as string) || "",
+          });
+        }
+      } catch {
+        // No existing analysis found - that's ok
+      } finally {
+        setLpSearched(true);
+      }
+    };
+    fetchLPData();
+  }, [activeTab, product?.destination, lpSearched]);
+
+  const handleStartLPAnalysis = async () => {
+    if (!product?.destination) return;
+    setLpAnalyzing(true);
+    try {
+      await lpAnalysisApi.crawl({
+        url: product.destination,
+        ad_id: product.id,
+        genre: product.genre || undefined,
+        product_name: product.productName || undefined,
+        advertiser_name: product.advertiserName || undefined,
+        auto_analyze: true,
+      });
+      // After triggering, poll for results
+      let attempts = 0;
+      const poll = async () => {
+        attempts++;
+        try {
+          const response = await lpAnalysisApi.list({ url: product.destination });
+          const items = response.data?.items || response.data?.results || response.data;
+          if (Array.isArray(items) && items.length > 0) {
+            const lp = items[0] as Record<string, unknown>;
+            const status = (lp.status as string) || "";
+            if (status === "analyzed" || status === "completed" || (lp.quality_score as number) > 0) {
+              setLpData({
+                id: (lp.id as number) || 0,
+                url: (lp.url as string) || product.destination,
+                domain: (lp.domain as string) || "",
+                title: (lp.title as string) || "",
+                qualityScore: (lp.quality_score as number) || 0,
+                conversionScore: (lp.conversion_score as number) || 0,
+                trustScore: (lp.trust_score as number) || 0,
+                primaryAppeal: (lp.primary_appeal as string) || "",
+                secondaryAppeal: (lp.secondary_appeal as string) || "",
+                ctaCount: (lp.cta_count as number) || 0,
+                testimonialCount: (lp.testimonial_count as number) || 0,
+                wordCount: (lp.word_count as number) || 0,
+                hasPricing: (lp.has_pricing as boolean) || false,
+                priceText: (lp.price_text as string) || "",
+                heroHeadline: (lp.hero_headline as string) || "",
+                status,
+              });
+              setLpAnalyzing(false);
+              return;
+            }
+          }
+        } catch {
+          // Still processing
+        }
+        if (attempts < 15) {
+          setTimeout(poll, 3000);
+        } else {
+          setLpAnalyzing(false);
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch (error) {
+      console.error("Failed to start LP analysis:", error);
+      setLpAnalyzing(false);
+    }
+  };
 
   // Fetch predictions when analysis tab is activated
   useEffect(() => {
@@ -248,21 +368,143 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
           {!loading && product && activeTab === "lp-analysis" && (
             <div className="space-y-4">
               {product.destination ? (
-                <div className="card bg-gradient-to-r from-purple-50 to-blue-50">
-                  <div className="flex items-center gap-2 mb-2">
-                    {product.destinationType && (
-                      <span className="badge text-[9px] bg-purple-100 text-purple-700">{product.destinationType}</span>
-                    )}
-                    <span className="text-[11px] text-gray-500">遷移先LP</span>
+                <>
+                  {/* Destination URL info */}
+                  <div className="card bg-gradient-to-r from-purple-50 to-blue-50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {product.destinationType && (
+                            <span className="badge text-[9px] bg-purple-100 text-purple-700">{product.destinationType}</span>
+                          )}
+                          <span className="text-[11px] text-gray-500">遷移先LP</span>
+                        </div>
+                        <a href={product.destination} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#4A7DFF] hover:underline break-all">
+                          {product.destination}
+                        </a>
+                      </div>
+                      {!lpData && !lpAnalyzing && (
+                        <button
+                          className="btn-primary text-xs whitespace-nowrap ml-4"
+                          onClick={handleStartLPAnalysis}
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                          </svg>
+                          LP分析を実行
+                        </button>
+                      )}
+                      {lpAnalyzing && (
+                        <div className="flex items-center gap-2 ml-4">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+                          <span className="text-[11px] text-gray-500">分析中...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[10px] text-[#4A7DFF] break-all">{product.destination}</p>
-                  <p className="text-[11px] text-gray-500 mt-3">
-                    LP分析はLP分析タブで確認できます。
-                  </p>
-                </div>
+
+                  {/* LP Analysis Results */}
+                  {lpData && (
+                    <>
+                      {/* Title & Domain */}
+                      {lpData.title && (
+                        <div className="card">
+                          <h3 className="text-[13px] font-bold text-gray-900">{lpData.title}</h3>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{lpData.domain}</p>
+                          {lpData.heroHeadline && (
+                            <p className="text-[11px] text-gray-600 mt-2 italic">&ldquo;{lpData.heroHeadline}&rdquo;</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Scores */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">品質スコア</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.qualityScore >= 70 ? "text-emerald-600" : lpData.qualityScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.qualityScore || "-"}
+                          </p>
+                        </div>
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">CV可能性</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.conversionScore >= 70 ? "text-emerald-600" : lpData.conversionScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.conversionScore || "-"}
+                          </p>
+                        </div>
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">信頼性スコア</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.trustScore >= 70 ? "text-emerald-600" : lpData.trustScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.trustScore || "-"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Appeal axes */}
+                      {(lpData.primaryAppeal || lpData.secondaryAppeal) && (
+                        <div className="card">
+                          <h3 className="text-[13px] font-bold text-gray-900 mb-2">訴求軸</h3>
+                          <div className="flex items-center gap-2">
+                            {lpData.primaryAppeal && (
+                              <span className="badge text-[10px] bg-blue-100 text-blue-700">{lpData.primaryAppeal}</span>
+                            )}
+                            {lpData.secondaryAppeal && (
+                              <span className="badge text-[10px] bg-gray-100 text-gray-600">{lpData.secondaryAppeal}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* LP Structure details */}
+                      <div className="card">
+                        <h3 className="text-[13px] font-bold text-gray-900 mb-3">LP構成情報</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">CTA数</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.ctaCount}</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">お客様の声</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.testimonialCount}件</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">文字数</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.wordCount ? lpData.wordCount.toLocaleString() : "-"}文字</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">価格表示</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.hasPricing ? lpData.priceText || "あり" : "なし"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Re-analyze button */}
+                      <div className="flex justify-center">
+                        <button
+                          className="btn-secondary text-xs"
+                          onClick={handleStartLPAnalysis}
+                          disabled={lpAnalyzing}
+                        >
+                          {lpAnalyzing ? "分析中..." : "再分析"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* No analysis yet but searched */}
+                  {!lpData && !lpAnalyzing && lpSearched && (
+                    <div className="text-center py-8 text-gray-400">
+                      <svg className="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                      </svg>
+                      <p className="text-xs">この遷移先LPはまだ分析されていません</p>
+                      <p className="text-[10px] mt-1">上の「LP分析を実行」ボタンから分析を開始できます</p>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12 text-gray-400">
                   <p className="text-xs">遷移先LPの情報がありません</p>
+                  <p className="text-[10px] mt-1">この広告にはLP遷移先URLが設定されていません</p>
                 </div>
               )}
             </div>

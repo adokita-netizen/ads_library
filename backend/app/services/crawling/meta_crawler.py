@@ -168,6 +168,16 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     ad_data["ad_delivery_start_time"].replace("Z", "+00:00")
                 )
 
+            # Extract destination URL from link descriptions or creative data
+            link_descriptions = ad_data.get("ad_creative_link_descriptions", [])
+            link_captions = ad_data.get("ad_creative_link_captions", [])
+            destination_url = ad_data.get("link_url") or ad_data.get("website_url")
+            if not destination_url and link_captions:
+                # Caption often contains the display URL
+                caption = link_captions[0]
+                if caption and ("http" in caption or "." in caption):
+                    destination_url = caption if caption.startswith("http") else f"https://{caption}"
+
             return CrawledAd(
                 external_id=ad_id,
                 platform=platform,
@@ -185,6 +195,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     "demographic_distribution": ad_data.get("demographic_distribution"),
                     "delivery_by_region": ad_data.get("delivery_by_region"),
                     "impressions_lower": impressions_lower,
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
                 },
             )
         except Exception as e:
@@ -199,12 +211,30 @@ class MetaAdLibraryCrawler(BaseCrawler):
             desc_el = card.select_one("p, .xdj266r")
             advertiser_el = card.select_one("[data-testid='page_name'], .x1i10hfl")
 
+            # Extract destination URL from card link
+            link_el = card.select_one("a[href*='l.facebook.com'], a[href*='http'], a.see-ad-link")
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if "l.facebook.com/l.php" in href:
+                    # Facebook redirect URL - extract the actual URL param
+                    import urllib.parse
+                    parsed = urllib.parse.urlparse(href)
+                    params = urllib.parse.parse_qs(parsed.query)
+                    destination_url = params.get("u", [None])[0]
+                elif href.startswith("http") and "facebook.com" not in href:
+                    destination_url = href
+
             return CrawledAd(
                 external_id=ad_id or f"meta_scraped_{hash(str(card)):#010x}",
                 platform="facebook",
                 title=title_el.get_text(strip=True) if title_el else None,
                 description=desc_el.get_text(strip=True) if desc_el else None,
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
+                metadata={
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("meta_scrape_parse_failed", error=str(e))
