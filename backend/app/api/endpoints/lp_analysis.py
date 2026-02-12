@@ -20,6 +20,9 @@ from app.schemas.lp_analysis import (
     GenreInsightResponse,
     LPAnalysisDetailResponse,
     LPBatchCrawlRequest,
+    LPCompareAxisItem,
+    LPCompareRequest,
+    LPCompareResponse,
     LPCompetitorRequest,
     LPCrawlRequest,
     LPDetailResponse,
@@ -27,11 +30,16 @@ from app.schemas.lp_analysis import (
     LPResponse,
     LPSectionResponse,
     LPTaskResponse,
+    OwnLPImportRequest,
+    OwnLPListResponse,
+    OwnLPResponse,
+    OwnLPUpdateRequest,
     USPFlowRequest,
     USPFlowResponse,
     USPPatternResponse,
 )
 from app.services.lp_analysis.competitor_intelligence import CompetitorIntelligence
+from app.services.lp_analysis.lp_comparator import LPComparator
 from app.tasks.lp_tasks import batch_crawl_lps_task, crawl_and_analyze_lp_task
 
 logger = structlog.get_logger()
@@ -341,6 +349,335 @@ async def generate_usp_flow(request: USPFlowRequest):
             competitor_gaps=recommendation.competitor_gaps,
             estimated_effectiveness=recommendation.estimated_effectiveness,
             reasoning=recommendation.reasoning,
+        )
+    finally:
+        session.close()
+
+
+# ==================== Own LP Management ====================
+
+
+@router.post("/own/import", response_model=LPResponse)
+async def import_own_lp(request: OwnLPImportRequest):
+    """Import own LP for analysis and comparison against competitors."""
+    if not request.url and not request.html_content and not request.text_content:
+        raise HTTPException(
+            status_code=400,
+            detail="url, html_content, text_content のいずれかを指定してください",
+        )
+
+    session = SyncSessionLocal()
+    try:
+        import hashlib
+        from datetime import datetime, timezone
+
+        # Build URL hash
+        source = request.url or f"own-lp-{request.label}"
+        url_hash = hashlib.sha256(source.encode()).hexdigest()
+
+        # Check for existing own LP with same hash
+        existing = session.query(LandingPage).filter(
+            LandingPage.url_hash == url_hash,
+            LandingPage.is_own == True,  # noqa: E712
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"同じURLまたはラベルの自社LPが既に登録されています (ID: {existing.id})",
+            )
+
+        lp = LandingPage(
+            url=request.url or f"own://{request.label}",
+            url_hash=url_hash,
+            is_own=True,
+            own_lp_label=request.label,
+            own_lp_version=request.version or 1,
+            genre=request.genre,
+            product_name=request.product_name,
+            advertiser_name=request.advertiser_name,
+            lp_type="article",
+            status="pending",
+        )
+
+        # If text/html content provided directly, store it
+        if request.text_content:
+            lp.full_text_content = request.text_content
+            lp.word_count = len(request.text_content)
+            lp.status = "completed" if not request.auto_analyze else "analyzing"
+        elif request.html_content:
+            lp.full_text_content = request.html_content
+            lp.word_count = len(request.html_content)
+            lp.status = "completed" if not request.auto_analyze else "analyzing"
+
+        session.add(lp)
+        session.commit()
+        session.refresh(lp)
+
+        # If URL provided, queue crawl task
+        if request.url:
+            crawl_and_analyze_lp_task.delay(
+                url=request.url,
+                genre=request.genre,
+                product_name=request.product_name,
+                advertiser_name=request.advertiser_name,
+                auto_analyze=request.auto_analyze,
+                is_own=True,
+                own_lp_id=lp.id,
+            )
+
+        logger.info("own_lp_imported", lp_id=lp.id, label=request.label)
+        return LPResponse.model_validate(lp)
+    finally:
+        session.close()
+
+
+@router.get("/own/list", response_model=OwnLPListResponse)
+async def list_own_lps(
+    genre: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """List all own (self-managed) LPs."""
+    session = SyncSessionLocal()
+    try:
+        query = session.query(LandingPage).filter(
+            LandingPage.is_own == True,  # noqa: E712
+        )
+
+        if genre:
+            query = query.filter(LandingPage.genre == genre)
+        if search:
+            query = query.filter(
+                (LandingPage.own_lp_label.ilike(f"%{search}%"))
+                | (LandingPage.product_name.ilike(f"%{search}%"))
+            )
+
+        lps = query.order_by(LandingPage.created_at.desc()).all()
+
+        own_responses = []
+        for lp in lps:
+            # Count competitors in same genre
+            comp_count = 0
+            avg_quality = None
+            if lp.genre:
+                comp_query = session.query(LandingPage).filter(
+                    LandingPage.genre == lp.genre,
+                    LandingPage.is_own == False,  # noqa: E712
+                    LandingPage.status == "completed",
+                )
+                comp_count = comp_query.count()
+
+                # Get avg quality from analyses
+                comp_analyses = session.query(LPAnalysis).join(LandingPage).filter(
+                    LandingPage.genre == lp.genre,
+                    LandingPage.is_own == False,  # noqa: E712
+                    LandingPage.status == "completed",
+                ).all()
+                if comp_analyses:
+                    scores = [a.overall_quality_score for a in comp_analyses if a.overall_quality_score]
+                    if scores:
+                        avg_quality = round(sum(scores) / len(scores), 1)
+
+            resp = OwnLPResponse.model_validate(lp)
+            resp.competitor_count_in_genre = comp_count
+            resp.avg_competitor_quality = avg_quality
+            own_responses.append(resp)
+
+        return OwnLPListResponse(own_lps=own_responses, total=len(own_responses))
+    finally:
+        session.close()
+
+
+@router.put("/own/{lp_id}", response_model=LPResponse)
+async def update_own_lp(lp_id: int, request: OwnLPUpdateRequest):
+    """Update an own LP (e.g., upload new version)."""
+    session = SyncSessionLocal()
+    try:
+        lp = session.query(LandingPage).filter(
+            LandingPage.id == lp_id,
+            LandingPage.is_own == True,  # noqa: E712
+        ).first()
+        if not lp:
+            raise HTTPException(status_code=404, detail="自社LPが見つかりません")
+
+        if request.label:
+            lp.own_lp_label = request.label
+        if request.version is not None:
+            lp.own_lp_version = request.version
+        elif request.url or request.html_content or request.text_content:
+            lp.own_lp_version = (lp.own_lp_version or 1) + 1
+
+        if request.text_content:
+            lp.full_text_content = request.text_content
+            lp.word_count = len(request.text_content)
+        elif request.html_content:
+            lp.full_text_content = request.html_content
+            lp.word_count = len(request.html_content)
+
+        if request.url:
+            lp.url = request.url
+            import hashlib
+            lp.url_hash = hashlib.sha256(request.url.encode()).hexdigest()
+            crawl_and_analyze_lp_task.delay(
+                url=request.url,
+                genre=lp.genre,
+                product_name=lp.product_name,
+                advertiser_name=lp.advertiser_name,
+                auto_analyze=request.auto_analyze,
+                is_own=True,
+                own_lp_id=lp.id,
+            )
+
+        session.commit()
+        session.refresh(lp)
+        logger.info("own_lp_updated", lp_id=lp.id, version=lp.own_lp_version)
+        return LPResponse.model_validate(lp)
+    finally:
+        session.close()
+
+
+@router.delete("/own/{lp_id}")
+async def delete_own_lp(lp_id: int):
+    """Delete an own LP."""
+    session = SyncSessionLocal()
+    try:
+        lp = session.query(LandingPage).filter(
+            LandingPage.id == lp_id,
+            LandingPage.is_own == True,  # noqa: E712
+        ).first()
+        if not lp:
+            raise HTTPException(status_code=404, detail="自社LPが見つかりません")
+
+        session.delete(lp)
+        session.commit()
+        logger.info("own_lp_deleted", lp_id=lp_id)
+        return {"message": f"自社LP (ID: {lp_id}) を削除しました"}
+    finally:
+        session.close()
+
+
+@router.post("/own/compare", response_model=LPCompareResponse)
+async def compare_own_lp(request: LPCompareRequest):
+    """Compare own LP against competitor LPs in the same genre."""
+    session = SyncSessionLocal()
+    try:
+        # Get own LP
+        own_lp = session.query(LandingPage).filter(
+            LandingPage.id == request.own_lp_id,
+            LandingPage.is_own == True,  # noqa: E712
+        ).first()
+        if not own_lp:
+            raise HTTPException(status_code=404, detail="自社LPが見つかりません")
+
+        genre = request.genre or own_lp.genre
+        if not genre:
+            raise HTTPException(status_code=400, detail="ジャンルが指定されていません")
+
+        # Get own LP analysis
+        own_analysis_obj = session.query(LPAnalysis).filter(
+            LPAnalysis.landing_page_id == own_lp.id
+        ).first()
+        own_usps = session.query(USPPattern).filter(
+            USPPattern.landing_page_id == own_lp.id
+        ).all()
+        own_appeals = session.query(AppealAxisAnalysis).filter(
+            AppealAxisAnalysis.landing_page_id == own_lp.id
+        ).all()
+
+        own_analysis_dict = {
+            "quality_score": own_analysis_obj.overall_quality_score if own_analysis_obj else 0,
+            "conversion_potential": own_analysis_obj.conversion_potential_score if own_analysis_obj else 0,
+            "trust_score": own_analysis_obj.trust_score if own_analysis_obj else 0,
+            "page_flow": own_analysis_obj.page_flow_pattern if own_analysis_obj else "",
+            "usps": [
+                {"category": u.usp_category, "text": u.usp_text}
+                for u in own_usps
+            ],
+            "appeal_axes": [
+                {"axis": a.appeal_axis, "strength": a.strength_score}
+                for a in own_appeals
+            ],
+        }
+
+        # Get competitor LPs
+        if request.competitor_lp_ids:
+            comp_lps = session.query(LandingPage).filter(
+                LandingPage.id.in_(request.competitor_lp_ids),
+                LandingPage.status == "completed",
+            ).all()
+        else:
+            comp_lps = session.query(LandingPage).filter(
+                LandingPage.genre == genre,
+                LandingPage.is_own == False,  # noqa: E712
+                LandingPage.status == "completed",
+            ).limit(30).all()
+
+        # Build competitor analysis dicts
+        competitor_analyses = []
+        for clp in comp_lps:
+            ca = session.query(LPAnalysis).filter(
+                LPAnalysis.landing_page_id == clp.id
+            ).first()
+            if not ca:
+                continue
+            c_usps = session.query(USPPattern).filter(
+                USPPattern.landing_page_id == clp.id
+            ).all()
+            c_appeals = session.query(AppealAxisAnalysis).filter(
+                AppealAxisAnalysis.landing_page_id == clp.id
+            ).all()
+            competitor_analyses.append({
+                "quality_score": ca.overall_quality_score or 0,
+                "conversion_potential": ca.conversion_potential_score or 0,
+                "trust_score": ca.trust_score or 0,
+                "page_flow": ca.page_flow_pattern or "",
+                "usps": [{"category": u.usp_category, "text": u.usp_text} for u in c_usps],
+                "appeal_axes": [{"axis": a.appeal_axis, "strength": a.strength_score} for a in c_appeals],
+            })
+
+        # Run comparison
+        comparator = LPComparator()
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    comparator.generate_comparison_insights(
+                        own_analysis=own_analysis_dict,
+                        competitor_analyses=competitor_analyses,
+                        product_name=own_lp.product_name or "",
+                        genre=genre,
+                    )
+                )
+            finally:
+                loop.close()
+        except Exception:
+            result = comparator.compare_scores(own_analysis_dict, competitor_analyses)
+
+        return LPCompareResponse(
+            own_lp=LPResponse.model_validate(own_lp),
+            competitor_count=len(competitor_analyses),
+            own_quality=result.own_quality,
+            competitor_avg_quality=result.competitor_avg_quality,
+            own_conversion=result.own_conversion,
+            competitor_avg_conversion=result.competitor_avg_conversion,
+            own_trust=result.own_trust,
+            competitor_avg_trust=result.competitor_avg_trust,
+            appeal_comparison=[
+                LPCompareAxisItem(
+                    axis=ac.axis,
+                    own_strength=ac.own_strength,
+                    competitor_avg=ac.competitor_avg,
+                    gap=ac.gap,
+                )
+                for ac in result.appeal_comparison
+            ],
+            own_usps=[USPPatternResponse.model_validate(u) for u in own_usps],
+            missing_usp_categories=result.missing_usp_categories,
+            own_flow=result.own_flow,
+            common_competitor_flows=result.common_competitor_flows,
+            strengths_vs_competitors=result.strengths_vs_competitors,
+            improvement_opportunities=result.improvement_opportunities,
+            quick_wins=result.quick_wins,
         )
     finally:
         session.close()

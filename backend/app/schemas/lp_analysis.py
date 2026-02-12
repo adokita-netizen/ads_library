@@ -25,6 +25,38 @@ class LPBatchCrawlRequest(BaseModel):
     auto_analyze: bool = True
 
 
+class OwnLPImportRequest(BaseModel):
+    """Import own article LP for analysis and comparison."""
+    label: str = Field(..., description="LP管理ラベル (例: セラムV3_記事LP_A案)")
+    genre: str
+    product_name: str
+    # One of these is required:
+    url: Optional[str] = Field(None, description="LP URL (自動クロールして分析)")
+    html_content: Optional[str] = Field(None, description="HTML本文を直接投入")
+    text_content: Optional[str] = Field(None, description="テキスト本文を直接投入")
+    # Optional metadata
+    advertiser_name: Optional[str] = None
+    version: Optional[int] = None
+    auto_analyze: bool = True
+
+
+class OwnLPUpdateRequest(BaseModel):
+    """Update own LP content (new version)."""
+    label: Optional[str] = None
+    url: Optional[str] = None
+    html_content: Optional[str] = None
+    text_content: Optional[str] = None
+    version: Optional[int] = None
+    auto_analyze: bool = True
+
+
+class LPCompareRequest(BaseModel):
+    """Compare own LP against competitor LPs."""
+    own_lp_id: int
+    competitor_lp_ids: Optional[list[int]] = Field(None, description="指定なしの場合、同ジャンル競合を自動選択")
+    genre: Optional[str] = None
+
+
 class LPCompetitorRequest(BaseModel):
     """Request for competitor LP intelligence."""
     genre: str
@@ -119,6 +151,11 @@ class LPResponse(BaseModel):
     product_name: Optional[str] = None
     status: str
 
+    # Ownership
+    is_own: bool = False
+    own_lp_label: Optional[str] = None
+    own_lp_version: Optional[int] = None
+
     # Content metrics
     word_count: Optional[int] = None
     image_count: Optional[int] = None
@@ -183,6 +220,50 @@ class USPFlowResponse(BaseModel):
     competitor_gaps: list[str] = []
     estimated_effectiveness: float = 0.0
     reasoning: str = ""
+
+
+class LPCompareAxisItem(BaseModel):
+    axis: str
+    own_strength: float
+    competitor_avg: float
+    gap: float  # positive = own is stronger
+
+
+class LPCompareResponse(BaseModel):
+    """Comparison result: own LP vs competitors."""
+    own_lp: LPResponse
+    competitor_count: int
+    # Score comparison
+    own_quality: float
+    competitor_avg_quality: float
+    own_conversion: float
+    competitor_avg_conversion: float
+    own_trust: float
+    competitor_avg_trust: float
+    # Appeal axis comparison
+    appeal_comparison: list[LPCompareAxisItem] = []
+    # USP gaps
+    own_usps: list[USPPatternResponse] = []
+    missing_usp_categories: list[str] = []
+    # Structure comparison
+    own_flow: str = ""
+    common_competitor_flows: list[str] = []
+    # AI recommendations
+    strengths_vs_competitors: list[str] = []
+    improvement_opportunities: list[str] = []
+    quick_wins: list[str] = []
+
+
+class OwnLPResponse(LPResponse):
+    """Extended response for own LP with comparison hints."""
+    competitor_count_in_genre: int = 0
+    avg_competitor_quality: Optional[float] = None
+    quality_rank_in_genre: Optional[str] = None  # e.g., "上位20%"
+
+
+class OwnLPListResponse(BaseModel):
+    own_lps: list[OwnLPResponse]
+    total: int
 
 
 class LPTaskResponse(BaseModel):

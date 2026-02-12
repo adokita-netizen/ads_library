@@ -223,3 +223,39 @@ export interface USPFlowRecommendation {
   estimated_effectiveness: number;
   reasoning: string;
 }
+
+// Own LP types
+export interface OwnLP extends LandingPageSummary {
+  is_own: boolean;
+  own_lp_label?: string;
+  own_lp_version?: number;
+  competitor_count_in_genre: number;
+  avg_competitor_quality?: number;
+  quality_rank_in_genre?: string;
+}
+
+export interface LPCompareAxisItem {
+  axis: string;
+  own_strength: number;
+  competitor_avg: number;
+  gap: number;
+}
+
+export interface LPCompareResult {
+  own_lp: LandingPageSummary;
+  competitor_count: number;
+  own_quality: number;
+  competitor_avg_quality: number;
+  own_conversion: number;
+  competitor_avg_conversion: number;
+  own_trust: number;
+  competitor_avg_trust: number;
+  appeal_comparison: LPCompareAxisItem[];
+  own_usps: USPPattern[];
+  missing_usp_categories: string[];
+  own_flow: string;
+  common_competitor_flows: string[];
+  strengths_vs_competitors: string[];
+  improvement_opportunities: string[];
+  quick_wins: string[];
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type LPTab = "list" | "competitor" | "usp-flow";
+type LPTab = "list" | "competitor" | "usp-flow" | "own-lp";
 
 // ===== Mock Data =====
 
@@ -153,6 +153,76 @@ const mockCommonUSPs = [
   { category: "uniqueness", count: 5, prominence: 60, keywords: ["日本初", "独自技術", "特許", "業界初"] },
 ];
 
+// Mock own LPs
+interface MockOwnLP {
+  id: number;
+  label: string;
+  version: number;
+  genre: string;
+  product: string;
+  qualityScore: number;
+  conversionScore: number;
+  trustScore: number;
+  competitorCount: number;
+  avgCompetitorQuality: number;
+  status: string;
+  createdAt: string;
+}
+
+const mockOwnLPs: MockOwnLP[] = [
+  {
+    id: 101, label: "セラムV3_記事LP_A案", version: 3, genre: "美容・コスメ", product: "スキンケアセラムV3",
+    qualityScore: 82, conversionScore: 78, trustScore: 85, competitorCount: 12, avgCompetitorQuality: 76,
+    status: "completed", createdAt: "2025-12-15",
+  },
+  {
+    id: 102, label: "セラムV3_記事LP_B案", version: 1, genre: "美容・コスメ", product: "スキンケアセラムV3",
+    qualityScore: 75, conversionScore: 80, trustScore: 72, competitorCount: 12, avgCompetitorQuality: 76,
+    status: "completed", createdAt: "2025-12-18",
+  },
+  {
+    id: 103, label: "ダイエットX_LP_v2", version: 2, genre: "健康食品", product: "ダイエットサプリメントX",
+    qualityScore: 70, conversionScore: 68, trustScore: 65, competitorCount: 8, avgCompetitorQuality: 72,
+    status: "completed", createdAt: "2025-12-20",
+  },
+];
+
+// Mock comparison result
+const mockCompareResult = {
+  competitorCount: 12,
+  scores: [
+    { label: "品質スコア", own: 82, comp: 76, color: "#4A7DFF" },
+    { label: "CV力", own: 78, comp: 74, color: "#10b981" },
+    { label: "信頼性", own: 85, comp: 71, color: "#f59e0b" },
+  ],
+  appealComparison: [
+    { axis: "authority", own: 85, comp: 71, gap: 14 },
+    { axis: "social_proof", own: 72, comp: 75, gap: -3 },
+    { axis: "benefit", own: 68, comp: 82, gap: -14 },
+    { axis: "urgency", own: 55, comp: 65, gap: -10 },
+    { axis: "price", own: 60, comp: 58, gap: 2 },
+    { axis: "emotional", own: 45, comp: 40, gap: 5 },
+  ],
+  missingUSPs: ["速度・即効性", "利便性"],
+  strengths: [
+    "権威性（医師監修）の訴求が競合平均を大きく上回る",
+    "信頼性スコアがジャンル内トップクラス",
+    "価格訴求のバランスが良い",
+  ],
+  improvements: [
+    "ベネフィット訴求を強化する余地がある（競合平均-14pt）",
+    "緊急性の演出が競合より弱い",
+    "社会的証明（口コミ・実績数）をもっと前面に出す",
+  ],
+  quickWins: [
+    "競合が使用している「即効性」のUSPを追加",
+    "口コミ件数を具体的な数字で表示（例: 12,345件の口コミ）",
+    "期間限定オファーのカウントダウンを追加",
+  ],
+};
+
+type ImportMethod = "url" | "html" | "text";
+
 const uspCategoryLabels: Record<string, string> = {
   efficacy: "効果・実感",
   authority: "権威性",
@@ -195,6 +265,15 @@ export default function LPAnalysisView() {
   const [crawlUrl, setCrawlUrl] = useState("");
   const [selectedLP, setSelectedLP] = useState<MockLP | null>(null);
 
+  // Own LP state
+  const [selectedOwnLP, setSelectedOwnLP] = useState<MockOwnLP | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
+  const [importMethod, setImportMethod] = useState<ImportMethod>("url");
+  const [importLabel, setImportLabel] = useState("");
+  const [importGenre, setImportGenre] = useState("美容・コスメ");
+  const [importProduct, setImportProduct] = useState("");
+  const [importContent, setImportContent] = useState("");
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -229,6 +308,7 @@ export default function LPAnalysisView() {
       <div className="flex gap-0 px-5 border-b border-gray-200 bg-[#f8f9fc]">
         {([
           { id: "list" as LPTab, label: "LP一覧・分析" },
+          { id: "own-lp" as LPTab, label: "自社LP管理" },
           { id: "competitor" as LPTab, label: "競合訴求パターン" },
           { id: "usp-flow" as LPTab, label: "USP→記事LP設計" },
         ]).map((tab) => (
@@ -544,6 +624,329 @@ export default function LPAnalysisView() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "own-lp" && (
+          <div className="flex h-full">
+            {/* Left: Import + Own LP List */}
+            <div className={`${showCompare ? "w-1/2 border-r border-gray-200" : "w-full"} overflow-y-auto custom-scrollbar`}>
+              <div className="p-4 space-y-4">
+                {/* Import Form */}
+                <div className="card">
+                  <h3 className="text-[13px] font-bold text-gray-900 mb-3">自社LP取り込み</h3>
+                  <p className="text-[11px] text-gray-500 mb-3">
+                    自社の記事LPをURL、HTML、またはテキストで取り込み、競合LPと比較分析できます。
+                  </p>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div>
+                      <label className="text-[10px] text-gray-500 font-medium">管理ラベル</label>
+                      <input
+                        className="input text-xs mt-1 w-full"
+                        placeholder="例: セラムV3_記事LP_A案"
+                        value={importLabel}
+                        onChange={(e) => setImportLabel(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 font-medium">ジャンル</label>
+                      <select
+                        className="select-filter w-full mt-1 text-xs"
+                        value={importGenre}
+                        onChange={(e) => setImportGenre(e.target.value)}
+                      >
+                        <option>美容・コスメ</option>
+                        <option>健康食品</option>
+                        <option>ヘアケア</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 font-medium">商品名</label>
+                      <input
+                        className="input text-xs mt-1 w-full"
+                        placeholder="例: スキンケアセラムV3"
+                        value={importProduct}
+                        onChange={(e) => setImportProduct(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Input method tabs */}
+                  <div className="flex gap-1 mb-2">
+                    {([
+                      { id: "url" as ImportMethod, label: "URL" },
+                      { id: "html" as ImportMethod, label: "HTML" },
+                      { id: "text" as ImportMethod, label: "テキスト" },
+                    ]).map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setImportMethod(m.id); setImportContent(""); }}
+                        className={`px-3 py-1 rounded text-[11px] font-medium transition-colors ${
+                          importMethod === m.id
+                            ? "bg-[#4A7DFF] text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {importMethod === "url" ? (
+                    <input
+                      className="input text-xs w-full"
+                      placeholder="https://your-lp.example.com/article-lp"
+                      value={importContent}
+                      onChange={(e) => setImportContent(e.target.value)}
+                    />
+                  ) : (
+                    <textarea
+                      className="input text-xs w-full h-24 resize-y"
+                      placeholder={importMethod === "html" ? "<html>...</html>" : "記事LPのテキスト本文を貼り付け..."}
+                      value={importContent}
+                      onChange={(e) => setImportContent(e.target.value)}
+                    />
+                  )}
+
+                  <button
+                    className="btn-primary text-xs mt-3"
+                    onClick={() => { setImportLabel(""); setImportProduct(""); setImportContent(""); }}
+                  >
+                    <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    取り込み開始
+                  </button>
+                </div>
+
+                {/* Own LP List */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[13px] font-bold text-gray-900">自社LP一覧</h3>
+                    <span className="text-[11px] text-gray-400">{mockOwnLPs.length}件</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {mockOwnLPs.map((lp) => {
+                      const qualityDiff = lp.qualityScore - lp.avgCompetitorQuality;
+                      return (
+                        <div
+                          key={lp.id}
+                          onClick={() => { setSelectedOwnLP(lp); setShowCompare(true); }}
+                          className={`card cursor-pointer transition-shadow hover:shadow-md ${
+                            selectedOwnLP?.id === lp.id ? "ring-2 ring-[#4A7DFF]" : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Score */}
+                            <div className="flex gap-2 shrink-0">
+                              <ScoreCircle score={lp.qualityScore} label="品質" />
+                              <ScoreCircle score={lp.conversionScore} label="CV力" color="#10b981" />
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="badge text-[9px] bg-indigo-100 text-indigo-700">自社LP</span>
+                                <span className="badge-blue text-[9px]">{lp.genre}</span>
+                                <span className="text-[9px] text-gray-400">v{lp.version}</span>
+                              </div>
+                              <p className="text-[12px] font-medium text-gray-900 truncate">{lp.label}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">{lp.product}</p>
+
+                              {/* Competitor comparison hint */}
+                              <div className="flex items-center gap-3 mt-2">
+                                <span className="text-[10px] text-gray-500">
+                                  競合 {lp.competitorCount}件
+                                </span>
+                                <span className={`text-[10px] font-medium ${qualityDiff >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                  {qualityDiff >= 0 ? "▲" : "▼"} 競合平均比 {qualityDiff >= 0 ? "+" : ""}{qualityDiff}pt
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Comparison Panel */}
+            {showCompare && selectedOwnLP && (
+              <div className="w-1/2 overflow-y-auto custom-scrollbar p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[13px] font-bold text-gray-900">
+                    競合比較: {selectedOwnLP.label}
+                  </h3>
+                  <button onClick={() => setShowCompare(false)} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Score Comparison Bars */}
+                <div className="card">
+                  <h4 className="text-[12px] font-bold text-gray-900 mb-3">スコア比較（自社 vs 競合平均）</h4>
+                  <div className="space-y-3">
+                    {mockCompareResult.scores.map((s) => (
+                      <div key={s.label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] text-gray-700 font-medium">{s.label}</span>
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="font-bold" style={{ color: s.color }}>自社 {s.own}</span>
+                            <span className="text-gray-400">vs</span>
+                            <span className="text-gray-600">競合平均 {s.comp}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 h-3">
+                          <div
+                            className="rounded-l-full h-full transition-all"
+                            style={{ width: `${s.own}%`, backgroundColor: s.color }}
+                          />
+                          <div
+                            className="rounded-r-full h-full bg-gray-300 transition-all"
+                            style={{ width: `${s.comp}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-4 mt-3 text-[9px] text-gray-400">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-[#4A7DFF]" /> 自社</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-gray-300" /> 競合平均</span>
+                  </div>
+                </div>
+
+                {/* Appeal Axis Gap Chart */}
+                <div className="card">
+                  <h4 className="text-[12px] font-bold text-gray-900 mb-3">訴求軸ギャップ分析</h4>
+                  <p className="text-[10px] text-gray-500 mb-3">
+                    プラス = 競合より強い、マイナス = 競合より弱い（改善機会）
+                  </p>
+                  <div className="space-y-2">
+                    {mockCompareResult.appealComparison.map((item) => {
+                      const maxGap = 20;
+                      const barWidth = Math.min(Math.abs(item.gap) / maxGap * 50, 50);
+                      return (
+                        <div key={item.axis} className="flex items-center gap-2">
+                          <span className={`w-24 text-right text-[10px] font-medium ${appealAxisColors[item.axis] ? "text-gray-700" : "text-gray-500"}`}>
+                            {appealAxisLabels[item.axis] || item.axis}
+                          </span>
+                          <div className="flex-1 flex items-center h-5">
+                            {/* Center axis */}
+                            <div className="w-1/2 flex justify-end">
+                              {item.gap < 0 && (
+                                <div
+                                  className="h-4 rounded-l bg-red-400 transition-all"
+                                  style={{ width: `${barWidth}%` }}
+                                />
+                              )}
+                            </div>
+                            <div className="w-px h-5 bg-gray-300 shrink-0" />
+                            <div className="w-1/2">
+                              {item.gap > 0 && (
+                                <div
+                                  className="h-4 rounded-r bg-emerald-400 transition-all"
+                                  style={{ width: `${barWidth}%` }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <span className={`w-10 text-[10px] font-bold ${
+                            item.gap > 0 ? "text-emerald-600" : item.gap < 0 ? "text-red-500" : "text-gray-400"
+                          }`}>
+                            {item.gap > 0 ? "+" : ""}{item.gap}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Missing USP Categories */}
+                {mockCompareResult.missingUSPs.length > 0 && (
+                  <div className="card bg-amber-50 border-amber-200">
+                    <h4 className="text-[12px] font-bold text-amber-800 mb-2">不足しているUSPカテゴリ</h4>
+                    <p className="text-[10px] text-amber-700 mb-2">競合が使用しているが自社LPに含まれていないUSP</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mockCompareResult.missingUSPs.map((usp) => (
+                        <span key={usp} className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-medium text-amber-800">
+                          {usp}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Recommendations */}
+                <div className="card">
+                  <h4 className="text-[12px] font-bold text-gray-900 mb-3">AI改善提案</h4>
+
+                  {/* Strengths */}
+                  <div className="mb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-4 h-4 rounded bg-emerald-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      </span>
+                      <span className="text-[11px] font-bold text-emerald-700">競合に対する強み</span>
+                    </div>
+                    <div className="space-y-1">
+                      {mockCompareResult.strengths.map((s, i) => (
+                        <div key={i} className="flex items-start gap-1.5 pl-5">
+                          <span className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="text-[11px] text-gray-700">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Improvement Opportunities */}
+                  <div className="mb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-4 h-4 rounded bg-blue-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22" />
+                        </svg>
+                      </span>
+                      <span className="text-[11px] font-bold text-blue-700">改善機会</span>
+                    </div>
+                    <div className="space-y-1">
+                      {mockCompareResult.improvements.map((s, i) => (
+                        <div key={i} className="flex items-start gap-1.5 pl-5">
+                          <span className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full bg-blue-400" />
+                          <span className="text-[11px] text-gray-700">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick Wins */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-4 h-4 rounded bg-amber-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                        </svg>
+                      </span>
+                      <span className="text-[11px] font-bold text-amber-700">すぐに実施できる改善</span>
+                    </div>
+                    <div className="space-y-1">
+                      {mockCompareResult.quickWins.map((s, i) => (
+                        <div key={i} className="flex items-start gap-1.5 pl-5">
+                          <span className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <span className="text-[11px] text-gray-700">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

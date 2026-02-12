@@ -114,6 +114,17 @@ export const lpAnalysisApi = {
     api.post("/lp-analysis/competitor-insight", data),
   uspFlow: (data: { product_name: string; product_description: string; target_audience: string; genre: string; competitor_lp_ids?: number[] }) =>
     api.post("/lp-analysis/usp-flow", data),
+  // Own LP management
+  importOwn: (data: { label: string; genre: string; product_name: string; url?: string; html_content?: string; text_content?: string; advertiser_name?: string; version?: number; auto_analyze?: boolean }) =>
+    api.post("/lp-analysis/own/import", data),
+  listOwn: (params?: { genre?: string; search?: string }) =>
+    api.get("/lp-analysis/own/list", { params }),
+  updateOwn: (id: number, data: { label?: string; url?: string; html_content?: string; text_content?: string; version?: number; auto_analyze?: boolean }) =>
+    api.put(`/lp-analysis/own/${id}`, data),
+  deleteOwn: (id: number) =>
+    api.delete(`/lp-analysis/own/${id}`),
+  compareOwn: (data: { own_lp_id: number; competitor_lp_ids?: number[]; genre?: string }) =>
+    api.post("/lp-analysis/own/compare", data),
 };
 
 export default api;

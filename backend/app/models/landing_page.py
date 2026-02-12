@@ -112,6 +112,11 @@ class LandingPage(Base):
     price_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
     discount_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Ownership: is_own=True means this is our own LP (not competitor)
+    is_own: Mapped[bool] = mapped_column(default=False, nullable=False)
+    own_lp_label: Mapped[str | None] = mapped_column(String(255), nullable=True)  # e.g., "セラムV3_記事LP_A案"
+    own_lp_version: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Version tracking
+
     # Status
     status: Mapped[LPStatusEnum] = mapped_column(
         Enum(LPStatusEnum), default=LPStatusEnum.PENDING, nullable=False
