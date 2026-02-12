@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { rankingsApi, lpAnalysisApi } from "@/lib/api";
+import { rankingsApi, lpAnalysisApi, adsApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -156,15 +156,18 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
   const [ads, setAds] = useState<MockAd[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCrawlModal, setShowCrawlModal] = useState(false);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const params: Record<string, string | number | undefined> = {};
         if (filters.media !== "all") params.platform = filters.media;
         if (filters.genre !== "all") params.genre = filters.genre;
-        if (filters.interval === "7days") params.period = "weekly";
-        else if (filters.interval === "14days") params.period = "biweekly";
+        // Backend accepts: daily, weekly, monthly only
+        if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
         else if (filters.interval === "30days") params.period = "monthly";
         else params.period = "daily";
 
@@ -192,15 +195,18 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             destination: (item.destination_url as string) || "",
           }));
           setAds(mapped);
+        } else {
+          setAds([]);
         }
       } catch (error) {
         console.error("Failed to fetch ad data:", error);
+        setAds([]);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [filters.media, filters.genre, filters.interval]);
+  }, [filters.media, filters.genre, filters.interval, fetchTrigger]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
@@ -329,6 +335,14 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
         <div className="flex-1" />
 
+        {/* Crawl button */}
+        <button
+          className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors whitespace-nowrap"
+          onClick={() => setShowCrawlModal(true)}
+        >
+          広告クロール
+        </button>
+
         {/* Search */}
         <div className="relative">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -363,7 +377,13 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
             </svg>
             <p className="text-xs">データがありません</p>
-            <p className="text-[10px] mt-1">広告をクロールするか、フィルター条件を変更してください</p>
+            <p className="text-[10px] mt-1 mb-3">広告をクロールするか、フィルター条件を変更してください</p>
+            <button
+              className="px-4 py-2 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors"
+              onClick={() => setShowCrawlModal(true)}
+            >
+              広告クロールを開始
+            </button>
           </div>
         )}
         <table className="data-table">
@@ -579,6 +599,187 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             onClick={() => setCurrentPage(currentPage + 1)}
           >
             次へ →
+          </button>
+        </div>
+      </div>
+      {/* Crawl Modal */}
+      {showCrawlModal && (
+        <CrawlModal
+          onClose={() => setShowCrawlModal(false)}
+          onSuccess={() => {
+            setShowCrawlModal(false);
+            setFetchTrigger((n) => n + 1);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const ALL_CRAWL_PLATFORMS = [
+  { value: "youtube", label: "YouTube" },
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "x_twitter", label: "X (Twitter)" },
+  { value: "line", label: "LINE" },
+  { value: "yahoo", label: "Yahoo!" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "smartnews", label: "SmartNews" },
+  { value: "google_ads", label: "Google Ads" },
+  { value: "gunosy", label: "Gunosy" },
+];
+
+function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [query, setQuery] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
+    ALL_CRAWL_PLATFORMS.map((p) => p.value)
+  );
+  const [category, setCategory] = useState("");
+  const [limit, setLimit] = useState(20);
+  const [crawling, setCrawling] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const togglePlatform = (value: string) => {
+    setSelectedPlatforms((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const toggleAll = () => {
+    if (selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length) {
+      setSelectedPlatforms([]);
+    } else {
+      setSelectedPlatforms(ALL_CRAWL_PLATFORMS.map((p) => p.value));
+    }
+  };
+
+  const handleCrawl = async () => {
+    if (!query.trim()) return;
+    if (selectedPlatforms.length === 0) {
+      setMessage("媒体を1つ以上選択してください");
+      return;
+    }
+    setCrawling(true);
+    setMessage("");
+    try {
+      const res = await adsApi.crawl({
+        query: query.trim(),
+        platforms: selectedPlatforms,
+        category: category || undefined,
+        limit_per_platform: limit,
+        auto_analyze: true,
+      });
+      const data = res.data;
+      if (data?.status === "error") {
+        setMessage(data.message || "クロール中にエラーが発生しました");
+        setCrawling(false);
+      } else {
+        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
+        setTimeout(() => onSuccess(), 2000);
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setMessage(detail || "クロールの開始に失敗しました。バックエンドの接続を確認してください。");
+      setCrawling(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-gray-900">広告クロール</h3>
+        <p className="text-[11px] text-gray-400 mt-0.5">各媒体の広告ライブラリから広告データを収集します</p>
+
+        <div className="mt-4 space-y-4">
+          {/* Query */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              検索キーワード <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="商材名、競合名、カテゴリなど"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              autoFocus
+            />
+          </div>
+
+          {/* Platforms */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-gray-700">対象媒体</label>
+              <button className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll}>
+                {selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length ? "全解除" : "全選択"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_CRAWL_PLATFORMS.map((p) => (
+                <button
+                  key={p.value}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${
+                    selectedPlatforms.includes(p.value)
+                      ? "bg-[#4A7DFF] text-white border-[#4A7DFF]"
+                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => togglePlatform(p.value)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">{selectedPlatforms.length}媒体を選択中</p>
+          </div>
+
+          {/* Category & Limit row */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">ジャンル（任意）</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              >
+                <option value="">指定なし</option>
+                {genreFilterOptions.filter((g) => g.value !== "all").map((g) => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-28">
+              <label className="block text-xs font-medium text-gray-700 mb-1">取得件数/媒体</label>
+              <input
+                type="number"
+                value={limit}
+                onChange={(e) => setLimit(Math.max(1, Math.min(100, Number(e.target.value))))}
+                min={1}
+                max={100}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Message */}
+        {message && (
+          <p className={`mt-3 text-xs ${message.includes("失敗") ? "text-red-500" : "text-green-600"}`}>
+            {message}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            キャンセル
+          </button>
+          <button
+            onClick={handleCrawl}
+            disabled={crawling || !query.trim()}
+            className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {crawling ? "クロール中..." : "クロール開始"}
           </button>
         </div>
       </div>

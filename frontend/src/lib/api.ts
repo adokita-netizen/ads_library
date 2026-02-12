@@ -16,13 +16,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for token refresh
+// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("access_token");
-      window.location.href = "/login";
+      // Don't redirect — no login page in current app
+      console.warn("401 Unauthorized: auth token missing or expired");
     }
     return Promise.reject(error);
   }
