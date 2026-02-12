@@ -9,7 +9,8 @@ interface AdLibraryTableProps {
 
 // Filter bar types
 type AdType = "all" | "video" | "banner" | "carousel" | "search";
-type MediaType = "all" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x";
+type MediaType = "all" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x_twitter" | "pinterest" | "smartnews" | "google_ads" | "gunosy";
+type GenreType = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
 type FormatType = "all" | "video" | "banner" | "carousel";
 type VersionType = "latest" | "all_versions";
 type IntervalType = "2days" | "7days" | "14days" | "30days";
@@ -18,6 +19,7 @@ type SortField = "rank" | "play_increase" | "spend_increase" | "total_plays" | "
 interface FilterState {
   adType: AdType;
   media: MediaType;
+  genre: GenreType;
   format: FormatType;
   version: VersionType;
   interval: IntervalType;
@@ -54,7 +56,12 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   line: "L",
   yahoo: "Y!",
+  x_twitter: "X",
   x: "X",
+  pinterest: "Pin",
+  smartnews: "SN",
+  google_ads: "G",
+  gunosy: "Gn",
 };
 
 const platformColors: Record<string, string> = {
@@ -65,11 +72,16 @@ const platformColors: Record<string, string> = {
   instagram: "platform-instagram",
   line: "platform-line",
   yahoo: "platform-yahoo",
+  x_twitter: "platform-x",
   x: "platform-x",
+  pinterest: "bg-red-600",
+  smartnews: "bg-sky-600",
+  google_ads: "bg-blue-500",
+  gunosy: "bg-orange-500",
 };
 
 const mediaFilterOptions: { value: MediaType; label: string }[] = [
-  { value: "all", label: "媒体を選択" },
+  { value: "all", label: "全媒体" },
   { value: "youtube", label: "YouTube" },
   { value: "shorts", label: "YouTube Shorts" },
   { value: "facebook", label: "Facebook" },
@@ -77,7 +89,27 @@ const mediaFilterOptions: { value: MediaType; label: string }[] = [
   { value: "tiktok", label: "TikTok" },
   { value: "line", label: "LINE" },
   { value: "yahoo", label: "Yahoo!" },
-  { value: "x", label: "X (Twitter)" },
+  { value: "x_twitter", label: "X (Twitter)" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "smartnews", label: "SmartNews" },
+  { value: "google_ads", label: "Google Ads" },
+  { value: "gunosy", label: "Gunosy" },
+];
+
+const genreFilterOptions: { value: GenreType; label: string }[] = [
+  { value: "all", label: "全ジャンル" },
+  { value: "ec_d2c", label: "EC・D2C" },
+  { value: "app", label: "アプリ" },
+  { value: "finance", label: "金融" },
+  { value: "education", label: "教育" },
+  { value: "beauty", label: "美容・コスメ" },
+  { value: "food", label: "食品" },
+  { value: "gaming", label: "ゲーム" },
+  { value: "health", label: "健康食品" },
+  { value: "technology", label: "テクノロジー" },
+  { value: "real_estate", label: "不動産" },
+  { value: "travel", label: "旅行" },
+  { value: "other", label: "その他" },
 ];
 
 const adTypeOptions: { value: AdType; label: string }[] = [
@@ -111,6 +143,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [filters, setFilters] = useState<FilterState>({
     adType: "all",
     media: "all",
+    genre: "all",
     format: "all",
     version: "latest",
     interval: "2days",
@@ -129,13 +162,14 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       try {
         const params: Record<string, string | number | undefined> = {};
         if (filters.media !== "all") params.platform = filters.media;
+        if (filters.genre !== "all") params.genre = filters.genre;
         if (filters.interval === "7days") params.period = "weekly";
         else if (filters.interval === "14days") params.period = "biweekly";
         else if (filters.interval === "30days") params.period = "monthly";
         else params.period = "daily";
 
         const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.results || response.data;
+        const items = response.data?.items || response.data?.rankings || response.data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
             id: (item.ad_id as number) || idx + 1,
@@ -166,7 +200,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       }
     };
     fetchData();
-  }, [filters.media, filters.interval]);
+  }, [filters.media, filters.genre, filters.interval]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
@@ -245,6 +279,17 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           onChange={(e) => setFilters({ ...filters, media: e.target.value as MediaType })}
         >
           {mediaFilterOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+
+        {/* Genre filter */}
+        <select
+          className="select-filter"
+          value={filters.genre}
+          onChange={(e) => setFilters({ ...filters, genre: e.target.value as GenreType })}
+        >
+          {genreFilterOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>

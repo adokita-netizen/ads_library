@@ -73,11 +73,18 @@ interface OwnLP {
 type ImportMethod = "url" | "html" | "text";
 
 const GENRE_OPTIONS = [
-  { value: "美容・コスメ", label: "美容・コスメ" },
-  { value: "健康食品", label: "健康食品" },
-  { value: "ヘアケア", label: "ヘアケア" },
-  { value: "ダイエット", label: "ダイエット" },
-  { value: "サプリメント", label: "サプリメント" },
+  { value: "ec_d2c", label: "EC・D2C" },
+  { value: "app", label: "アプリ" },
+  { value: "finance", label: "金融" },
+  { value: "education", label: "教育" },
+  { value: "beauty", label: "美容・コスメ" },
+  { value: "food", label: "食品" },
+  { value: "gaming", label: "ゲーム" },
+  { value: "health", label: "健康食品" },
+  { value: "technology", label: "テクノロジー" },
+  { value: "real_estate", label: "不動産" },
+  { value: "travel", label: "旅行" },
+  { value: "other", label: "その他" },
 ] as const;
 
 const uspCategoryLabels: Record<string, string> = {

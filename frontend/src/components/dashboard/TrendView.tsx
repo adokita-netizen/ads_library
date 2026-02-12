@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { analyticsApi } from "@/lib/api";
+import { rankingsApi } from "@/lib/api";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
-type TrendCategory = "all" | "beauty" | "health" | "diet" | "haircare" | "oral";
+type TrendCategory = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
 
 interface TrendItem {
   rank: number;
@@ -26,7 +26,12 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   line: "L",
   yahoo: "Y!",
+  x_twitter: "X",
   x: "X",
+  pinterest: "Pin",
+  smartnews: "SN",
+  google_ads: "G",
+  gunosy: "Gn",
 };
 
 const platformColors: Record<string, string> = {
@@ -37,16 +42,28 @@ const platformColors: Record<string, string> = {
   instagram: "platform-instagram",
   line: "platform-line",
   yahoo: "platform-yahoo",
+  x_twitter: "platform-x",
   x: "platform-x",
+  pinterest: "bg-red-600",
+  smartnews: "bg-sky-600",
+  google_ads: "bg-blue-500",
+  gunosy: "bg-orange-500",
 };
 
 const categoryOptions: { value: TrendCategory; label: string }[] = [
   { value: "all", label: "全ジャンル" },
+  { value: "ec_d2c", label: "EC・D2C" },
+  { value: "app", label: "アプリ" },
+  { value: "finance", label: "金融" },
+  { value: "education", label: "教育" },
   { value: "beauty", label: "美容・コスメ" },
+  { value: "food", label: "食品" },
+  { value: "gaming", label: "ゲーム" },
   { value: "health", label: "健康食品" },
-  { value: "diet", label: "ダイエット" },
-  { value: "haircare", label: "ヘアケア" },
-  { value: "oral", label: "オーラルケア" },
+  { value: "technology", label: "テクノロジー" },
+  { value: "real_estate", label: "不動産" },
+  { value: "travel", label: "旅行" },
+  { value: "other", label: "その他" },
 ];
 
 function formatYen(n: number): string {
@@ -74,8 +91,8 @@ export default function TrendView() {
         if (period) params.period = period;
         if (category !== "all") params.genre = category;
 
-        const response = await analyticsApi.getTrends(params);
-        const items = response.data?.items || response.data?.results || response.data;
+        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
+        const items = response.data?.items || response.data?.rankings || response.data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
             rank: (item.rank as number) || idx + 1,

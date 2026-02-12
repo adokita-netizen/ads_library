@@ -132,7 +132,8 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
     const fetchLPData = async () => {
       try {
         const response = await lpAnalysisApi.list({ url: product.destination });
-        const items = response.data?.items || response.data?.results || response.data;
+        const data = response.data;
+        const items = data?.landing_pages || data?.items || data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const lp = items[0] as Record<string, unknown>;
           setLpData({
@@ -181,7 +182,8 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
         attempts++;
         try {
           const response = await lpAnalysisApi.list({ url: product.destination });
-          const items = response.data?.items || response.data?.results || response.data;
+          const pollData = response.data;
+          const items = pollData?.landing_pages || pollData?.items || pollData?.results;
           if (Array.isArray(items) && items.length > 0) {
             const lp = items[0] as Record<string, unknown>;
             const status = (lp.status as string) || "";
