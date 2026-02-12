@@ -240,110 +240,164 @@ def crawl_ads(
     except Exception as celery_err:
         _logger.warning("celery_check_failed_using_inline", error=str(celery_err))
 
-    # Fallback: generate sample ads for each requested platform
-    saved_count = _generate_crawled_ads(
+    # Fallback: run real crawlers inline (API + scraping)
+    try:
+        saved_count = _inline_crawl(
+            query=request.query,
+            platforms=request.platforms,
+            category=request.category,
+            limit_per_platform=request.limit_per_platform,
+        )
+        if saved_count > 0:
+            return CrawlResponse(
+                task_id=str(uuid.uuid4()),
+                status="completed",
+                message=f"クロール完了: {saved_count}件の広告を取得しました ({len(request.platforms)}媒体)",
+            )
+        _logger.info("real_crawlers_returned_zero_using_demo_data")
+    except Exception as crawl_err:
+        _logger.warning("inline_crawl_error_using_demo_data", error=str(crawl_err))
+
+    # Real crawlers returned 0 (network blocked / no API keys) — generate demo data
+    saved_count = _generate_demo_ads(
         query=request.query,
         platforms=request.platforms,
         category=request.category,
         limit_per_platform=request.limit_per_platform,
     )
-
     return CrawlResponse(
         task_id=str(uuid.uuid4()),
         status="completed",
-        message=f"クロール完了: {saved_count}件の広告を取得しました ({len(request.platforms)}媒体)",
+        message=f"クロール完了: {saved_count}件の広告を取得しました ({len(request.platforms)}媒体) ※デモデータ",
     )
 
 
-def _generate_crawled_ads(
+def _inline_crawl(
     query: str,
     platforms: list[str],
     category: str | None,
     limit_per_platform: int,
 ) -> int:
-    """Generate ads per platform and save to DB."""
+    """Run the real crawlers inline (same logic as Celery task, but synchronous)."""
+    import asyncio
+    from app.tasks.crawl_tasks import _crawl_platforms, _map_platform
+
+    # Run async crawlers in a new event loop
+    loop = asyncio.new_event_loop()
+    try:
+        results = loop.run_until_complete(
+            _crawl_platforms(query, platforms, category, limit_per_platform)
+        )
+    finally:
+        loop.close()
+
+    # Save to DB
+    saved = 0
+    session = SyncSessionLocal()
+    try:
+        for platform, crawled_ads in results.items():
+            for crawled_ad in crawled_ads:
+                if crawled_ad.external_id:
+                    existing = session.query(Ad).filter(
+                        Ad.external_id == crawled_ad.external_id
+                    ).first()
+                    if existing:
+                        continue
+
+                ad = Ad(
+                    external_id=crawled_ad.external_id,
+                    title=crawled_ad.title,
+                    description=crawled_ad.description,
+                    platform=_map_platform(platform),
+                    video_url=crawled_ad.video_url,
+                    advertiser_name=crawled_ad.advertiser_name,
+                    advertiser_url=crawled_ad.advertiser_url,
+                    brand_name=crawled_ad.brand_name,
+                    duration_seconds=crawled_ad.duration_seconds,
+                    view_count=crawled_ad.view_count,
+                    like_count=crawled_ad.like_count,
+                    first_seen_at=crawled_ad.first_seen_at,
+                    last_seen_at=crawled_ad.last_seen_at,
+                    tags=crawled_ad.tags,
+                    ad_metadata=crawled_ad.metadata,
+                    status=AdStatusEnum.PENDING,
+                )
+                session.add(ad)
+                saved += 1
+
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+    return saved
+
+
+def _generate_demo_ads(
+    query: str,
+    platforms: list[str],
+    category: str | None,
+    limit_per_platform: int,
+) -> int:
+    """Generate demo ads when real crawlers can't reach external services."""
     import random
     from datetime import datetime, timedelta, timezone
+    from app.tasks.crawl_tasks import _map_platform
 
-    PLATFORM_MAP = {
-        "youtube": AdPlatformEnum.YOUTUBE, "tiktok": AdPlatformEnum.TIKTOK,
-        "instagram": AdPlatformEnum.INSTAGRAM, "facebook": AdPlatformEnum.FACEBOOK,
-        "x_twitter": AdPlatformEnum.X_TWITTER, "line": AdPlatformEnum.LINE,
-        "yahoo": AdPlatformEnum.YAHOO, "pinterest": AdPlatformEnum.PINTEREST,
-        "smartnews": AdPlatformEnum.SMARTNEWS, "google_ads": AdPlatformEnum.GOOGLE_ADS,
-        "gunosy": AdPlatformEnum.GUNOSY,
-    }
-    PREFIX = {
-        "youtube": "YO", "tiktok": "TI", "instagram": "IN", "facebook": "FA",
-        "x_twitter": "X", "line": "LI", "yahoo": "YA", "pinterest": "PI",
-        "smartnews": "SM", "google_ads": "GO", "gunosy": "GU",
-    }
     ADVERTISERS = [
         "スキンケアプラス", "マネーテック", "エデュテック", "ゲームスタジオX",
         "京都菓子工房", "ファイナンスワン", "フィットテック", "ナチュラルビューティー",
         "ヘルスケアジャパン", "ビューティーラボ", "ウェルスナビ", "スタディAI",
         "カラーラボ", "エンタメプラス", "モバイルセーバー", "アニマルケア",
-        "キャリアナビ", "ボディメイク", "ランゲージテック", "ダイエットサポート",
     ]
     CATS = ["ec_d2c", "app", "finance", "education", "beauty", "food", "gaming", "health", "technology"]
-    DEST_TYPES = ["記事LP", "直LP", "EC", "アプリストア"]
 
     now = datetime.now(timezone.utc)
     saved = 0
     session = SyncSessionLocal()
     try:
         from sqlalchemy import func as sqla_func
-        max_id = session.query(sqla_func.max(Ad.id)).scalar() or 0
-        counter = max_id + 1
+        counter = (session.query(sqla_func.max(Ad.id)).scalar() or 0) + 1
 
         for plat in platforms:
-            p = plat.lower()
-            pe = PLATFORM_MAP.get(p)
-            if not pe:
-                continue
-            pfx = PREFIX.get(p, "XX")
-
+            pe = _map_platform(plat.lower())
             for i in range(limit_per_platform):
-                ext_id = f"EXT-{pfx}-{counter}"
+                ext_id = f"DEMO-{plat[:2].upper()}-{counter}"
                 counter += 1
                 adv = random.choice(ADVERTISERS)
-                cat = category or random.choice(CATS)
-                dur = random.choice([15, 30, 60, 90, 120])
-                views = random.randint(50000, 5000000)
-                days_ago = random.randint(0, 30)
-                dest = random.choice(DEST_TYPES)
 
                 ad = Ad(
                     external_id=ext_id,
                     title=f"{query} - {adv}広告{i+1}",
-                    description=f"{query}に関する{p}広告",
+                    description=f"{query}に関する{plat}広告 (デモデータ)",
                     platform=pe,
                     status=AdStatusEnum.PENDING,
-                    category=cat,
-                    video_url=f"https://example.com/ads/{p}_{counter}.mp4",
-                    thumbnail_s3_key="",
-                    duration_seconds=dur,
+                    category=category or random.choice(CATS),
+                    video_url=f"https://example.com/demo/{plat}_{counter}.mp4",
+                    duration_seconds=random.choice([15, 30, 60, 90]),
                     advertiser_name=adv,
                     brand_name=adv,
-                    view_count=views,
-                    like_count=random.randint(100, views // 50),
-                    first_seen_at=now - timedelta(days=days_ago),
+                    view_count=random.randint(50000, 5000000),
+                    like_count=random.randint(100, 50000),
+                    first_seen_at=now - timedelta(days=random.randint(0, 30)),
                     last_seen_at=now,
                     ad_metadata={
                         "destination_url": f"https://example.com/lp/{query}",
-                        "destination_type": dest,
+                        "destination_type": random.choice(["記事LP", "直LP", "EC", "アプリストア"]),
                         "crawl_query": query,
+                        "is_demo": True,
                     },
-                    tags=[query, p, cat],
+                    tags=[query, plat, "demo"],
                 )
                 session.add(ad)
                 saved += 1
 
         session.commit()
-    except Exception as e:
+    except Exception:
         session.rollback()
-        import structlog
-        structlog.get_logger().error("crawl_generation_failed", error=str(e))
+        raise
     finally:
         session.close()
 
