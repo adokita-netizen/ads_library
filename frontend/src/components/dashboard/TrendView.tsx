@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { analyticsApi } from "@/lib/api";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
 type TrendCategory = "all" | "beauty" | "health" | "diet" | "haircare" | "oral";
@@ -73,6 +74,40 @@ function formatNumber(n: number): string {
 export default function TrendView() {
   const [period, setPeriod] = useState<TrendPeriod>("daily");
   const [category, setCategory] = useState<TrendCategory>("all");
+  const [trends, setTrends] = useState<TrendItem[]>(mockTrends);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrends = async () => {
+      try {
+        const params: Record<string, string> = {};
+        if (period) params.period = period;
+        if (category !== "all") params.genre = category;
+
+        const response = await analyticsApi.getTrends(params);
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
+            rank: (item.rank as number) || idx + 1,
+            productName: (item.product_name as string) || "不明",
+            platform: (item.platform as string) || "youtube",
+            genre: (item.genre as string) || "",
+            change: (item.rank_change as number) || (item.change as number) || 0,
+            spendEstimate: (item.spend_estimate as number) || (item.spend_increase as number) || 0,
+            playCount: (item.play_count as number) || (item.view_increase as number) || 0,
+            trendScore: (item.trend_score as number) || 0,
+          }));
+          setTrends(mapped);
+        }
+      } catch (error) {
+        console.warn("API unavailable, using mock data:", error);
+        // keep mock data as fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTrends();
+  }, [period, category]);
 
   return (
     <div className="flex flex-col h-full">
@@ -150,7 +185,17 @@ export default function TrendView() {
             </tr>
           </thead>
           <tbody>
-            {mockTrends.map((item) => (
+            {loading && (
+              <tr>
+                <td colSpan={8} className="text-center py-8">
+                  <div className="inline-flex items-center gap-2">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+                    <span className="text-xs text-gray-400">読み込み中...</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {trends.map((item) => (
               <tr key={item.rank}>
                 <td className="text-center">
                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${

@@ -8,9 +8,10 @@ from datetime import date, timedelta
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user_sync
 from app.core.database import SyncSessionLocal
 from app.models.ad import Ad
 from app.models.competitive_intel import (
@@ -73,7 +74,10 @@ class ClassificationConfirmRequest(BaseModel):
 
 
 @router.post("/spend/estimate")
-async def estimate_spend(request: SpendEstimateRequest):
+async def estimate_spend(
+    request: SpendEstimateRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Estimate ad spend with P10/P25/P50/P75/P90 confidence ranges."""
     from app.services.competitive.spend_estimator import SpendEstimator
 
@@ -86,7 +90,7 @@ async def estimate_spend(request: SpendEstimateRequest):
             view_count_increase=request.view_count_increase,
             platform=request.platform,
             genre=request.genre,
-            user_id=1,
+            user_id=current_user["user_id"],
         )
 
         return {
@@ -113,7 +117,10 @@ async def estimate_spend(request: SpendEstimateRequest):
 
 
 @router.post("/spend/calibrate")
-async def save_cpm_calibration(request: CPMCalibrationRequest):
+async def save_cpm_calibration(
+    request: CPMCalibrationRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Save user CPM calibration data for improving spend estimates."""
     from app.services.competitive.spend_estimator import SpendEstimator
 
@@ -122,7 +129,7 @@ async def save_cpm_calibration(request: CPMCalibrationRequest):
         estimator = SpendEstimator()
         calib = estimator.save_calibration(
             session,
-            user_id=1,
+            user_id=current_user["user_id"],
             platform=request.platform,
             actual_cpm=request.actual_cpm,
             genre=request.genre,
@@ -141,12 +148,14 @@ async def save_cpm_calibration(request: CPMCalibrationRequest):
 
 
 @router.get("/spend/calibrations")
-async def list_calibrations():
+async def list_calibrations(
+    current_user: dict = Depends(get_current_user_sync),
+):
     """List user CPM calibration data."""
     session = SyncSessionLocal()
     try:
         calibs = session.query(CPMCalibration).filter(
-            CPMCalibration.user_id == 1
+            CPMCalibration.user_id == current_user["user_id"]
         ).order_by(CPMCalibration.created_at.desc()).all()
         return {
             "calibrations": [
@@ -234,7 +243,10 @@ async def similarity_search(request: SimilaritySearchRequest):
 
 
 @router.post("/similarity/generate/{ad_id}")
-async def generate_embedding(ad_id: int):
+async def generate_embedding(
+    ad_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Generate/update embedding for a specific ad."""
     from app.services.competitive.embedding_service import EmbeddingService
 
@@ -403,7 +415,10 @@ async def get_alert_history(
 
 
 @router.post("/alerts/{alert_id}/dismiss")
-async def dismiss_alert(alert_id: int):
+async def dismiss_alert(
+    alert_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Dismiss an alert."""
     session = SyncSessionLocal()
     try:
@@ -451,7 +466,10 @@ async def get_classification_tags(ad_id: int):
 
 
 @router.post("/classification/tag")
-async def create_classification_tag(request: ClassificationTagRequest):
+async def create_classification_tag(
+    request: ClassificationTagRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Create or update a classification tag for an ad."""
     from datetime import datetime, timezone
 
@@ -503,7 +521,10 @@ async def create_classification_tag(request: ClassificationTagRequest):
 
 
 @router.post("/classification/confirm")
-async def confirm_classification(request: ClassificationConfirmRequest):
+async def confirm_classification(
+    request: ClassificationConfirmRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Confirm a provisional classification tag (provisional → confirmed)."""
     from datetime import datetime, timezone
 

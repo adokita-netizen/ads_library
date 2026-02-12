@@ -38,7 +38,7 @@ export default function DashboardView() {
         analysis_rate: 0,
         ads_by_platform: {},
         ads_by_category: {},
-        avg_winning_score: null,
+        avg_winning_score: undefined,
         sentiment_distribution: {},
       });
     } finally {

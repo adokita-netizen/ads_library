@@ -3,8 +3,11 @@
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.endpoints import ads, auth, analytics, creative, predictions, lp_analysis, rankings, notifications, competitive_intel
 from app.core.config import get_settings
@@ -36,6 +39,50 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+
+# ==================== Global Exception Handlers ====================
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return structured 422 for Pydantic / query-param validation errors."""
+    details = []
+    for err in exc.errors():
+        details.append({
+            "field": ".".join(str(loc) for loc in err.get("loc", [])),
+            "message": err.get("msg", ""),
+            "type": err.get("type", ""),
+        })
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"code": "validation_error", "message": "リクエストの検証に失敗しました", "details": details}},
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Catch database errors — log full traceback, return generic message."""
+    logger.error("database_error", error=str(exc), path=request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "database_error", "message": "データベースエラーが発生しました", "details": []}},
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unhandled exceptions."""
+    logger.error("unhandled_error", error=str(exc), error_type=type(exc).__name__, path=request.url.path)
+    message = str(exc) if settings.debug else "内部サーバーエラーが発生しました"
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "internal_error", "message": message, "details": []}},
+    )
+
+
+# ==================== Middleware ====================
+
 
 # CORS middleware
 app.add_middleware(

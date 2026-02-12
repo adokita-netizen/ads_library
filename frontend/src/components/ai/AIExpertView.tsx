@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { rankingsApi, notificationsApi } from "@/lib/api";
 
 type AITab = "search" | "notifications" | "insights";
 
@@ -37,6 +38,10 @@ export default function AIExpertView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchScope, setSearchScope] = useState("all");
 
+  // Search state
+  const [searchResults, setSearchResults] = useState(mockSearchResults);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   // Notification config state
   const [notifChannel, setNotifChannel] = useState("slack");
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -44,6 +49,81 @@ export default function AIExpertView() {
   const [notifyCompetitor, setNotifyCompetitor] = useState(true);
   const [notifyRanking, setNotifyRanking] = useState(false);
   const [watchedGenres, setWatchedGenres] = useState<string[]>(["美容・コスメ"]);
+  const [notifConfigs, setNotifConfigs] = useState<Array<Record<string, unknown>>>([]);
+  const [savingNotif, setSavingNotif] = useState(false);
+
+  // Load existing notification configs on mount
+  useEffect(() => {
+    const loadConfigs = async () => {
+      try {
+        const response = await notificationsApi.listConfigs();
+        const configs = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(configs)) {
+          setNotifConfigs(configs);
+        }
+      } catch (error) {
+        console.warn("Failed to load notification configs:", error);
+      }
+    };
+    loadConfigs();
+  }, []);
+
+  // Search handler
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearchLoading(true);
+    try {
+      const response = await rankingsApi.proSearch({
+        q: searchQuery,
+        search_scope: searchScope !== "all" ? searchScope : undefined,
+      });
+      const items = response.data?.items || response.data?.results || response.data;
+      if (Array.isArray(items) && items.length > 0) {
+        const mapped = items.map((item: Record<string, unknown>) => ({
+          type: (item.type as string) || "ad",
+          id: (item.id as number) || 0,
+          title: (item.title as string) || "",
+          matchedText: (item.matched_text as string) || undefined,
+          matchField: (item.match_field as string) || "",
+          platform: (item.platform as string) || "",
+          advertiser: (item.advertiser_name as string) || "",
+        }));
+        setSearchResults(mapped);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.warn("Search API unavailable, using mock data:", error);
+      setSearchResults(mockSearchResults);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Save notification config handler
+  const handleSaveNotifConfig = async () => {
+    setSavingNotif(true);
+    try {
+      await notificationsApi.createConfig({
+        channel_type: notifChannel,
+        webhook_url: notifChannel === "slack" ? webhookUrl : undefined,
+        api_token: notifChannel === "chatwork" ? webhookUrl : undefined,
+        notify_new_hit_ads: notifyHitAds,
+        notify_competitor_activity: notifyCompetitor,
+        watched_genres: watchedGenres,
+      });
+      // Reload configs after save
+      const response = await notificationsApi.listConfigs();
+      const configs = response.data?.items || response.data?.results || response.data;
+      if (Array.isArray(configs)) {
+        setNotifConfigs(configs);
+      }
+    } catch (error) {
+      console.warn("Failed to save notification config:", error);
+    } finally {
+      setSavingNotif(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -103,10 +183,14 @@ export default function AIExpertView() {
                   <option value="text">動画テキスト</option>
                   <option value="lp">LP</option>
                 </select>
-                <button className="btn-primary text-xs whitespace-nowrap">
-                  <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                  </svg>
+                <button className="btn-primary text-xs whitespace-nowrap" onClick={handleSearch} disabled={searchLoading}>
+                  {searchLoading ? (
+                    <div className="h-3.5 w-3.5 mr-1 inline-block animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                  )}
                   検索
                 </button>
               </div>
@@ -114,8 +198,8 @@ export default function AIExpertView() {
 
             {/* Results */}
             <div className="space-y-2">
-              <p className="text-[11px] text-gray-400">{mockSearchResults.length}件の結果</p>
-              {mockSearchResults.map((r) => (
+              <p className="text-[11px] text-gray-400">{searchResults.length}件の結果</p>
+              {searchResults.map((r) => (
                 <div key={`${r.type}-${r.id}`} className="card hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-start gap-3">
                     <span className={`badge text-[9px] shrink-0 mt-0.5 ${searchTypeColors[r.type]}`}>
@@ -262,9 +346,38 @@ export default function AIExpertView() {
               </div>
             </div>
 
+            {/* Existing configs */}
+            {notifConfigs.length > 0 && (
+              <div className="card">
+                <h3 className="text-[13px] font-bold text-gray-900 mb-3">登録済み設定</h3>
+                <div className="space-y-1">
+                  {notifConfigs.map((cfg, i) => (
+                    <div key={(cfg.id as number) || i} className="flex items-center gap-3 text-[11px] text-gray-600 p-2 bg-gray-50 rounded">
+                      <span className="badge text-[9px] bg-blue-100 text-blue-700">{(cfg.channel_type as string) || "slack"}</span>
+                      <span>{(cfg.is_active as boolean) ? "有効" : "無効"}</span>
+                      <span className="text-gray-400 ml-auto">{(cfg.created_at as string) || ""}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <button className="btn-primary text-xs">設定を保存</button>
-              <button className="px-3 py-1.5 rounded bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors">
+              <button className="btn-primary text-xs" onClick={handleSaveNotifConfig} disabled={savingNotif}>
+                {savingNotif ? "保存中..." : "設定を保存"}
+              </button>
+              <button
+                className="px-3 py-1.5 rounded bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors"
+                onClick={async () => {
+                  if (notifConfigs.length > 0 && notifConfigs[0].id) {
+                    try {
+                      await notificationsApi.testNotification(notifConfigs[0].id as number);
+                    } catch (error) {
+                      console.warn("Test notification failed:", error);
+                    }
+                  }
+                }}
+              >
                 テスト通知を送信
               </button>
             </div>

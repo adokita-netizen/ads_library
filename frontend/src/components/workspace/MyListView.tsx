@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { notificationsApi } from "@/lib/api";
 
 type FilterType = "all" | "ad" | "lp" | "creative" | "advertiser";
 
@@ -29,9 +30,46 @@ const typeColors: Record<string, string> = {
 
 export default function MyListView() {
   const [filter, setFilter] = useState<FilterType>("all");
+  const [savedItems, setSavedItems] = useState(mockSaved);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = filter === "all" ? mockSaved : mockSaved.filter((s) => s.type === filter);
-  const folders = [...new Set(mockSaved.map((s) => s.folder).filter(Boolean))];
+  useEffect(() => {
+    const fetchSaved = async () => {
+      try {
+        const response = await notificationsApi.listSaved();
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          const mapped = items.map((item: Record<string, unknown>) => ({
+            id: (item.id as number) || 0,
+            type: (item.item_type as string) || "ad",
+            label: (item.label as string) || "",
+            notes: (item.notes as string) || "",
+            folder: (item.folder as string) || "",
+            createdAt: (item.created_at as string) || "",
+          }));
+          setSavedItems(mapped);
+        }
+      } catch (error) {
+        console.warn("API unavailable, using mock data:", error);
+        // keep mock data as fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSaved();
+  }, []);
+
+  const handleRemoveSaved = async (id: number) => {
+    try {
+      await notificationsApi.removeSaved(id);
+      setSavedItems((prev) => prev.filter((item) => item.id !== id));
+    } catch (error) {
+      console.warn("Failed to remove saved item:", error);
+    }
+  };
+
+  const filtered = filter === "all" ? savedItems : savedItems.filter((s) => s.type === filter);
+  const folders = Array.from(new Set(savedItems.map((s) => s.folder).filter(Boolean)));
 
   return (
     <div className="flex flex-col h-full">
@@ -41,7 +79,9 @@ export default function MyListView() {
           <p className="text-[11px] text-gray-400 mt-0.5">保存した広告・LP・クリエイティブを管理</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-400">{mockSaved.length}件保存</span>
+          <span className="text-[11px] text-gray-400">
+            {loading ? "読み込み中..." : `${savedItems.length}件保存`}
+          </span>
         </div>
       </div>
 
@@ -95,7 +135,10 @@ export default function MyListView() {
                 </span>
               )}
               <span className="text-[10px] text-gray-400 shrink-0">{item.createdAt}</span>
-              <button className="text-gray-300 hover:text-red-400 transition-colors shrink-0">
+              <button
+                className="text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                onClick={(e) => { e.stopPropagation(); handleRemoveSaved(item.id); }}
+              >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                 </svg>

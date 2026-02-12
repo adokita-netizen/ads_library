@@ -3,9 +3,10 @@
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user_sync
 from app.core.database import SyncSessionLocal
 from app.models.ad_metrics import NotificationConfig, SavedItem
 
@@ -69,10 +70,12 @@ class SavedItemResponse(BaseModel):
 
 
 @router.post("/config", response_model=NotificationConfigResponse)
-async def create_notification_config(request: NotificationConfigRequest):
+async def create_notification_config(
+    request: NotificationConfigRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Create or update notification configuration."""
-    # TODO: get user_id from auth token
-    user_id = 1
+    user_id = current_user["user_id"]
 
     session = SyncSessionLocal()
     try:
@@ -117,9 +120,9 @@ async def create_notification_config(request: NotificationConfigRequest):
 
 
 @router.get("/config")
-async def list_notification_configs():
+async def list_notification_configs(current_user: dict = Depends(get_current_user_sync)):
     """List all notification configurations for current user."""
-    user_id = 1  # TODO: from auth
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
         configs = session.query(NotificationConfig).filter(
@@ -179,9 +182,12 @@ async def test_notification(config_id: int):
 
 
 @router.post("/saved", response_model=SavedItemResponse)
-async def save_item(request: SavedItemRequest):
+async def save_item(
+    request: SavedItemRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Save an item to My List (マイリスト)."""
-    user_id = 1  # TODO: from auth
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
         # Check if already saved
@@ -226,9 +232,10 @@ async def save_item(request: SavedItemRequest):
 async def list_saved_items(
     item_type: Optional[str] = None,
     folder: Optional[str] = None,
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """List saved items (マイリスト)."""
-    user_id = 1  # TODO: from auth
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
         query = session.query(SavedItem).filter(SavedItem.user_id == user_id)

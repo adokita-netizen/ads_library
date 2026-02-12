@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_async_session
+from app.models.user import User
 from app.models.ad import Ad
 from app.models.analysis import AdAnalysis
 from app.schemas.creative import (
@@ -33,6 +35,7 @@ def get_creative_engine() -> CreativeEngine:
 @router.post("/script", response_model=ScriptGenerationResponse)
 async def generate_script(
     request: ScriptGenerationRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Generate a video ad script."""
@@ -68,7 +71,10 @@ async def generate_script(
 
 
 @router.post("/copy", response_model=CopyGenerationResponse)
-async def generate_ad_copy(request: CopyGenerationRequest):
+async def generate_ad_copy(
+    request: CopyGenerationRequest,
+    current_user: User = Depends(get_current_user),
+):
     """Generate ad copy variations."""
     generator = CopyGenerator()
     copies = await generator.generate_ad_copy(
@@ -88,6 +94,7 @@ async def generate_ad_copy(request: CopyGenerationRequest):
 @router.post("/lp-copy", response_model=LPCopyResponse)
 async def generate_lp_copy(
     request: LPCopyRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Generate landing page copy."""
@@ -113,7 +120,10 @@ async def generate_lp_copy(
 
 
 @router.post("/storyboard")
-async def generate_storyboard(request: StoryboardRequest):
+async def generate_storyboard(
+    request: StoryboardRequest,
+    current_user: User = Depends(get_current_user),
+):
     """Generate a video storyboard."""
     engine = get_creative_engine()
     storyboard = await engine.generate_storyboard(
@@ -131,6 +141,7 @@ async def generate_storyboard(request: StoryboardRequest):
 @router.post("/improvements")
 async def suggest_improvements(
     request: ImprovementRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get improvement suggestions for an ad."""
@@ -165,6 +176,7 @@ async def suggest_improvements(
 @router.post("/ab-test-plan")
 async def generate_ab_test_plan(
     request: ABTestPlanRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Generate an A/B test plan."""
@@ -188,6 +200,7 @@ async def generate_ab_test_plan(
 @router.post("/winning-pattern")
 async def rewrite_winning_pattern(
     request: WinningPatternRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Rewrite using a winning ad's pattern."""

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { competitiveApi } from "@/lib/api";
 
 type CITab = "spend" | "similarity" | "destination" | "alerts" | "trends" | "classification";
 
@@ -125,6 +126,153 @@ export default function CompetitiveIntelView() {
   const [calibCPM, setCalibCPM] = useState("");
   const [similarQuery, setSimilarQuery] = useState("");
 
+  // API state for alerts
+  const [alerts, setAlerts] = useState(mockAlerts);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+
+  // API state for trends
+  const [trendPredictions, setTrendPredictions] = useState(mockTrendPredictions);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+
+  // API state for calibrations
+  const [calibrations, setCalibrations] = useState(mockCalibrations);
+  const [calibSaving, setCalibSaving] = useState(false);
+
+  // API state for similarity
+  const [similarAds, setSimilarAds] = useState(mockSimilarAds);
+  const [similarLoading, setSimilarLoading] = useState(false);
+
+  // Fetch alerts
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const response = await competitiveApi.getAlertHistory();
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          setAlerts(items);
+        }
+      } catch (error) {
+        console.warn("Alerts API unavailable, using mock data:", error);
+      } finally {
+        setAlertsLoading(false);
+      }
+    };
+    fetchAlerts();
+  }, []);
+
+  // Fetch trend predictions + early hit candidates
+  useEffect(() => {
+    const fetchTrends = async () => {
+      try {
+        const [predResponse, earlyResponse] = await Promise.allSettled([
+          competitiveApi.getTrendPredictions(),
+          competitiveApi.getEarlyHitCandidates(),
+        ]);
+        const predItems = predResponse.status === "fulfilled"
+          ? (predResponse.value.data?.items || predResponse.value.data?.results || predResponse.value.data)
+          : null;
+        const earlyItems = earlyResponse.status === "fulfilled"
+          ? (earlyResponse.value.data?.items || earlyResponse.value.data?.results || earlyResponse.value.data)
+          : null;
+
+        const combined = [
+          ...(Array.isArray(predItems) ? predItems : []),
+          ...(Array.isArray(earlyItems) ? earlyItems : []),
+        ];
+        if (combined.length > 0) {
+          // Deduplicate by ad_id
+          const seen = new Set<number>();
+          const unique = combined.filter((item: Record<string, unknown>) => {
+            const adId = item.ad_id as number;
+            if (seen.has(adId)) return false;
+            seen.add(adId);
+            return true;
+          });
+          setTrendPredictions(unique);
+        }
+      } catch (error) {
+        console.warn("Trends API unavailable, using mock data:", error);
+      } finally {
+        setTrendsLoading(false);
+      }
+    };
+    fetchTrends();
+  }, []);
+
+  // Fetch calibrations
+  useEffect(() => {
+    const fetchCalibrations = async () => {
+      try {
+        const response = await competitiveApi.listCalibrations();
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          setCalibrations(items);
+        }
+      } catch (error) {
+        console.warn("Calibrations API unavailable, using mock data:", error);
+      }
+    };
+    fetchCalibrations();
+  }, []);
+
+  // Dismiss alert handler
+  const handleDismissAlert = async (alertId: number) => {
+    try {
+      await competitiveApi.dismissAlert(alertId);
+      setAlerts((prev) =>
+        prev.map((a) => (a.id === alertId ? { ...a, is_dismissed: true } : a))
+      );
+    } catch (error) {
+      console.warn("Failed to dismiss alert:", error);
+    }
+  };
+
+  // Save calibration handler
+  const handleSaveCalibration = async () => {
+    if (!calibCPM) return;
+    setCalibSaving(true);
+    try {
+      await competitiveApi.saveCPMCalibration({
+        platform: calibPlatform,
+        genre: calibGenre || undefined,
+        actual_cpm: Number(calibCPM),
+      });
+      // Reload calibrations
+      const response = await competitiveApi.listCalibrations();
+      const items = response.data?.items || response.data?.results || response.data;
+      if (Array.isArray(items)) {
+        setCalibrations(items);
+      }
+      setCalibCPM("");
+      setCalibGenre("");
+    } catch (error) {
+      console.warn("Failed to save calibration:", error);
+    } finally {
+      setCalibSaving(false);
+    }
+  };
+
+  // Similarity search handler
+  const handleSimilaritySearch = async () => {
+    if (!similarQuery.trim()) return;
+    setSimilarLoading(true);
+    try {
+      const response = await competitiveApi.similaritySearch({
+        query_text: similarQuery,
+        limit: 10,
+      });
+      const items = response.data?.items || response.data?.results || response.data;
+      if (Array.isArray(items) && items.length > 0) {
+        setSimilarAds(items);
+      }
+    } catch (error) {
+      console.warn("Similarity search API unavailable, using mock data:", error);
+      setSimilarAds(mockSimilarAds);
+    } finally {
+      setSimilarLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-white">
@@ -180,7 +328,9 @@ export default function CompetitiveIntelView() {
             {/* Predictions table */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] text-gray-400">{mockTrendPredictions.length}件の予測</p>
+                <p className="text-[11px] text-gray-400">
+                  {trendsLoading ? "読み込み中..." : `${trendPredictions.length}件の予測`}
+                </p>
                 <div className="flex items-center gap-2 text-[9px] text-gray-400">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> 成長中</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> ローンチ</span>
@@ -188,7 +338,7 @@ export default function CompetitiveIntelView() {
                 </div>
               </div>
 
-              {mockTrendPredictions.map((p) => (
+              {trendPredictions.map((p) => (
                 <div key={p.ad_id} className="card hover:shadow-md transition-shadow">
                   <div className="flex items-start gap-4">
                     {/* Momentum score */}
@@ -260,9 +410,11 @@ export default function CompetitiveIntelView() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] text-gray-400">{mockAlerts.filter(a => !a.is_dismissed).length}件のアクティブアラート</p>
+              <p className="text-[11px] text-gray-400">
+                {alertsLoading ? "読み込み中..." : `${alerts.filter(a => !a.is_dismissed).length}件のアクティブアラート`}
+              </p>
 
-              {mockAlerts.filter(a => !a.is_dismissed).map((alert) => (
+              {alerts.filter(a => !a.is_dismissed).map((alert) => (
                 <div key={alert.id} className={`card border-l-4 ${
                   alert.severity === "high" ? "border-l-red-500" :
                   alert.severity === "critical" ? "border-l-red-700" :
@@ -299,7 +451,10 @@ export default function CompetitiveIntelView() {
                       )}
                     </div>
 
-                    <button className="text-gray-300 hover:text-gray-500 transition-colors shrink-0 text-[10px]">
+                    <button
+                      className="text-gray-300 hover:text-gray-500 transition-colors shrink-0 text-[10px]"
+                      onClick={() => handleDismissAlert(alert.id)}
+                    >
                       非表示
                     </button>
                   </div>
@@ -397,13 +552,15 @@ export default function CompetitiveIntelView() {
                   <input type="number" className="input text-xs w-full mt-1" placeholder="例: 480" value={calibCPM} onChange={e => setCalibCPM(e.target.value)} />
                 </div>
                 <div className="flex items-end">
-                  <button className="btn-primary text-xs w-full">保存</button>
+                  <button className="btn-primary text-xs w-full" onClick={handleSaveCalibration} disabled={calibSaving}>
+                    {calibSaving ? "保存中..." : "保存"}
+                  </button>
                 </div>
               </div>
 
               {/* Existing calibrations */}
               <div className="space-y-1">
-                {mockCalibrations.map(c => (
+                {calibrations.map(c => (
                   <div key={c.id} className="flex items-center gap-3 text-[11px] text-gray-600 p-2 bg-gray-50 rounded">
                     <span className="badge text-[9px] bg-blue-100 text-blue-700">{c.platform}</span>
                     <span>{c.genre}</span>
@@ -444,10 +601,14 @@ export default function CompetitiveIntelView() {
                   value={similarQuery}
                   onChange={e => setSimilarQuery(e.target.value)}
                 />
-                <button className="btn-primary text-xs whitespace-nowrap">
-                  <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                  </svg>
+                <button className="btn-primary text-xs whitespace-nowrap" onClick={handleSimilaritySearch} disabled={similarLoading}>
+                  {similarLoading ? (
+                    <div className="h-3.5 w-3.5 mr-1 inline-block animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                  )}
                   類似検索
                 </button>
               </div>
@@ -455,9 +616,9 @@ export default function CompetitiveIntelView() {
 
             {/* Results */}
             <div className="space-y-2">
-              <p className="text-[11px] text-gray-400">{mockSimilarAds.length}件の類似広告</p>
+              <p className="text-[11px] text-gray-400">{similarAds.length}件の類似広告</p>
 
-              {mockSimilarAds.map((ad) => (
+              {similarAds.map((ad) => (
                 <div key={ad.ad_id} className="card hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-start gap-3">
                     {/* Similarity score */}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { adsApi } from "@/lib/api";
 
 interface ProductDetailModalProps {
   adId: number;
@@ -117,7 +118,39 @@ type TabType = "overview" | "creatives" | "competitors" | "analysis" | "lp-analy
 
 export default function ProductDetailModal({ adId, onClose }: ProductDetailModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-  const _ = adId; // Would be used for API call
+  const [product, setProduct] = useState(mockProduct);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAdData = async () => {
+      try {
+        const response = await adsApi.get(adId);
+        const data = response.data;
+        if (data) {
+          setProduct({
+            id: data.id || adId,
+            managementId: data.external_id || data.management_id || mockProduct.managementId,
+            productName: data.product_name || data.title || mockProduct.productName,
+            advertiserName: data.advertiser_name || mockProduct.advertiserName,
+            genre: data.category || data.genre || mockProduct.genre,
+            totalSpend: data.cumulative_spend || data.total_spend || product.totalSpend,
+            totalPlays: data.view_count || data.cumulative_views || product.totalPlays,
+            publishedDate: data.published_date || data.created_at || product.publishedDate,
+            duration: data.duration_seconds || data.duration || mockProduct.duration,
+            platforms: data.platforms || product.platforms,
+            destinationType: data.destination_type || product.destinationType,
+            destination: data.destination_url || data.destination || product.destination,
+          });
+        }
+      } catch (error) {
+        console.warn("API unavailable, using mock data:", error);
+        // keep mock data as fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAdData();
+  }, [adId]);
 
   const maxSpend = Math.max(...spendTrend.map((d) => d.spend));
 
@@ -134,9 +167,9 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
               </svg>
             </div>
             <div>
-              <h2 className="text-[15px] font-bold text-gray-900">{mockProduct.productName}</h2>
+              <h2 className="text-[15px] font-bold text-gray-900">{product.productName}</h2>
               <p className="text-[11px] text-gray-400">
-                {mockProduct.advertiserName} · {mockProduct.managementId} · {mockProduct.genre}
+                {product.advertiserName} · {product.managementId} · {product.genre}
               </p>
             </div>
           </div>
@@ -183,25 +216,31 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+              <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
+            </div>
+          )}
           {activeTab === "overview" && (
             <div className="space-y-5">
               {/* Top Stats */}
               <div className="grid grid-cols-4 gap-3">
                 <div className="card py-3">
                   <p className="text-[10px] text-gray-400 font-medium">累計予想消化額</p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">{formatYen(mockProduct.totalSpend)}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{formatYen(product.totalSpend)}</p>
                 </div>
                 <div className="card py-3">
                   <p className="text-[10px] text-gray-400 font-medium">累計再生回数</p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">{formatNumber(mockProduct.totalPlays)}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{formatNumber(product.totalPlays)}</p>
                 </div>
                 <div className="card py-3">
                   <p className="text-[10px] text-gray-400 font-medium">出稿媒体数</p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">{mockProduct.platforms.length}媒体</p>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{product.platforms.length}媒体</p>
                 </div>
                 <div className="card py-3">
                   <p className="text-[10px] text-gray-400 font-medium">公開日</p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">{mockProduct.publishedDate}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{product.publishedDate}</p>
                 </div>
               </div>
 
@@ -416,7 +455,7 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                   【医師監修】話題の美容セラムが初回980円
                 </p>
                 <p className="text-[10px] text-[#4A7DFF] break-all">
-                  {mockProduct.destination}
+                  {product.destination}
                 </p>
               </div>
 

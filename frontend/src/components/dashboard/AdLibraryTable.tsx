@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { rankingsApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -207,18 +208,66 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const filteredAds = useMemo(() => {
-    let ads = [...mockAds];
+  const [ads, setAds] = useState<MockAd[]>(mockAds);
+  const [loading, setLoading] = useState(true);
 
-    // Apply media filter
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const params: Record<string, string | number | undefined> = {};
+        if (filters.media !== "all") params.platform = filters.media;
+        if (filters.interval === "7days") params.period = "weekly";
+        else if (filters.interval === "14days") params.period = "biweekly";
+        else if (filters.interval === "30days") params.period = "monthly";
+        else params.period = "daily";
+
+        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
+            id: (item.ad_id as number) || idx + 1,
+            rank: (item.rank as number) || idx + 1,
+            thumbnail: (item.thumbnail as string) || "",
+            duration: (item.duration_seconds as number) || 0,
+            platform: (item.platform as string) || "youtube",
+            managementId: (item.management_id as string) || `AD-${item.ad_id || idx + 1}`,
+            productName: (item.product_name as string) || "不明",
+            genre: (item.genre as string) || "",
+            destinationType: (item.destination_type as string) || "",
+            playIncrease: (item.view_increase as number) || 0,
+            spendIncrease: (item.spend_increase as number) || 0,
+            spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
+            isHit: (item.is_hit as boolean) || false,
+            totalPlays: (item.cumulative_views as number) || 0,
+            totalSpend: (item.cumulative_spend as number) || 0,
+            publishedDate: (item.published_date as string) || (item.created_at as string) || "",
+            adUrl: (item.ad_url as string) || "",
+            destination: (item.destination_url as string) || "",
+          }));
+          setAds(mapped);
+        }
+      } catch (error) {
+        console.warn("API unavailable, using mock data:", error);
+        // keep mock data as fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [filters.media, filters.interval]);
+
+  const filteredAds = useMemo(() => {
+    let result = [...ads];
+
+    // Apply media filter (client-side for additional filtering beyond API)
     if (filters.media !== "all") {
-      ads = ads.filter((a) => a.platform === filters.media);
+      result = result.filter((a) => a.platform === filters.media);
     }
 
     // Apply search filter
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      ads = ads.filter(
+      result = result.filter(
         (a) =>
           a.productName.toLowerCase().includes(q) ||
           a.managementId.toLowerCase().includes(q) ||
@@ -227,7 +276,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
     }
 
     // Sort
-    ads.sort((a, b) => {
+    result.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
         case "rank": cmp = a.rank - b.rank; break;
@@ -241,8 +290,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       return sortAsc ? cmp : -cmp;
     });
 
-    return ads;
-  }, [filters, sortField, sortAsc]);
+    return result;
+  }, [ads, filters, sortField, sortAsc]);
 
   const totalPages = Math.ceil(filteredAds.length / pageSize);
   const paginatedAds = filteredAds.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -345,6 +394,12 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
       {/* Table */}
       <div className="flex-1 overflow-auto custom-scrollbar">
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+            <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
+          </div>
+        )}
         <table className="data-table">
           <thead>
             <tr>

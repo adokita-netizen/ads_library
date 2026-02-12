@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.database import get_async_session
 from app.core.storage import get_storage_client
+from app.models.user import User
 from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum
 from app.models.analysis import AdAnalysis
 from app.schemas.ad import (
@@ -84,6 +86,7 @@ async def get_ad(
 @router.post("", response_model=AdResponse)
 async def create_ad(
     ad_data: AdCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Create a new ad entry."""
@@ -110,6 +113,7 @@ async def upload_ad_video(
     platform: str = "youtube",
     title: Optional[str] = None,
     auto_analyze: bool = True,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Upload a video file for analysis."""
@@ -160,6 +164,7 @@ async def upload_ad_video(
 @router.post("/{ad_id}/analyze")
 async def trigger_analysis(
     ad_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Trigger analysis for an existing ad."""
@@ -200,7 +205,10 @@ async def get_analysis(
 
 
 @router.post("/crawl", response_model=CrawlResponse)
-async def crawl_ads(request: CrawlRequest):
+async def crawl_ads(
+    request: CrawlRequest,
+    current_user: User = Depends(get_current_user),
+):
     """Crawl ads from external platforms."""
     from app.tasks.crawl_tasks import crawl_ads_task
     task = crawl_ads_task.delay(
@@ -221,6 +229,7 @@ async def crawl_ads(request: CrawlRequest):
 @router.delete("/{ad_id}")
 async def delete_ad(
     ad_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Delete an ad and its analysis."""
