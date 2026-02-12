@@ -20,6 +20,12 @@ from app.models.landing_page import (
     AppealAxisAnalysis,
     LPAnalysis,
 )
+from app.models.ad_metrics import (
+    AdDailyMetrics,
+    ProductRanking,
+    NotificationConfig,
+    SavedItem,
+)
 
 __all__ = [
     "Ad",
@@ -43,4 +49,8 @@ __all__ = [
     "USPPattern",
     "AppealAxisAnalysis",
     "LPAnalysis",
+    "AdDailyMetrics",
+    "ProductRanking",
+    "NotificationConfig",
+    "SavedItem",
 ]

@@ -7,6 +7,10 @@ import TrendView from "@/components/dashboard/TrendView";
 import ProductDetailModal from "@/components/analysis/ProductDetailModal";
 import CreativeStudio from "@/components/creative/CreativeStudio";
 import LPAnalysisView from "@/components/lp/LPAnalysisView";
+import AIExpertView from "@/components/ai/AIExpertView";
+import TeamSpaceView from "@/components/workspace/TeamSpaceView";
+import MyListView from "@/components/workspace/MyListView";
+import StoreView from "@/components/workspace/StoreView";
 
 type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "team" | "mylist" | "store";
 
@@ -31,8 +35,15 @@ export default function Home() {
       case "lp-analysis":
         return <LPAnalysisView />;
       case "ai-expert":
+        return <AIExpertView />;
       case "creative":
         return <CreativeStudio />;
+      case "team":
+        return <TeamSpaceView />;
+      case "mylist":
+        return <MyListView />;
+      case "store":
+        return <StoreView />;
       default:
         return <AdLibraryTable onAdSelect={handleAdSelect} />;
     }

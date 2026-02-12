@@ -127,4 +127,40 @@ export const lpAnalysisApi = {
     api.post("/lp-analysis/own/compare", data),
 };
 
+// Rankings & Search API
+export const rankingsApi = {
+  getProducts: (params?: { period?: string; genre?: string; platform?: string; page?: number; page_size?: number }) =>
+    api.get("/rankings/products", { params }),
+  getHitAds: (params?: { genre?: string; limit?: number }) =>
+    api.get("/rankings/hit-ads", { params }),
+  getAdvertiser: (name: string, period?: string) =>
+    api.get(`/rankings/advertiser/${name}`, { params: { period } }),
+  getGenreSummary: (period?: string) =>
+    api.get("/rankings/genre-summary", { params: { period } }),
+  proSearch: (params: { q: string; search_scope?: string; genre?: string; platform?: string; page?: number }) =>
+    api.get("/rankings/search", { params }),
+  exportRankingsCSV: (params?: { period?: string; genre?: string }) =>
+    api.get("/rankings/export/rankings", { params, responseType: "blob" }),
+  exportAdsCSV: (params?: { genre?: string; platform?: string; advertiser?: string }) =>
+    api.get("/rankings/export/ads", { params, responseType: "blob" }),
+};
+
+// Notifications & My List API
+export const notificationsApi = {
+  createConfig: (data: { channel_type: string; webhook_url?: string; api_token?: string; room_id?: string; notify_new_hit_ads?: boolean; notify_competitor_activity?: boolean; watched_genres?: string[]; watched_advertisers?: string[] }) =>
+    api.post("/notifications/config", data),
+  listConfigs: () =>
+    api.get("/notifications/config"),
+  deleteConfig: (id: number) =>
+    api.delete(`/notifications/config/${id}`),
+  testNotification: (configId: number) =>
+    api.post("/notifications/test", null, { params: { config_id: configId } }),
+  saveItem: (data: { item_type: string; item_id: number; label?: string; notes?: string; folder?: string }) =>
+    api.post("/notifications/saved", data),
+  listSaved: (params?: { item_type?: string; folder?: string }) =>
+    api.get("/notifications/saved", { params }),
+  removeSaved: (id: number) =>
+    api.delete(`/notifications/saved/${id}`),
+};
+
 export default api;

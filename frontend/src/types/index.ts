@@ -224,6 +224,60 @@ export interface USPFlowRecommendation {
   reasoning: string;
 }
 
+// Ranking types
+export interface ProductRankingItem {
+  rank: number;
+  previous_rank?: number;
+  rank_change?: number;
+  ad_id: number;
+  product_name?: string;
+  advertiser_name?: string;
+  genre?: string;
+  platform?: string;
+  view_increase: number;
+  spend_increase: number;
+  cumulative_views: number;
+  cumulative_spend: number;
+  is_hit: boolean;
+  hit_score?: number;
+  trend_score?: number;
+}
+
+export interface SearchResult {
+  type: "ad" | "transcript" | "text_detection" | "landing_page";
+  id: number;
+  title?: string;
+  matched_text?: string;
+  platform?: string;
+  advertiser_name?: string;
+  match_field: string;
+  created_at?: string;
+}
+
+export interface NotificationConfig {
+  id: number;
+  channel_type: string;
+  webhook_url?: string;
+  room_id?: string;
+  notify_new_hit_ads: boolean;
+  notify_competitor_activity: boolean;
+  notify_ranking_change: boolean;
+  notify_fatigue_warning: boolean;
+  watched_genres?: string[];
+  watched_advertisers?: string[];
+  is_active: boolean;
+}
+
+export interface SavedItem {
+  id: number;
+  item_type: string;
+  item_id: number;
+  label?: string;
+  notes?: string;
+  folder?: string;
+  created_at: string;
+}
+
 // Own LP types
 export interface OwnLP extends LandingPageSummary {
   is_own: boolean;
