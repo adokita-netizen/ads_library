@@ -161,12 +161,13 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const params: Record<string, string | number | undefined> = {};
         if (filters.media !== "all") params.platform = filters.media;
         if (filters.genre !== "all") params.genre = filters.genre;
-        if (filters.interval === "7days") params.period = "weekly";
-        else if (filters.interval === "14days") params.period = "biweekly";
+        // Backend accepts: daily, weekly, monthly only
+        if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
         else if (filters.interval === "30days") params.period = "monthly";
         else params.period = "daily";
 
@@ -194,9 +195,12 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             destination: (item.destination_url as string) || "",
           }));
           setAds(mapped);
+        } else {
+          setAds([]);
         }
       } catch (error) {
         console.error("Failed to fetch ad data:", error);
+        setAds([]);
       } finally {
         setLoading(false);
       }

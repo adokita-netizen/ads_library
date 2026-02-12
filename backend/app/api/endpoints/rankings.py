@@ -44,6 +44,10 @@ async def get_product_rankings(
             offset=(page - 1) * page_size,
         )
 
+        # If no pre-computed rankings exist, fall back to listing ads directly
+        if total == 0:
+            return _fallback_ad_list(session, genre, platform, page, page_size, period)
+
         # Join with Ad table to get ad-level details
         ad_ids = [r.ad_id for r in rankings]
         ads_map = {}
@@ -103,6 +107,64 @@ async def get_product_rankings(
         }
     finally:
         session.close()
+
+
+def _fallback_ad_list(session, genre, platform, page, page_size, period):
+    """When no pre-computed rankings exist, list ads directly from the Ad table."""
+    query = session.query(Ad)
+
+    if platform:
+        query = query.filter(Ad.platform == platform)
+    if genre:
+        query = query.filter(Ad.category == genre)
+
+    total = query.count()
+    ads = (
+        query.order_by(desc(Ad.created_at))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for rank, ad in enumerate(ads, start=(page - 1) * page_size + 1):
+        metadata = ad.ad_metadata or {}
+        items.append({
+            "rank": rank,
+            "previous_rank": None,
+            "rank_change": None,
+            "ad_id": ad.id,
+            "product_name": ad.title or ad.brand_name or ad.advertiser_name or "不明",
+            "advertiser_name": ad.advertiser_name or "",
+            "genre": str(ad.category.value) if ad.category else "",
+            "platform": str(ad.platform.value) if ad.platform else "",
+            "view_increase": ad.view_count or 0,
+            "spend_increase": 0,
+            "cumulative_views": ad.view_count or 0,
+            "cumulative_spend": 0,
+            "is_hit": False,
+            "hit_score": 0,
+            "trend_score": 0,
+            "thumbnail": ad.thumbnail_s3_key or "",
+            "duration_seconds": ad.duration_seconds or 0,
+            "management_id": ad.external_id or f"AD-{ad.id}",
+            "ad_url": ad.video_url or "",
+            "destination_url": metadata.get("destination_url", ""),
+            "destination_type": metadata.get("destination_type", ""),
+            "published_date": (
+                ad.first_seen_at.isoformat() if ad.first_seen_at else
+                ad.created_at.isoformat() if ad.created_at else ""
+            ),
+        })
+
+    return {
+        "period": period,
+        "genre": genre,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 @router.get("/hit-ads")

@@ -86,6 +86,7 @@ export default function TrendView() {
 
   useEffect(() => {
     const fetchTrends = async () => {
+      setLoading(true);
       try {
         const params: Record<string, string> = {};
         if (period) params.period = period;
@@ -105,9 +106,12 @@ export default function TrendView() {
             trendScore: (item.trend_score as number) || 0,
           }));
           setTrends(mapped);
+        } else {
+          setTrends([]);
         }
       } catch (error) {
         console.error("Failed to fetch trends:", error);
+        setTrends([]);
       } finally {
         setLoading(false);
       }
