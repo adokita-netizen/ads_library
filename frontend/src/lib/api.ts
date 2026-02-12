@@ -36,43 +36,56 @@ export async function fetchApi<T = unknown>(
     if (qs) url += `?${qs}`;
   }
 
-  const init: RequestInit = {
-    method: options?.method || "GET",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-  };
+  const method = options?.method || "GET";
+  const headers: Record<string, string> = { Accept: "application/json" };
+
+  // Only set Content-Type for requests with a body
   if (options?.body) {
-    init.body = JSON.stringify(options.body);
+    headers["Content-Type"] = "application/json";
   }
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   if (token) {
-    (init.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const init: RequestInit = { method, headers };
+  if (options?.body) {
+    init.body = JSON.stringify(options.body);
   }
 
   const res = await fetch(url, init);
-  const data = await res.json().catch(() => null);
+
+  // Handle empty responses (204 No Content, etc.)
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = null; }
+  }
+
   if (!res.ok) {
     throw new FetchError(res.status, data);
   }
   return data as T;
 }
 
-// Request interceptor for auth token
+// Request interceptor for auth token (guarded for SSR)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
-// Response interceptor for error handling
+// Response interceptor for error handling (guarded for SSR)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (typeof window !== "undefined" && error.response?.status === 401) {
       localStorage.removeItem("access_token");
-      // Don't redirect — no login page in current app
       console.warn("401 Unauthorized: auth token missing or expired");
     }
     return Promise.reject(error);

@@ -97,6 +97,19 @@ async def general_exception_handler(request: Request, exc: Exception):
 # ==================== Middleware ====================
 
 
+# Request timing middleware
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    import time
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed = (time.monotonic() - start) * 1000
+    response.headers["X-Response-Time"] = f"{elapsed:.0f}ms"
+    if elapsed > 1000:
+        logger.warning("slow_request", path=request.url.path, method=request.method, elapsed_ms=round(elapsed))
+    return response
+
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -137,5 +150,28 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+def health_check():
+    """Enhanced health check — verifies database connectivity."""
+    result: dict = {"status": "healthy"}
+    try:
+        from app.core.database import SyncSessionLocal
+        session = SyncSessionLocal()
+        try:
+            session.execute(__import__("sqlalchemy").text("SELECT 1"))
+            result["database"] = "ok"
+        finally:
+            session.close()
+    except Exception as e:
+        result["database"] = "error"
+        result["database_error"] = str(e)
+        result["status"] = "degraded"
+
+    try:
+        import redis
+        r = redis.Redis(host="localhost", port=6379, socket_timeout=2)
+        r.ping()
+        result["redis"] = "ok"
+    except Exception:
+        result["redis"] = "unavailable"
+
+    return result

@@ -15,13 +15,16 @@ import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView"
 
 type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store";
 
-/** Connectivity banner — auto-hides after successful check */
+/** Connectivity banner — auto-hides after successful check, shows data test */
 function ConnectivityBanner() {
   const [status, setStatus] = useState<"checking" | "ok" | "error">("checking");
   const [detail, setDetail] = useState("");
+  const [dataTest, setDataTest] = useState<"pending" | "ok" | "error">("pending");
+  const [dataDetail, setDataDetail] = useState("");
 
   useEffect(() => {
     const checkHealth = async () => {
+      // Step 1: Check health endpoint
       try {
         const res = await fetch("/api/health");
         const data = await res.json();
@@ -30,16 +33,42 @@ function ConnectivityBanner() {
         } else {
           setStatus("error");
           setDetail(`Backend: ${data.backend_error || "unreachable"}`);
+          return;
         }
       } catch (err) {
         setStatus("error");
         setDetail(`Next.js API: ${String(err)}`);
+        return;
+      }
+
+      // Step 2: Check data endpoint (this is what the table actually uses)
+      try {
+        const res = await fetch("/api/v1/rankings/products?period=weekly&page_size=1");
+        const text = await res.text();
+        if (!res.ok) {
+          setDataTest("error");
+          setDataDetail(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+          return;
+        }
+        const data = JSON.parse(text);
+        const count = data?.items?.length ?? data?.total ?? 0;
+        if (count > 0) {
+          setDataTest("ok");
+        } else {
+          setDataTest("error");
+          setDataDetail("API応答はOKですが、データが0件です");
+        }
+      } catch (err) {
+        setDataTest("error");
+        setDataDetail(`Data fetch: ${String(err)}`);
       }
     };
     checkHealth();
   }, []);
 
-  if (status === "ok") return null;
+  // Everything works - hide banner
+  if (status === "ok" && dataTest === "ok") return null;
+
   if (status === "checking") {
     return (
       <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 text-xs text-blue-700">
@@ -47,17 +76,36 @@ function ConnectivityBanner() {
       </div>
     );
   }
-  return (
-    <div className="bg-red-50 border-b border-red-200 px-4 py-1.5 text-xs text-red-700">
-      API接続エラー: {detail}
-      <button
-        className="ml-2 underline"
-        onClick={() => window.location.reload()}
-      >
-        再読み込み
-      </button>
-    </div>
-  );
+
+  if (status === "error") {
+    return (
+      <div className="bg-red-50 border-b border-red-200 px-4 py-1.5 text-xs text-red-700">
+        API接続エラー: {detail}
+        <button className="ml-2 underline" onClick={() => window.location.reload()}>再読み込み</button>
+      </div>
+    );
+  }
+
+  // Health OK but data failed
+  if (dataTest === "error") {
+    return (
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700">
+        API接続OK / データ取得エラー: {dataDetail}
+        <button className="ml-2 underline" onClick={() => window.location.reload()}>再読み込み</button>
+      </div>
+    );
+  }
+
+  // Data test still pending
+  if (dataTest === "pending") {
+    return (
+      <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 text-xs text-blue-700">
+        データ接続を確認中...
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function Home() {

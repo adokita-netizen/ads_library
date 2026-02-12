@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { lpAnalysisApi, fetchApi } from "@/lib/api";
+import { fetchApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -568,7 +568,10 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                         className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
-                          lpAnalysisApi.crawl({ url: ad.destination, ad_id: ad.id, auto_analyze: true })
+                          fetchApi("/lp-analysis/crawl", {
+                            method: "POST",
+                            body: { url: ad.destination, ad_id: ad.id, auto_analyze: true },
+                          })
                             .then(() => { alert("LP分析を開始しました"); })
                             .catch(() => { alert("LP分析の開始に失敗しました"); });
                         }}

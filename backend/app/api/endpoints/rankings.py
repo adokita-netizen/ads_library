@@ -24,7 +24,7 @@ router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
 
 @router.get("/products")
-async def get_product_rankings(
+def get_product_rankings(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
     genre: Optional[str] = None,
     platform: Optional[str] = None,
@@ -168,7 +168,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
 
 
 @router.get("/hit-ads")
-async def get_hit_ads(
+def get_hit_ads(
     genre: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -202,7 +202,7 @@ async def get_hit_ads(
 
 
 @router.get("/advertiser/{advertiser_name}")
-async def get_advertiser_analytics(
+def get_advertiser_analytics(
     advertiser_name: str,
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
@@ -216,7 +216,7 @@ async def get_advertiser_analytics(
 
 
 @router.get("/genre-summary")
-async def get_genre_summary(
+def get_genre_summary(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
     """Get summary statistics per genre (market overview)."""
@@ -264,7 +264,7 @@ async def get_genre_summary(
 
 
 @router.get("/search")
-async def pro_search(
+def pro_search(
     q: str = Query(..., min_length=1, description="検索キーワード"),
     search_scope: str = Query("all", description="検索範囲: all, ads, lp, transcript, text"),
     genre: Optional[str] = None,
@@ -407,7 +407,7 @@ async def pro_search(
 
 
 @router.get("/export/rankings")
-async def export_rankings_csv(
+def export_rankings_csv(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
     genre: Optional[str] = None,
 ):
@@ -456,7 +456,7 @@ async def export_rankings_csv(
 
 
 @router.get("/export/ads")
-async def export_ads_csv(
+def export_ads_csv(
     genre: Optional[str] = None,
     platform: Optional[str] = None,
     advertiser: Optional[str] = None,
