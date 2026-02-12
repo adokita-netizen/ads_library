@@ -72,6 +72,14 @@ interface OwnLP {
 
 type ImportMethod = "url" | "html" | "text";
 
+const GENRE_OPTIONS = [
+  { value: "美容・コスメ", label: "美容・コスメ" },
+  { value: "健康食品", label: "健康食品" },
+  { value: "ヘアケア", label: "ヘアケア" },
+  { value: "ダイエット", label: "ダイエット" },
+  { value: "サプリメント", label: "サプリメント" },
+] as const;
+
 const uspCategoryLabels: Record<string, string> = {
   efficacy: "効果・実感",
   authority: "権威性",
@@ -135,6 +143,63 @@ export default function LPAnalysisView() {
   const [importGenre, setImportGenre] = useState("美容・コスメ");
   const [importProduct, setImportProduct] = useState("");
   const [importContent, setImportContent] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Helper: safely parse domain from URL
+  const safeDomain = (url: string | undefined): string => {
+    if (!url) return "";
+    try { return new URL(url).hostname; } catch { return ""; }
+  };
+
+  // Helper: map LP API items to LPData (deduplicated)
+  const mapLPItems = (items: Record<string, unknown>[]): LPData[] =>
+    items.map((item, idx) => ({
+      id: (item.id as number) || idx + 1,
+      url: (item.url as string) || "",
+      domain: (item.domain as string) || safeDomain(item.url as string),
+      title: (item.title as string) || "",
+      lpType: (item.lp_type as string) || "",
+      genre: (item.genre as string) || "",
+      advertiser: (item.advertiser_name as string) || "",
+      product: (item.product_name as string) || "",
+      qualityScore: (item.quality_score as number) || 0,
+      conversionScore: (item.conversion_score as number) || 0,
+      trustScore: (item.trust_score as number) || 0,
+      primaryAppeal: (item.primary_appeal as string) || "",
+      secondaryAppeal: (item.secondary_appeal as string) || "",
+      ctaCount: (item.cta_count as number) || 0,
+      testimonialCount: (item.testimonial_count as number) || 0,
+      wordCount: (item.word_count as number) || 0,
+      hasPricing: (item.has_pricing as boolean) || false,
+      priceText: (item.price_text as string) || "",
+      heroHeadline: (item.hero_headline as string) || "",
+      status: (item.status as string) || "",
+      analyzedAt: (item.analyzed_at as string) || (item.created_at as string) || "",
+    }));
+
+  // Helper: map OwnLP API items (deduplicated)
+  const mapOwnLPItems = (items: Record<string, unknown>[]): OwnLP[] =>
+    items.map((item) => ({
+      id: (item.id as number) || 0,
+      label: (item.own_lp_label as string) || (item.label as string) || "",
+      version: (item.own_lp_version as number) || (item.version as number) || 1,
+      genre: (item.genre as string) || "",
+      product: (item.product_name as string) || "",
+      qualityScore: (item.quality_score as number) || 0,
+      conversionScore: (item.conversion_score as number) || 0,
+      trustScore: (item.trust_score as number) || 0,
+      competitorCount: (item.competitor_count_in_genre as number) || (item.competitor_count as number) || 0,
+      avgCompetitorQuality: (item.avg_competitor_quality as number) || 0,
+      status: (item.status as string) || "",
+      createdAt: (item.created_at as string) || "",
+    }));
+
+  // Auto-dismiss error
+  useEffect(() => {
+    if (!errorMessage) return;
+    const t = setTimeout(() => setErrorMessage(null), 5000);
+    return () => clearTimeout(t);
+  }, [errorMessage]);
 
   // Fetch LPs
   useEffect(() => {
@@ -144,35 +209,14 @@ export default function LPAnalysisView() {
         const params: Record<string, string> = {};
         if (selectedGenre !== "all") params.genre = selectedGenre;
         const response = await lpAnalysisApi.list(params);
-        const items = response.data?.items || response.data?.results || response.data;
+        const data = response.data;
+        const items = data?.landing_pages || data?.items || data?.results;
         if (Array.isArray(items)) {
-          const mapped: LPData[] = items.map((item: Record<string, unknown>, idx: number) => ({
-            id: (item.id as number) || idx + 1,
-            url: (item.url as string) || "",
-            domain: (item.domain as string) || new URL((item.url as string) || "https://example.com").hostname,
-            title: (item.title as string) || "",
-            lpType: (item.lp_type as string) || (item.destination_type as string) || "",
-            genre: (item.genre as string) || "",
-            advertiser: (item.advertiser_name as string) || (item.advertiser as string) || "",
-            product: (item.product_name as string) || (item.product as string) || "",
-            qualityScore: (item.quality_score as number) || 0,
-            conversionScore: (item.conversion_score as number) || 0,
-            trustScore: (item.trust_score as number) || 0,
-            primaryAppeal: (item.primary_appeal as string) || "",
-            secondaryAppeal: (item.secondary_appeal as string) || "",
-            ctaCount: (item.cta_count as number) || 0,
-            testimonialCount: (item.testimonial_count as number) || 0,
-            wordCount: (item.word_count as number) || 0,
-            hasPricing: (item.has_pricing as boolean) || false,
-            priceText: (item.price_text as string) || "",
-            heroHeadline: (item.hero_headline as string) || "",
-            status: (item.status as string) || "",
-            analyzedAt: (item.analyzed_at as string) || (item.created_at as string) || "",
-          }));
-          setLPs(mapped);
+          setLPs(mapLPItems(items));
         }
       } catch (error) {
         console.error("Failed to fetch LPs:", error);
+        setErrorMessage("LP一覧の取得に失敗しました");
       } finally {
         setLPsLoading(false);
       }
@@ -186,26 +230,14 @@ export default function LPAnalysisView() {
       setOwnLPsLoading(true);
       try {
         const response = await lpAnalysisApi.listOwn();
-        const items = response.data?.items || response.data?.results || response.data;
+        const data = response.data;
+        const items = data?.own_lps || data?.items || data?.results;
         if (Array.isArray(items)) {
-          const mapped: OwnLP[] = items.map((item: Record<string, unknown>) => ({
-            id: (item.id as number) || 0,
-            label: (item.label as string) || "",
-            version: (item.version as number) || 1,
-            genre: (item.genre as string) || "",
-            product: (item.product_name as string) || "",
-            qualityScore: (item.quality_score as number) || 0,
-            conversionScore: (item.conversion_score as number) || 0,
-            trustScore: (item.trust_score as number) || 0,
-            competitorCount: (item.competitor_count as number) || 0,
-            avgCompetitorQuality: (item.avg_competitor_quality as number) || 0,
-            status: (item.status as string) || "",
-            createdAt: (item.created_at as string) || "",
-          }));
-          setOwnLPs(mapped);
+          setOwnLPs(mapOwnLPItems(items));
         }
       } catch (error) {
         console.error("Failed to fetch own LPs:", error);
+        setErrorMessage("自社LP一覧の取得に失敗しました");
       } finally {
         setOwnLPsLoading(false);
       }
@@ -226,10 +258,10 @@ export default function LPAnalysisView() {
         if (data) {
           if (Array.isArray(data.appeal_distribution)) {
             setAppealDistribution(data.appeal_distribution.map((item: Record<string, unknown>) => ({
-              axis: (item.axis as string) || "",
+              axis: (item.appeal_axis as string) || (item.axis as string) || "",
               avgStrength: (item.avg_strength as number) || 0,
-              count: (item.count as number) || 0,
-              samples: (item.samples as string[]) || [],
+              count: (item.usage_count as number) || (item.count as number) || 0,
+              samples: (item.sample_texts as string[]) || (item.samples as string[]) || [],
             })));
           }
           if (Array.isArray(data.common_usps)) {
@@ -243,6 +275,7 @@ export default function LPAnalysisView() {
         }
       } catch (error) {
         console.error("Failed to fetch competitor insight:", error);
+        setErrorMessage("競合分析データの取得に失敗しました");
       } finally {
         setCompetitorLoading(false);
       }
@@ -252,40 +285,26 @@ export default function LPAnalysisView() {
 
   // Handle crawl
   const handleCrawl = async () => {
-    if (!crawlUrl.trim()) return;
+    const trimmed = crawlUrl.trim();
+    if (!trimmed) return;
+    // Basic URL validation
+    try { new URL(trimmed); } catch {
+      setErrorMessage("有効なURLを入力してください（例: https://example.com）");
+      return;
+    }
     try {
       await lpAnalysisApi.crawl({ url: crawlUrl, auto_analyze: true });
       setCrawlUrl("");
       // Refresh LP list
       const response = await lpAnalysisApi.list();
-      const items = response.data?.items || response.data?.results || response.data;
+      const data = response.data;
+      const items = data?.landing_pages || data?.items || data?.results;
       if (Array.isArray(items)) {
-        setLPs(items.map((item: Record<string, unknown>, idx: number) => ({
-          id: (item.id as number) || idx + 1,
-          url: (item.url as string) || "",
-          domain: (item.domain as string) || "",
-          title: (item.title as string) || "",
-          lpType: (item.lp_type as string) || "",
-          genre: (item.genre as string) || "",
-          advertiser: (item.advertiser_name as string) || "",
-          product: (item.product_name as string) || "",
-          qualityScore: (item.quality_score as number) || 0,
-          conversionScore: (item.conversion_score as number) || 0,
-          trustScore: (item.trust_score as number) || 0,
-          primaryAppeal: (item.primary_appeal as string) || "",
-          secondaryAppeal: (item.secondary_appeal as string) || "",
-          ctaCount: (item.cta_count as number) || 0,
-          testimonialCount: (item.testimonial_count as number) || 0,
-          wordCount: (item.word_count as number) || 0,
-          hasPricing: (item.has_pricing as boolean) || false,
-          priceText: (item.price_text as string) || "",
-          heroHeadline: (item.hero_headline as string) || "",
-          status: (item.status as string) || "",
-          analyzedAt: (item.analyzed_at as string) || "",
-        })));
+        setLPs(mapLPItems(items));
       }
     } catch (error) {
       console.error("Failed to crawl LP:", error);
+      setErrorMessage("LPのクロールに失敗しました");
     }
   };
 
@@ -307,25 +326,14 @@ export default function LPAnalysisView() {
       setImportContent("");
       // Refresh own LPs
       const response = await lpAnalysisApi.listOwn();
-      const items = response.data?.items || response.data?.results || response.data;
+      const data = response.data;
+      const items = data?.own_lps || data?.items || data?.results;
       if (Array.isArray(items)) {
-        setOwnLPs(items.map((item: Record<string, unknown>) => ({
-          id: (item.id as number) || 0,
-          label: (item.label as string) || "",
-          version: (item.version as number) || 1,
-          genre: (item.genre as string) || "",
-          product: (item.product_name as string) || "",
-          qualityScore: (item.quality_score as number) || 0,
-          conversionScore: (item.conversion_score as number) || 0,
-          trustScore: (item.trust_score as number) || 0,
-          competitorCount: (item.competitor_count as number) || 0,
-          avgCompetitorQuality: (item.avg_competitor_quality as number) || 0,
-          status: (item.status as string) || "",
-          createdAt: (item.created_at as string) || "",
-        })));
+        setOwnLPs(mapOwnLPItems(items));
       }
     } catch (error) {
       console.error("Failed to import own LP:", error);
+      setErrorMessage("自社LPの取り込みに失敗しました");
     }
   };
 
@@ -339,9 +347,22 @@ export default function LPAnalysisView() {
         own_lp_id: lp.id,
         genre: lp.genre,
       });
-      setCompareResult(response.data);
+      const raw = response.data;
+      // Normalize compare response to frontend-friendly structure
+      const scores = [
+        { label: "品質スコア", own: raw.own_quality || 0, comp: raw.competitor_avg_quality || 0, color: "#4A7DFF" },
+        { label: "CV力", own: raw.own_conversion || 0, comp: raw.competitor_avg_conversion || 0, color: "#10b981" },
+        { label: "信頼性", own: raw.own_trust || 0, comp: raw.competitor_avg_trust || 0, color: "#f59e0b" },
+      ];
+      setCompareResult({
+        ...raw,
+        scores,
+        strengths: raw.strengths_vs_competitors || [],
+        improvements: raw.improvement_opportunities || [],
+      });
     } catch (error) {
       console.error("Failed to compare LP:", error);
+      setErrorMessage("競合比較に失敗しました");
     } finally {
       setCompareLoading(false);
     }
@@ -357,9 +378,18 @@ export default function LPAnalysisView() {
         target_audience: target,
         genre: genre,
       });
-      setUSPFlow(response.data);
+      const raw = response.data;
+      // Normalize USP flow response to frontend-friendly keys
+      setUSPFlow({
+        ...raw,
+        primaryUSP: raw.recommended_primary_usp || raw.primaryUSP || "",
+        appealAxis: raw.recommended_appeal_axis || raw.appealAxis || "",
+        structure: raw.article_lp_structure || raw.structure || [],
+        headlines: raw.headline_suggestions || raw.headlines || [],
+      });
     } catch (error) {
       console.error("Failed to generate USP flow:", error);
+      setErrorMessage("USP導線設計の生成に失敗しました");
     } finally {
       setUSPFlowLoading(false);
     }
@@ -367,6 +397,21 @@ export default function LPAnalysisView() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Error Toast */}
+      {errorMessage && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg shadow-lg text-xs animate-in fade-in">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="ml-2 text-red-400 hover:text-red-600">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-white">
         <div>
@@ -431,9 +476,7 @@ export default function LPAnalysisView() {
                     onChange={(e) => setSelectedGenre(e.target.value)}
                   >
                     <option value="all">全ジャンル</option>
-                    <option value="美容・コスメ">美容・コスメ</option>
-                    <option value="健康食品">健康食品</option>
-                    <option value="ヘアケア">ヘアケア</option>
+                    {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                   </select>
                   <span className="text-[11px] text-gray-400">
                     {lpsLoading ? "読み込み中..." : `${lps.length}件のLP`}
@@ -582,9 +625,7 @@ export default function LPAnalysisView() {
                 value={selectedGenre}
                 onChange={(e) => setSelectedGenre(e.target.value)}
               >
-                <option value="美容・コスメ">美容・コスメ</option>
-                <option value="健康食品">健康食品</option>
-                <option value="ヘアケア">ヘアケア</option>
+                {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
               <span className="text-[11px] text-gray-400">
                 {competitorLoading ? "読み込み中..." : `ジャンル内の分析データ`}
@@ -687,9 +728,7 @@ export default function LPAnalysisView() {
                     <div>
                       <label className="text-[10px] text-gray-500 font-medium">ジャンル</label>
                       <select className="select-filter w-full mt-1 text-xs" value={importGenre} onChange={(e) => setImportGenre(e.target.value)}>
-                        <option>美容・コスメ</option>
-                        <option>健康食品</option>
-                        <option>ヘアケア</option>
+                        {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                       </select>
                     </div>
                     <div>
@@ -902,9 +941,7 @@ export default function LPAnalysisView() {
                   <div>
                     <label className="text-[10px] text-gray-500 font-medium">ジャンル</label>
                     <select name="genre" className="select-filter w-full mt-1 text-xs">
-                      <option>美容・コスメ</option>
-                      <option>健康食品</option>
-                      <option>ヘアケア</option>
+                      {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                     </select>
                   </div>
                   <div>

@@ -173,9 +173,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
             link_captions = ad_data.get("ad_creative_link_captions", [])
             destination_url = ad_data.get("link_url") or ad_data.get("website_url")
             if not destination_url and link_captions:
-                # Caption often contains the display URL
+                # Caption often contains the display URL (e.g., "example.com/product")
                 caption = link_captions[0]
-                if caption and ("http" in caption or "." in caption):
+                if caption and ("http" in caption or ("." in caption and "/" in caption)):
                     destination_url = caption if caption.startswith("http") else f"https://{caption}"
 
             return CrawledAd(
@@ -217,11 +217,12 @@ class MetaAdLibraryCrawler(BaseCrawler):
             if link_el:
                 href = link_el.get("href", "")
                 if "l.facebook.com/l.php" in href:
-                    # Facebook redirect URL - extract the actual URL param
+                    # Facebook redirect URL - extract and decode the actual URL param
                     import urllib.parse
                     parsed = urllib.parse.urlparse(href)
                     params = urllib.parse.parse_qs(parsed.query)
-                    destination_url = params.get("u", [None])[0]
+                    raw_url = params.get("u", [None])[0]
+                    destination_url = urllib.parse.unquote(raw_url) if raw_url else None
                 elif href.startswith("http") and "facebook.com" not in href:
                     destination_url = href
 

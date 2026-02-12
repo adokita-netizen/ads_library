@@ -241,6 +241,117 @@ def crawl_and_analyze_lp_task(
         session.close()
 
 
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30, queue="analysis")
+def analyze_own_lp_content_task(
+    self,
+    lp_id: int,
+    genre: str | None = None,
+):
+    """Analyze an already-imported own LP (text/HTML content, no crawl needed)."""
+    logger.info("own_lp_analysis_started", lp_id=lp_id, task_id=self.request.id)
+
+    session = SyncSessionLocal()
+    try:
+        lp = session.query(LandingPage).filter(LandingPage.id == lp_id).first()
+        if not lp:
+            return {"status": "failed", "error": f"LP {lp_id} not found"}
+
+        if not lp.full_text_content:
+            lp.status = LPStatusEnum.COMPLETED
+            session.commit()
+            return {"status": "completed", "lp_id": lp_id, "note": "No content to analyze"}
+
+        lp.status = LPStatusEnum.ANALYZING
+        session.commit()
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            analyzer = LPContentAnalyzer()
+            analysis_result = loop.run_until_complete(
+                analyzer.analyze_lp_full(
+                    text_content=lp.full_text_content,
+                    url=lp.url or "",
+                    title=lp.title or lp.own_lp_label or "",
+                    sections_summary="",
+                    genre=genre or lp.genre or "",
+                )
+            )
+
+            # Save USP patterns
+            session.query(USPPattern).filter(USPPattern.landing_page_id == lp.id).delete()
+            for usp in analysis_result.usps:
+                session.add(USPPattern(
+                    landing_page_id=lp.id,
+                    usp_category=usp.category,
+                    usp_text=usp.text,
+                    usp_headline=usp.headline,
+                    supporting_evidence=usp.evidence,
+                    prominence_score=usp.prominence,
+                    position_in_page=usp.position,
+                    keywords=usp.keywords,
+                ))
+
+            # Save appeal axes
+            session.query(AppealAxisAnalysis).filter(
+                AppealAxisAnalysis.landing_page_id == lp.id
+            ).delete()
+            for appeal in analysis_result.appeal_axes:
+                session.add(AppealAxisAnalysis(
+                    landing_page_id=lp.id,
+                    appeal_axis=appeal.axis,
+                    strength_score=appeal.strength,
+                    evidence_texts=appeal.evidence_texts,
+                ))
+
+            # Save analysis
+            session.query(LPAnalysis).filter(LPAnalysis.landing_page_id == lp.id).delete()
+            session.add(LPAnalysis(
+                landing_page_id=lp.id,
+                overall_quality_score=analysis_result.quality_score,
+                conversion_potential_score=analysis_result.conversion_potential,
+                trust_score=analysis_result.trust_score,
+                urgency_score=analysis_result.urgency_score,
+                page_flow_pattern=analysis_result.page_flow,
+                structure_summary=analysis_result.structure_summary,
+                inferred_target_gender=analysis_result.target_gender,
+                inferred_target_age_range=analysis_result.target_age_range,
+                inferred_target_concerns=analysis_result.target_concerns,
+                target_persona_summary=analysis_result.persona_summary,
+                primary_appeal_axis=analysis_result.primary_appeal,
+                secondary_appeal_axis=analysis_result.secondary_appeal,
+                appeal_strategy_summary=analysis_result.appeal_summary,
+                competitive_positioning=analysis_result.positioning,
+                differentiation_points=analysis_result.differentiation,
+                headline_effectiveness=analysis_result.headline_effectiveness,
+                cta_effectiveness=analysis_result.cta_effectiveness,
+                emotional_triggers=analysis_result.emotional_triggers,
+                power_words=analysis_result.power_words,
+                strengths=analysis_result.strengths,
+                weaknesses=analysis_result.weaknesses,
+                reusable_patterns=analysis_result.reusable_patterns,
+                improvement_suggestions=analysis_result.improvement_suggestions,
+                full_analysis_text=analysis_result.full_analysis,
+            ))
+
+            lp.status = LPStatusEnum.COMPLETED
+            lp.analyzed_at = datetime.now(timezone.utc)
+            session.commit()
+
+            logger.info("own_lp_analysis_completed", lp_id=lp.id)
+            return {"status": "completed", "lp_id": lp.id}
+
+        finally:
+            loop.close()
+
+    except Exception as e:
+        logger.error("own_lp_analysis_failed", lp_id=lp_id, error=str(e))
+        session.rollback()
+        raise self.retry(exc=e)
+    finally:
+        session.close()
+
+
 @celery_app.task(bind=True, max_retries=1, default_retry_delay=60, queue="analysis")
 def batch_crawl_lps_task(
     self,
