@@ -45,6 +45,9 @@ data/models/*
 !data/processed/.gitkeep
 !data/models/.gitkeep
 
+# Redis
+dump.rdb
+
 # Docker volumes
 postgres_data/
 redis_data/
