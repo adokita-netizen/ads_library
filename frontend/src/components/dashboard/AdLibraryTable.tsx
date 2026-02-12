@@ -135,7 +135,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
         else params.period = "daily";
 
         const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.results || response.data;
+        const items = response.data?.items || response.data?.rankings || response.data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
             id: (item.ad_id as number) || idx + 1,

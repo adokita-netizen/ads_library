@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { analyticsApi } from "@/lib/api";
+import { rankingsApi } from "@/lib/api";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
 type TrendCategory = "all" | "beauty" | "health" | "diet" | "haircare" | "oral";
@@ -74,8 +74,8 @@ export default function TrendView() {
         if (period) params.period = period;
         if (category !== "all") params.genre = category;
 
-        const response = await analyticsApi.getTrends(params);
-        const items = response.data?.items || response.data?.results || response.data;
+        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
+        const items = response.data?.items || response.data?.rankings || response.data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
             rank: (item.rank as number) || idx + 1,
