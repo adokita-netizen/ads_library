@@ -132,6 +132,12 @@ class TikTokAdCrawler(BaseCrawler):
             if ad_data.get("last_shown_date"):
                 last_seen = datetime.fromisoformat(ad_data["last_shown_date"])
 
+            destination_url = (
+                ad_data.get("landing_page_url")
+                or ad_data.get("landing_page")
+                or ad_data.get("click_url")
+            )
+
             return CrawledAd(
                 external_id=str(ad_data.get("ad_id", "")),
                 platform="tiktok",
@@ -148,6 +154,8 @@ class TikTokAdCrawler(BaseCrawler):
                     "paid_for_by": ad_data.get("paid_for_by"),
                     "target_audience": ad_data.get("target_audience"),
                     "reach": ad_data.get("reach"),
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
                 },
             )
         except Exception as e:
@@ -165,6 +173,14 @@ class TikTokAdCrawler(BaseCrawler):
             video_el = card.select_one("video source")
             video_url = video_el.get("src") if video_el else None
 
+            # Extract destination URL from card
+            link_el = card.select_one("a.landing-page, a[data-landing-url], a[href]:not([href*='tiktok.com'])")
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "tiktok.com" not in href:
+                    destination_url = href
+
             return CrawledAd(
                 external_id=ad_id or f"tt_{hash(str(card)):#010x}",
                 platform="tiktok",
@@ -172,6 +188,10 @@ class TikTokAdCrawler(BaseCrawler):
                 description=desc_el.get_text(strip=True) if desc_el else None,
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
+                metadata={
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("tiktok_scrape_parse_failed", error=str(e))

@@ -121,18 +121,20 @@ class RankingService:
         offset: int = 0,
     ) -> tuple[list[ProductRanking], int]:
         """Get current rankings with filters."""
-        today = date.today()
+        # Find the most recent rankings for the given period
+        # instead of requiring exact date match
+        latest_start = (
+            session.query(func.max(ProductRanking.period_start))
+            .filter(ProductRanking.period == period)
+            .scalar()
+        )
 
-        if period == "daily":
-            start = today - timedelta(days=1)
-        elif period == "weekly":
-            start = today - timedelta(days=7)
-        else:
-            start = today - timedelta(days=30)
+        if latest_start is None:
+            return [], 0
 
         query = session.query(ProductRanking).filter(
             ProductRanking.period == period,
-            ProductRanking.period_start == start,
+            ProductRanking.period_start == latest_start,
         )
 
         if genre:
@@ -157,12 +159,18 @@ class RankingService:
         limit: int = 20,
     ) -> list[ProductRanking]:
         """Get currently trending/hit ads."""
-        today = date.today()
-        start = today - timedelta(days=7)
+        latest_start = (
+            session.query(func.max(ProductRanking.period_start))
+            .filter(ProductRanking.period == "weekly")
+            .scalar()
+        )
+
+        if latest_start is None:
+            return []
 
         query = session.query(ProductRanking).filter(
             ProductRanking.period == "weekly",
-            ProductRanking.period_start == start,
+            ProductRanking.period_start == latest_start,
             ProductRanking.is_hit == True,  # noqa: E712
         )
 

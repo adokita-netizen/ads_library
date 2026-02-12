@@ -1,6 +1,5 @@
 """LP Analysis API endpoints."""
 
-import asyncio
 from typing import Optional
 
 import structlog
@@ -40,7 +39,11 @@ from app.schemas.lp_analysis import (
 )
 from app.services.lp_analysis.competitor_intelligence import CompetitorIntelligence
 from app.services.lp_analysis.lp_comparator import LPComparator
-from app.tasks.lp_tasks import batch_crawl_lps_task, crawl_and_analyze_lp_task
+from app.tasks.lp_tasks import (
+    analyze_own_lp_content_task,
+    batch_crawl_lps_task,
+    crawl_and_analyze_lp_task,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/lp-analysis", tags=["LP Analysis"])
@@ -246,14 +249,7 @@ async def get_competitor_insight(request: LPCompetitorRequest):
             })
 
         ci = CompetitorIntelligence()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            insight = loop.run_until_complete(
-                ci.generate_genre_insight(request.genre, lp_analyses)
-            )
-        finally:
-            loop.close()
+        insight = await ci.generate_genre_insight(request.genre, lp_analyses)
 
         return GenreInsightResponse(
             genre=insight.genre,
@@ -325,20 +321,13 @@ async def generate_usp_flow(request: USPFlowRequest):
             })
 
         ci = CompetitorIntelligence()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            recommendation = loop.run_until_complete(
-                ci.generate_usp_flow_recommendation(
-                    product_name=request.product_name,
-                    product_description=request.product_description,
-                    target_audience=request.target_audience,
-                    genre=request.genre,
-                    competitor_analyses=competitor_analyses,
-                )
-            )
-        finally:
-            loop.close()
+        recommendation = await ci.generate_usp_flow_recommendation(
+            product_name=request.product_name,
+            product_description=request.product_description,
+            target_audience=request.target_audience,
+            genre=request.genre,
+            competitor_analyses=competitor_analyses,
+        )
 
         return USPFlowResponse(
             recommended_primary_usp=recommendation.recommended_primary_usp,
@@ -413,7 +402,7 @@ async def import_own_lp(request: OwnLPImportRequest):
         session.commit()
         session.refresh(lp)
 
-        # If URL provided, queue crawl task
+        # If URL provided, queue crawl + analysis task
         if request.url:
             crawl_and_analyze_lp_task.delay(
                 url=request.url,
@@ -423,6 +412,12 @@ async def import_own_lp(request: OwnLPImportRequest):
                 auto_analyze=request.auto_analyze,
                 is_own=True,
                 own_lp_id=lp.id,
+            )
+        elif request.auto_analyze and (request.text_content or request.html_content):
+            # For non-URL imports, trigger analysis on the provided content
+            analyze_own_lp_content_task.delay(
+                lp_id=lp.id,
+                genre=request.genre,
             )
 
         logger.info("own_lp_imported", lp_id=lp.id, label=request.label)
@@ -637,19 +632,12 @@ async def compare_own_lp(request: LPCompareRequest):
         # Run comparison
         comparator = LPComparator()
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(
-                    comparator.generate_comparison_insights(
-                        own_analysis=own_analysis_dict,
-                        competitor_analyses=competitor_analyses,
-                        product_name=own_lp.product_name or "",
-                        genre=genre,
-                    )
-                )
-            finally:
-                loop.close()
+            result = await comparator.generate_comparison_insights(
+                own_analysis=own_analysis_dict,
+                competitor_analyses=competitor_analyses,
+                product_name=own_lp.product_name or "",
+                genre=genre,
+            )
         except Exception:
             result = comparator.compare_scores(own_analysis_dict, competitor_analyses)
 

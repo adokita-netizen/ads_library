@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AdCreate(BaseModel):
@@ -33,10 +33,29 @@ class AdResponse(BaseModel):
     estimated_ctr: Optional[float] = None
     view_count: Optional[int] = None
     tags: Optional[list[str]] = None
+    destination_url: Optional[str] = None
+    destination_type: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def extract_metadata_fields(cls, data):
+        """Extract destination_url and destination_type from ad_metadata JSONB."""
+        if hasattr(data, "__dict__"):
+            metadata = getattr(data, "ad_metadata", None) or {}
+            d = {k: v for k, v in data.__dict__.items() if not k.startswith("_")}
+            d["destination_url"] = metadata.get("destination_url")
+            d["destination_type"] = metadata.get("destination_type")
+            return d
+        if isinstance(data, dict):
+            metadata = data.get("ad_metadata") or data.get("metadata") or {}
+            if isinstance(metadata, dict):
+                data.setdefault("destination_url", metadata.get("destination_url"))
+                data.setdefault("destination_type", metadata.get("destination_type"))
+        return data
 
 
 class AdListResponse(BaseModel):

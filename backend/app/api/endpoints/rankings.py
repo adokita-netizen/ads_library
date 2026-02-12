@@ -44,35 +44,127 @@ async def get_product_rankings(
             offset=(page - 1) * page_size,
         )
 
+        # If no pre-computed rankings exist, fall back to listing ads directly
+        if total == 0:
+            return _fallback_ad_list(session, genre, platform, page, page_size, period)
+
+        # Join with Ad table to get ad-level details
+        ad_ids = [r.ad_id for r in rankings]
+        ads_map = {}
+        if ad_ids:
+            ads = session.query(Ad).filter(Ad.id.in_(ad_ids)).all()
+            for ad in ads:
+                metadata = ad.ad_metadata or {}
+                ads_map[ad.id] = {
+                    "thumbnail": ad.thumbnail_s3_key or "",
+                    "duration_seconds": ad.duration_seconds or 0,
+                    "management_id": ad.external_id or f"AD-{ad.id}",
+                    "ad_url": ad.video_url or "",
+                    "destination_url": metadata.get("destination_url", ""),
+                    "destination_type": metadata.get("destination_type", ""),
+                    "published_date": (
+                        ad.first_seen_at.isoformat() if ad.first_seen_at else
+                        ad.created_at.isoformat() if ad.created_at else ""
+                    ),
+                }
+
+        items = []
+        for r in rankings:
+            ad_info = ads_map.get(r.ad_id, {})
+            items.append({
+                "rank": r.rank_position,
+                "previous_rank": r.previous_rank,
+                "rank_change": r.rank_change,
+                "ad_id": r.ad_id,
+                "product_name": r.product_name,
+                "advertiser_name": r.advertiser_name,
+                "genre": r.genre,
+                "platform": r.platform,
+                "view_increase": r.total_view_increase,
+                "spend_increase": round(r.total_spend_increase),
+                "cumulative_views": r.cumulative_views,
+                "cumulative_spend": round(r.cumulative_spend),
+                "is_hit": r.is_hit,
+                "hit_score": r.hit_score,
+                "trend_score": r.trend_score,
+                # Ad-level fields from join
+                "thumbnail": ad_info.get("thumbnail", ""),
+                "duration_seconds": ad_info.get("duration_seconds", 0),
+                "management_id": ad_info.get("management_id", f"AD-{r.ad_id}"),
+                "ad_url": ad_info.get("ad_url", ""),
+                "destination_url": ad_info.get("destination_url", ""),
+                "destination_type": ad_info.get("destination_type", ""),
+                "published_date": ad_info.get("published_date", ""),
+            })
+
         return {
             "period": period,
             "genre": genre,
             "total": total,
             "page": page,
             "page_size": page_size,
-            "rankings": [
-                {
-                    "rank": r.rank_position,
-                    "previous_rank": r.previous_rank,
-                    "rank_change": r.rank_change,
-                    "ad_id": r.ad_id,
-                    "product_name": r.product_name,
-                    "advertiser_name": r.advertiser_name,
-                    "genre": r.genre,
-                    "platform": r.platform,
-                    "view_increase": r.total_view_increase,
-                    "spend_increase": round(r.total_spend_increase),
-                    "cumulative_views": r.cumulative_views,
-                    "cumulative_spend": round(r.cumulative_spend),
-                    "is_hit": r.is_hit,
-                    "hit_score": r.hit_score,
-                    "trend_score": r.trend_score,
-                }
-                for r in rankings
-            ],
+            "items": items,
         }
     finally:
         session.close()
+
+
+def _fallback_ad_list(session, genre, platform, page, page_size, period):
+    """When no pre-computed rankings exist, list ads directly from the Ad table."""
+    query = session.query(Ad)
+
+    if platform:
+        query = query.filter(Ad.platform == platform)
+    if genre:
+        query = query.filter(Ad.category == genre)
+
+    total = query.count()
+    ads = (
+        query.order_by(desc(Ad.created_at))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for rank, ad in enumerate(ads, start=(page - 1) * page_size + 1):
+        metadata = ad.ad_metadata or {}
+        items.append({
+            "rank": rank,
+            "previous_rank": None,
+            "rank_change": None,
+            "ad_id": ad.id,
+            "product_name": ad.title or ad.brand_name or ad.advertiser_name or "不明",
+            "advertiser_name": ad.advertiser_name or "",
+            "genre": str(ad.category.value) if ad.category else "",
+            "platform": str(ad.platform.value) if ad.platform else "",
+            "view_increase": ad.view_count or 0,
+            "spend_increase": 0,
+            "cumulative_views": ad.view_count or 0,
+            "cumulative_spend": 0,
+            "is_hit": False,
+            "hit_score": 0,
+            "trend_score": 0,
+            "thumbnail": ad.thumbnail_s3_key or "",
+            "duration_seconds": ad.duration_seconds or 0,
+            "management_id": ad.external_id or f"AD-{ad.id}",
+            "ad_url": ad.video_url or "",
+            "destination_url": metadata.get("destination_url", ""),
+            "destination_type": metadata.get("destination_type", ""),
+            "published_date": (
+                ad.first_seen_at.isoformat() if ad.first_seen_at else
+                ad.created_at.isoformat() if ad.created_at else ""
+            ),
+        })
+
+    return {
+        "period": period,
+        "genre": genre,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 @router.get("/hit-ads")
@@ -88,7 +180,7 @@ async def get_hit_ads(
 
         return {
             "total": len(hits),
-            "hit_ads": [
+            "items": [
                 {
                     "rank": h.rank_position,
                     "ad_id": h.ad_id,

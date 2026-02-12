@@ -21,7 +21,20 @@ async def lifespan(app: FastAPI):
     """Application lifecycle management."""
     logger.info("application_starting", env=settings.app_env)
 
-    # Startup: initialize connections, warm up models, etc.
+    # Auto-create tables if they don't exist (development convenience)
+    try:
+        from app.core.database import sync_engine, Base
+        # Import all models so Base.metadata has them registered
+        import app.models.ad  # noqa: F401
+        import app.models.ad_metrics  # noqa: F401
+        import app.models.analysis  # noqa: F401
+        import app.models.user  # noqa: F401
+        import app.models.landing_page  # noqa: F401
+        Base.metadata.create_all(bind=sync_engine)
+        logger.info("database_tables_ensured")
+    except Exception as e:
+        logger.warning("database_init_skipped", error=str(e))
+
     yield
 
     # Shutdown: cleanup resources

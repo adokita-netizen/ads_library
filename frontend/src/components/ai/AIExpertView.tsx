@@ -5,19 +5,6 @@ import { rankingsApi, notificationsApi } from "@/lib/api";
 
 type AITab = "search" | "notifications" | "insights";
 
-// Mock search results
-const mockSearchResults = [
-  { type: "ad", id: 1, title: "【医師監修】話題の美容セラムが初回980円", matchField: "title", platform: "YouTube", advertiser: "ビューティーラボ" },
-  { type: "transcript", id: 2, title: "ダイエットサプリX 15秒動画", matchedText: "...たった2週間で実感できる効果を...", matchField: "transcript", platform: "TikTok", advertiser: "ヘルスケアジャパン" },
-  { type: "text_detection", id: 3, title: "育毛トニックPRO 30秒", matchedText: "満足度98%", matchField: "video_text", platform: "YouTube", advertiser: "ヘアケアプロ" },
-  { type: "landing_page", id: 4, title: "アイクリームモイスト LP", matchField: "lp_content", platform: "-", advertiser: "コスメティックス" },
-];
-
-const mockInsights = [
-  { genre: "美容・コスメ", summary: "権威性訴求（医師監修）が増加傾向。初回割引の平均は78%OFF。", confidence: 92 },
-  { genre: "健康食品", summary: "UGC風動画が急増。15秒ショート形式がCTR平均1.5倍。", confidence: 88 },
-  { genre: "ヘアケア", summary: "悩み解決型フックが主流。返金保証の訴求が30%増加。", confidence: 85 },
-];
 
 const searchTypeLabels: Record<string, string> = {
   ad: "広告",
@@ -39,7 +26,7 @@ export default function AIExpertView() {
   const [searchScope, setSearchScope] = useState("all");
 
   // Search state
-  const [searchResults, setSearchResults] = useState(mockSearchResults);
+  const [searchResults, setSearchResults] = useState<Array<{ type: string; id: number; title: string; matchedText?: string; matchField: string; platform: string; advertiser: string }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
   // Notification config state
@@ -93,8 +80,7 @@ export default function AIExpertView() {
         setSearchResults([]);
       }
     } catch (error) {
-      console.warn("Search API unavailable, using mock data:", error);
-      setSearchResults(mockSearchResults);
+      console.error("Failed to search:", error);
     } finally {
       setSearchLoading(false);
     }
@@ -198,7 +184,9 @@ export default function AIExpertView() {
 
             {/* Results */}
             <div className="space-y-2">
-              <p className="text-[11px] text-gray-400">{searchResults.length}件の結果</p>
+              <p className="text-[11px] text-gray-400">
+                {searchResults.length > 0 ? `${searchResults.length}件の結果` : "キーワードを入力して検索してください"}
+              </p>
               {searchResults.map((r) => (
                 <div key={`${r.type}-${r.id}`} className="card hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-start gap-3">
@@ -242,18 +230,10 @@ export default function AIExpertView() {
               </p>
             </div>
 
-            {mockInsights.map((insight, i) => (
-              <div key={i} className="card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="badge-blue text-[10px] font-bold">{insight.genre}</span>
-                  <span className="text-[9px] text-gray-400">信頼度 {insight.confidence}%</span>
-                </div>
-                <p className="text-[12px] text-gray-800 leading-relaxed">{insight.summary}</p>
-                <div className="h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full rounded-full bg-[#4A7DFF]" style={{ width: `${insight.confidence}%` }} />
-                </div>
-              </div>
-            ))}
+            <div className="card text-center py-8 text-gray-400">
+              <p className="text-xs">AIインサイトは広告データの蓄積に伴い自動生成されます</p>
+              <p className="text-[10px] mt-1">広告のクロールと分析を進めてください</p>
+            </div>
           </div>
         )}
 

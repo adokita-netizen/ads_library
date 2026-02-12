@@ -350,7 +350,7 @@ async def run_alert_detection(
 
         return {
             "total_alerts": len(alerts),
-            "alerts": [
+            "items": [
                 {
                     "id": a.id,
                     "alert_type": a.alert_type,
@@ -394,7 +394,7 @@ async def get_alert_history(
 
         return {
             "total": len(alerts),
-            "alerts": [
+            "items": [
                 {
                     "id": a.id,
                     "alert_type": a.alert_type,
@@ -602,7 +602,7 @@ async def get_trend_predictions(
 
         return {
             "total": len(predictions),
-            "predictions": [
+            "items": [
                 {
                     "ad_id": p.ad_id,
                     "momentum_score": p.momentum_score,
@@ -654,7 +654,7 @@ async def get_early_hit_candidates(
                 c["platform"] = str(ad.platform)
                 c["advertiser_name"] = ad.advertiser_name
 
-        return {"total": len(candidates), "early_hits": candidates}
+        return {"total": len(candidates), "items": candidates}
     finally:
         session.close()
 
@@ -708,7 +708,7 @@ async def list_funnels(
                 ],
             })
 
-        return {"total": len(result), "funnels": result}
+        return {"total": len(result), "items": result}
     finally:
         session.close()
 
@@ -777,7 +777,7 @@ async def get_offer_clusters(
         clusters = query.all()
         return {
             "total": len(clusters),
-            "clusters": [
+            "items": [
                 {
                     "cluster_id": c.offer_cluster_id,
                     "lp_count": c.lp_count,

@@ -223,6 +223,14 @@ class PinterestAdCrawler(BaseCrawler):
             img_el = card.select_one("img")
             thumbnail_url = img_el.get("src") if img_el else None
 
+            # Extract destination URL from pin link
+            link_el = card.select_one("a[href]:not([href*='pinterest.'])")
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "pinterest." not in href:
+                    destination_url = href
+
             return CrawledAd(
                 external_id=ad_id or f"pin_{hash(str(card)):#010x}",
                 platform="pinterest",
@@ -231,7 +239,11 @@ class PinterestAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
-                metadata={"source": "pinterest_transparency_scrape"},
+                metadata={
+                    "source": "pinterest_transparency_scrape",
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("pinterest_scrape_parse_failed", error=str(e))

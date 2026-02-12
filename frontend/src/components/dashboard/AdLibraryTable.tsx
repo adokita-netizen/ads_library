@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { rankingsApi } from "@/lib/api";
+import { rankingsApi, lpAnalysisApi, adsApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -9,7 +9,8 @@ interface AdLibraryTableProps {
 
 // Filter bar types
 type AdType = "all" | "video" | "banner" | "carousel" | "search";
-type MediaType = "all" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x";
+type MediaType = "all" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x_twitter" | "pinterest" | "smartnews" | "google_ads" | "gunosy";
+type GenreType = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
 type FormatType = "all" | "video" | "banner" | "carousel";
 type VersionType = "latest" | "all_versions";
 type IntervalType = "2days" | "7days" | "14days" | "30days";
@@ -18,6 +19,7 @@ type SortField = "rank" | "play_increase" | "spend_increase" | "total_plays" | "
 interface FilterState {
   adType: AdType;
   media: MediaType;
+  genre: GenreType;
   format: FormatType;
   version: VersionType;
   interval: IntervalType;
@@ -45,93 +47,6 @@ interface MockAd {
   destination: string;
 }
 
-// Mock data matching DPro style
-const mockAds: MockAd[] = [
-  {
-    id: 1, rank: 1, thumbnail: "", duration: 30, platform: "youtube",
-    managementId: "AD-2025-00147", productName: "スキンケアセラムV3", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 1250000, spendIncrease: 8500000,
-    spendBar: 95, isHit: true, totalPlays: 45200000, totalSpend: 128000000,
-    publishedDate: "2025-12-15", adUrl: "https://ads.example.com/v/147", destination: "https://lp.example.com/serum-v3"
-  },
-  {
-    id: 2, rank: 2, thumbnail: "", duration: 15, platform: "tiktok",
-    managementId: "AD-2025-00283", productName: "ダイエットサプリメントX", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 980000, spendIncrease: 6200000,
-    spendBar: 82, isHit: true, totalPlays: 32100000, totalSpend: 95000000,
-    publishedDate: "2025-12-18", adUrl: "https://ads.example.com/v/283", destination: "https://shop.example.com/diet-x"
-  },
-  {
-    id: 3, rank: 3, thumbnail: "", duration: 60, platform: "facebook",
-    managementId: "AD-2025-00391", productName: "育毛トニックPRO", genre: "ヘアケア",
-    destinationType: "記事LP", playIncrease: 720000, spendIncrease: 5100000,
-    spendBar: 68, isHit: false, totalPlays: 28500000, totalSpend: 82000000,
-    publishedDate: "2025-12-10", adUrl: "https://ads.example.com/v/391", destination: "https://lp.example.com/tonic-pro"
-  },
-  {
-    id: 4, rank: 4, thumbnail: "", duration: 20, platform: "instagram",
-    managementId: "AD-2025-00412", productName: "プロテインバーFIT", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 650000, spendIncrease: 4300000,
-    spendBar: 58, isHit: false, totalPlays: 22300000, totalSpend: 67000000,
-    publishedDate: "2025-12-20", adUrl: "https://ads.example.com/v/412", destination: "https://shop.example.com/fit-bar"
-  },
-  {
-    id: 5, rank: 5, thumbnail: "", duration: 45, platform: "youtube",
-    managementId: "AD-2025-00523", productName: "美白クリームルーチェ", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 580000, spendIncrease: 3800000,
-    spendBar: 50, isHit: false, totalPlays: 19800000, totalSpend: 58000000,
-    publishedDate: "2025-12-08", adUrl: "https://ads.example.com/v/523", destination: "https://lp.example.com/luce"
-  },
-  {
-    id: 6, rank: 6, thumbnail: "", duration: 10, platform: "shorts",
-    managementId: "AD-2025-00634", productName: "アイクリームモイスト", genre: "美容・コスメ",
-    destinationType: "EC直接", playIncrease: 510000, spendIncrease: 3200000,
-    spendBar: 42, isHit: false, totalPlays: 16500000, totalSpend: 45000000,
-    publishedDate: "2025-12-22", adUrl: "https://ads.example.com/v/634", destination: "https://shop.example.com/eyecream"
-  },
-  {
-    id: 7, rank: 7, thumbnail: "", duration: 30, platform: "tiktok",
-    managementId: "AD-2025-00745", productName: "酵素ドリンクナチュラ", genre: "健康食品",
-    destinationType: "記事LP", playIncrease: 430000, spendIncrease: 2800000,
-    spendBar: 37, isHit: false, totalPlays: 14200000, totalSpend: 39000000,
-    publishedDate: "2025-12-05", adUrl: "https://ads.example.com/v/745", destination: "https://lp.example.com/natura"
-  },
-  {
-    id: 8, rank: 8, thumbnail: "", duration: 25, platform: "facebook",
-    managementId: "AD-2025-00856", productName: "CBDオイルリラクス", genre: "健康・リラックス",
-    destinationType: "EC直接", playIncrease: 380000, spendIncrease: 2400000,
-    spendBar: 32, isHit: false, totalPlays: 12100000, totalSpend: 34000000,
-    publishedDate: "2025-12-12", adUrl: "https://ads.example.com/v/856", destination: "https://shop.example.com/cbd"
-  },
-  {
-    id: 9, rank: 9, thumbnail: "", duration: 15, platform: "line",
-    managementId: "AD-2025-00967", productName: "マウスウォッシュクリア", genre: "オーラルケア",
-    destinationType: "記事LP", playIncrease: 320000, spendIncrease: 2100000,
-    spendBar: 28, isHit: false, totalPlays: 10500000, totalSpend: 28000000,
-    publishedDate: "2025-12-17", adUrl: "https://ads.example.com/v/967", destination: "https://lp.example.com/mouthwash"
-  },
-  {
-    id: 10, rank: 10, thumbnail: "", duration: 35, platform: "yahoo",
-    managementId: "AD-2025-01078", productName: "葉酸サプリママケア", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 280000, spendIncrease: 1800000,
-    spendBar: 24, isHit: false, totalPlays: 8900000, totalSpend: 24000000,
-    publishedDate: "2025-12-14", adUrl: "https://ads.example.com/v/1078", destination: "https://shop.example.com/mamacare"
-  },
-  {
-    id: 11, rank: 11, thumbnail: "", duration: 20, platform: "x",
-    managementId: "AD-2025-01189", productName: "シワ改善クリームリペア", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 240000, spendIncrease: 1500000,
-    spendBar: 20, isHit: false, totalPlays: 7600000, totalSpend: 21000000,
-    publishedDate: "2025-12-19", adUrl: "https://ads.example.com/v/1189", destination: "https://lp.example.com/repair"
-  },
-  {
-    id: 12, rank: 12, thumbnail: "", duration: 60, platform: "youtube",
-    managementId: "AD-2025-01290", productName: "除毛クリームスムース", genre: "美容・コスメ",
-    destinationType: "EC直接", playIncrease: 210000, spendIncrease: 1300000,
-    spendBar: 17, isHit: false, totalPlays: 6800000, totalSpend: 18000000,
-    publishedDate: "2025-12-06", adUrl: "https://ads.example.com/v/1290", destination: "https://shop.example.com/smooth"
-  },
-];
 
 const platformLabels: Record<string, string> = {
   youtube: "YT",
@@ -141,7 +56,12 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   line: "L",
   yahoo: "Y!",
+  x_twitter: "X",
   x: "X",
+  pinterest: "Pin",
+  smartnews: "SN",
+  google_ads: "G",
+  gunosy: "Gn",
 };
 
 const platformColors: Record<string, string> = {
@@ -152,11 +72,16 @@ const platformColors: Record<string, string> = {
   instagram: "platform-instagram",
   line: "platform-line",
   yahoo: "platform-yahoo",
+  x_twitter: "platform-x",
   x: "platform-x",
+  pinterest: "bg-red-600",
+  smartnews: "bg-sky-600",
+  google_ads: "bg-blue-500",
+  gunosy: "bg-orange-500",
 };
 
 const mediaFilterOptions: { value: MediaType; label: string }[] = [
-  { value: "all", label: "媒体を選択" },
+  { value: "all", label: "全媒体" },
   { value: "youtube", label: "YouTube" },
   { value: "shorts", label: "YouTube Shorts" },
   { value: "facebook", label: "Facebook" },
@@ -164,7 +89,27 @@ const mediaFilterOptions: { value: MediaType; label: string }[] = [
   { value: "tiktok", label: "TikTok" },
   { value: "line", label: "LINE" },
   { value: "yahoo", label: "Yahoo!" },
-  { value: "x", label: "X (Twitter)" },
+  { value: "x_twitter", label: "X (Twitter)" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "smartnews", label: "SmartNews" },
+  { value: "google_ads", label: "Google Ads" },
+  { value: "gunosy", label: "Gunosy" },
+];
+
+const genreFilterOptions: { value: GenreType; label: string }[] = [
+  { value: "all", label: "全ジャンル" },
+  { value: "ec_d2c", label: "EC・D2C" },
+  { value: "app", label: "アプリ" },
+  { value: "finance", label: "金融" },
+  { value: "education", label: "教育" },
+  { value: "beauty", label: "美容・コスメ" },
+  { value: "food", label: "食品" },
+  { value: "gaming", label: "ゲーム" },
+  { value: "health", label: "健康食品" },
+  { value: "technology", label: "テクノロジー" },
+  { value: "real_estate", label: "不動産" },
+  { value: "travel", label: "旅行" },
+  { value: "other", label: "その他" },
 ];
 
 const adTypeOptions: { value: AdType; label: string }[] = [
@@ -198,6 +143,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [filters, setFilters] = useState<FilterState>({
     adType: "all",
     media: "all",
+    genre: "all",
     format: "all",
     version: "latest",
     interval: "2days",
@@ -208,21 +154,25 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const [ads, setAds] = useState<MockAd[]>(mockAds);
+  const [ads, setAds] = useState<MockAd[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCrawlModal, setShowCrawlModal] = useState(false);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const params: Record<string, string | number | undefined> = {};
         if (filters.media !== "all") params.platform = filters.media;
-        if (filters.interval === "7days") params.period = "weekly";
-        else if (filters.interval === "14days") params.period = "biweekly";
+        if (filters.genre !== "all") params.genre = filters.genre;
+        // Backend accepts: daily, weekly, monthly only
+        if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
         else if (filters.interval === "30days") params.period = "monthly";
         else params.period = "daily";
 
         const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.results || response.data;
+        const items = response.data?.items || response.data?.rankings || response.data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
             id: (item.ad_id as number) || idx + 1,
@@ -245,16 +195,18 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             destination: (item.destination_url as string) || "",
           }));
           setAds(mapped);
+        } else {
+          setAds([]);
         }
       } catch (error) {
-        console.warn("API unavailable, using mock data:", error);
-        // keep mock data as fallback
+        console.error("Failed to fetch ad data:", error);
+        setAds([]);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [filters.media, filters.interval]);
+  }, [filters.media, filters.genre, filters.interval, fetchTrigger]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
@@ -337,6 +289,17 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           ))}
         </select>
 
+        {/* Genre filter */}
+        <select
+          className="select-filter"
+          value={filters.genre}
+          onChange={(e) => setFilters({ ...filters, genre: e.target.value as GenreType })}
+        >
+          {genreFilterOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+
         {/* Format filter */}
         <select
           className="select-filter"
@@ -372,6 +335,14 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
         <div className="flex-1" />
 
+        {/* Crawl button */}
+        <button
+          className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors whitespace-nowrap"
+          onClick={() => setShowCrawlModal(true)}
+        >
+          広告クロール
+        </button>
+
         {/* Search */}
         <div className="relative">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -398,6 +369,21 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           <div className="flex items-center justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
             <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
+          </div>
+        )}
+        {!loading && filteredAds.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <svg className="w-10 h-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+            <p className="text-xs">データがありません</p>
+            <p className="text-[10px] mt-1 mb-3">広告をクロールするか、フィルター条件を変更してください</p>
+            <button
+              className="px-4 py-2 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors"
+              onClick={() => setShowCrawlModal(true)}
+            >
+              広告クロールを開始
+            </button>
           </div>
         )}
         <table className="data-table">
@@ -549,13 +535,31 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
                 {/* Destination */}
                 <td>
-                  <button
-                    className="text-[#4A7DFF] hover:underline text-[11px] max-w-[100px] truncate block"
-                    onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank"); }}
-                    title={ad.destination}
-                  >
-                    遷移先
-                  </button>
+                  {ad.destination ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="text-[#4A7DFF] hover:underline text-[11px] max-w-[80px] truncate"
+                        onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank"); }}
+                        title={ad.destination}
+                      >
+                        遷移先
+                      </button>
+                      <button
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          lpAnalysisApi.crawl({ url: ad.destination, ad_id: ad.id, auto_analyze: true })
+                            .then(() => { alert("LP分析を開始しました"); })
+                            .catch(() => { alert("LP分析の開始に失敗しました"); });
+                        }}
+                        title="遷移先LPを分析"
+                      >
+                        LP分析
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-gray-300">-</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -595,6 +599,187 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             onClick={() => setCurrentPage(currentPage + 1)}
           >
             次へ →
+          </button>
+        </div>
+      </div>
+      {/* Crawl Modal */}
+      {showCrawlModal && (
+        <CrawlModal
+          onClose={() => setShowCrawlModal(false)}
+          onSuccess={() => {
+            setShowCrawlModal(false);
+            setFetchTrigger((n) => n + 1);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const ALL_CRAWL_PLATFORMS = [
+  { value: "youtube", label: "YouTube" },
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "x_twitter", label: "X (Twitter)" },
+  { value: "line", label: "LINE" },
+  { value: "yahoo", label: "Yahoo!" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "smartnews", label: "SmartNews" },
+  { value: "google_ads", label: "Google Ads" },
+  { value: "gunosy", label: "Gunosy" },
+];
+
+function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [query, setQuery] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
+    ALL_CRAWL_PLATFORMS.map((p) => p.value)
+  );
+  const [category, setCategory] = useState("");
+  const [limit, setLimit] = useState(20);
+  const [crawling, setCrawling] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const togglePlatform = (value: string) => {
+    setSelectedPlatforms((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const toggleAll = () => {
+    if (selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length) {
+      setSelectedPlatforms([]);
+    } else {
+      setSelectedPlatforms(ALL_CRAWL_PLATFORMS.map((p) => p.value));
+    }
+  };
+
+  const handleCrawl = async () => {
+    if (!query.trim()) return;
+    if (selectedPlatforms.length === 0) {
+      setMessage("媒体を1つ以上選択してください");
+      return;
+    }
+    setCrawling(true);
+    setMessage("");
+    try {
+      const res = await adsApi.crawl({
+        query: query.trim(),
+        platforms: selectedPlatforms,
+        category: category || undefined,
+        limit_per_platform: limit,
+        auto_analyze: true,
+      });
+      const data = res.data;
+      if (data?.status === "error") {
+        setMessage(data.message || "クロール中にエラーが発生しました");
+        setCrawling(false);
+      } else {
+        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
+        setTimeout(() => onSuccess(), 2000);
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setMessage(detail || "クロールの開始に失敗しました。バックエンドの接続を確認してください。");
+      setCrawling(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-gray-900">広告クロール</h3>
+        <p className="text-[11px] text-gray-400 mt-0.5">各媒体の広告ライブラリから広告データを収集します</p>
+
+        <div className="mt-4 space-y-4">
+          {/* Query */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              検索キーワード <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="商材名、競合名、カテゴリなど"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              autoFocus
+            />
+          </div>
+
+          {/* Platforms */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-gray-700">対象媒体</label>
+              <button className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll}>
+                {selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length ? "全解除" : "全選択"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_CRAWL_PLATFORMS.map((p) => (
+                <button
+                  key={p.value}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${
+                    selectedPlatforms.includes(p.value)
+                      ? "bg-[#4A7DFF] text-white border-[#4A7DFF]"
+                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => togglePlatform(p.value)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">{selectedPlatforms.length}媒体を選択中</p>
+          </div>
+
+          {/* Category & Limit row */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">ジャンル（任意）</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              >
+                <option value="">指定なし</option>
+                {genreFilterOptions.filter((g) => g.value !== "all").map((g) => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-28">
+              <label className="block text-xs font-medium text-gray-700 mb-1">取得件数/媒体</label>
+              <input
+                type="number"
+                value={limit}
+                onChange={(e) => setLimit(Math.max(1, Math.min(100, Number(e.target.value))))}
+                min={1}
+                max={100}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Message */}
+        {message && (
+          <p className={`mt-3 text-xs ${message.includes("失敗") ? "text-red-500" : "text-green-600"}`}>
+            {message}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            キャンセル
+          </button>
+          <button
+            onClick={handleCrawl}
+            disabled={crawling || !query.trim()}
+            className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {crawling ? "クロール中..." : "クロール開始"}
           </button>
         </div>
       </div>

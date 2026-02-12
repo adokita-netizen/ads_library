@@ -88,6 +88,20 @@ class YouTubeAdCrawler(BaseCrawler):
                 if date_match:
                     first_seen = datetime.fromisoformat(date_match.group(1))
 
+            # Extract destination URL from ad link elements
+            link_el = element.select_one(
+                "a.ad-destination, a[data-destination-url], a.landing-page-link, "
+                "a[href]:not([href*='google.com']):not([href*='youtube.com'])"
+            )
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "google.com" not in href and "youtube.com" not in href:
+                    destination_url = href
+            # Also check for destination URL in data attributes
+            if not destination_url:
+                destination_url = element.get("data-destination-url") or element.get("data-landing-page")
+
             return CrawledAd(
                 external_id=creative_id or f"yt_{hash(str(element)):#010x}",
                 platform="youtube",
@@ -97,7 +111,11 @@ class YouTubeAdCrawler(BaseCrawler):
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
                 first_seen_at=first_seen,
-                metadata={"source": "google_ads_transparency"},
+                metadata={
+                    "source": "google_ads_transparency",
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("youtube_parse_failed", error=str(e))

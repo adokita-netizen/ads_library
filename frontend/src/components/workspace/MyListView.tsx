@@ -5,14 +5,6 @@ import { notificationsApi } from "@/lib/api";
 
 type FilterType = "all" | "ad" | "lp" | "creative" | "advertiser";
 
-const mockSaved = [
-  { id: 1, type: "ad", label: "セラムV3 動画広告 #1", notes: "ベネフィット訴求が強い", folder: "競合分析", createdAt: "2025-12-22" },
-  { id: 2, type: "lp", label: "ダイエットX 記事LP", notes: "記事構成が参考になる", folder: "LP参考", createdAt: "2025-12-21" },
-  { id: 3, type: "ad", label: "育毛トニック YouTube 15s", notes: "フックが秀逸", folder: "競合分析", createdAt: "2025-12-20" },
-  { id: 4, type: "creative", label: "AI生成台本 - セラム権威性ver", notes: "", folder: "自社制作", createdAt: "2025-12-19" },
-  { id: 5, type: "advertiser", label: "ビューティーラボ", notes: "主要競合 - 月次チェック", folder: "競合分析", createdAt: "2025-12-18" },
-  { id: 6, type: "lp", label: "アイクリーム 口コミLP", notes: "口コミ構成が参考", folder: "LP参考", createdAt: "2025-12-17" },
-];
 
 const typeLabels: Record<string, string> = {
   ad: "広告",
@@ -30,7 +22,7 @@ const typeColors: Record<string, string> = {
 
 export default function MyListView() {
   const [filter, setFilter] = useState<FilterType>("all");
-  const [savedItems, setSavedItems] = useState(mockSaved);
+  const [savedItems, setSavedItems] = useState<Array<{ id: number; type: string; label: string; notes: string; folder: string; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,7 +30,7 @@ export default function MyListView() {
       try {
         const response = await notificationsApi.listSaved();
         const items = response.data?.items || response.data?.results || response.data;
-        if (Array.isArray(items) && items.length > 0) {
+        if (Array.isArray(items)) {
           const mapped = items.map((item: Record<string, unknown>) => ({
             id: (item.id as number) || 0,
             type: (item.item_type as string) || "ad",
@@ -50,8 +42,7 @@ export default function MyListView() {
           setSavedItems(mapped);
         }
       } catch (error) {
-        console.warn("API unavailable, using mock data:", error);
-        // keep mock data as fallback
+        console.error("Failed to fetch saved items:", error);
       } finally {
         setLoading(false);
       }
@@ -117,6 +108,12 @@ export default function MyListView() {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-2">
+        {!loading && filtered.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            <p className="text-xs">保存済みアイテムがありません</p>
+            <p className="text-[10px] mt-1">広告やLPの詳細画面から「マイリストに追加」で保存できます</p>
+          </div>
+        )}
         {filtered.map((item) => (
           <div key={item.id} className="card hover:shadow-md transition-shadow cursor-pointer">
             <div className="flex items-center gap-3">
