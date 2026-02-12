@@ -198,8 +198,9 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
         } else {
           setAds([]);
         }
-      } catch (error) {
-        console.error("Failed to fetch ad data:", error);
+      } catch (error: unknown) {
+        const axiosErr = error as { response?: { status?: number }; message?: string };
+        console.error("Failed to fetch ad data:", axiosErr?.message, "status:", axiosErr?.response?.status);
         setAds([]);
       } finally {
         setLoading(false);
@@ -676,11 +677,16 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
         setCrawling(false);
       } else {
         setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
-        setTimeout(() => onSuccess(), 2000);
+        setTimeout(() => onSuccess(), 3000);
       }
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMessage(detail || "クロールの開始に失敗しました。バックエンドの接続を確認してください。");
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string; error?: { message?: string } } }; message?: string };
+      const detail = axiosErr?.response?.data?.detail
+        || axiosErr?.response?.data?.error?.message
+        || axiosErr?.message
+        || "クロールの開始に失敗しました。";
+      const status = axiosErr?.response?.status;
+      setMessage(`${detail}${status ? ` (HTTP ${status})` : ""}`);
       setCrawling(false);
     }
   };
@@ -764,7 +770,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 
         {/* Message */}
         {message && (
-          <p className={`mt-3 text-xs ${message.includes("失敗") ? "text-red-500" : "text-green-600"}`}>
+          <p className={`mt-3 text-xs ${message.includes("失敗") || message.includes("エラー") || message.includes("HTTP") ? "text-red-500" : message.includes("保留") ? "text-amber-600" : "text-green-600"}`}>
             {message}
           </p>
         )}
