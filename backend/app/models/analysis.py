@@ -124,7 +124,7 @@ class DetectedObject(Base):
     bbox_width: Mapped[float] = mapped_column(Float, nullable=False)
     bbox_height: Mapped[float] = mapped_column(Float, nullable=False)
 
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
     # Relationships
     analysis: Mapped["AdAnalysis"] = relationship(back_populates="detected_objects")
@@ -155,7 +155,7 @@ class TextDetection(Base):
     bbox_width: Mapped[float] = mapped_column(Float, nullable=False)
     bbox_height: Mapped[float] = mapped_column(Float, nullable=False)
 
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
     # Relationships
     analysis: Mapped["AdAnalysis"] = relationship(back_populates="text_detections")
@@ -206,7 +206,7 @@ class SceneBoundary(Base):
     has_person: Mapped[bool | None] = mapped_column(nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
     # Relationships
     analysis: Mapped["AdAnalysis"] = relationship(back_populates="scene_boundaries")

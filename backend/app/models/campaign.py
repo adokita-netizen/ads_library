@@ -16,7 +16,7 @@ class Campaign(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    metadata: Mapped[dict | None] = mapped_column(JSONB, default=dict, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

@@ -102,7 +102,7 @@ class ProductRanking(Base):
     trend_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # velocity of growth
 
     # Extra data
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

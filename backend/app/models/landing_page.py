@@ -126,7 +126,7 @@ class LandingPage(Base):
 
     # Raw data
     raw_html_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    metadata: Mapped[dict | None] = mapped_column(JSONB, default=dict, nullable=True)
+    lp_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

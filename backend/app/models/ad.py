@@ -101,8 +101,8 @@ class Ad(Base):
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Flexible metadata
-    metadata: Mapped[dict | None] = mapped_column(JSONB, default=dict, nullable=True)
+    # Flexible metadata (attribute named ad_metadata to avoid SQLAlchemy reserved word)
+    ad_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
     tags: Mapped[list | None] = mapped_column(JSONB, default=list, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

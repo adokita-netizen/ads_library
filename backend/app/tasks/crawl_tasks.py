@@ -69,7 +69,7 @@ def crawl_ads_task(
                         first_seen_at=crawled_ad.first_seen_at,
                         last_seen_at=crawled_ad.last_seen_at,
                         tags=crawled_ad.tags,
-                        metadata=crawled_ad.metadata,
+                        ad_metadata=crawled_ad.metadata,
                         status=AdStatusEnum.PENDING,
                     )
                     session.add(ad)
