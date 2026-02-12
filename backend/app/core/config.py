@@ -38,6 +38,22 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-sonnet-4-5-20250929"
 
+    # Ad Platform API Keys
+    meta_access_token: Optional[str] = None
+    tiktok_access_token: Optional[str] = None
+    youtube_api_key: Optional[str] = None
+    x_twitter_bearer_token: Optional[str] = None
+    line_api_access_token: Optional[str] = None
+    yahoo_ads_api_key: Optional[str] = None
+    yahoo_ads_api_secret: Optional[str] = None
+    pinterest_access_token: Optional[str] = None
+    smartnews_ads_api_key: Optional[str] = None
+    google_ads_developer_token: Optional[str] = None
+    google_ads_client_id: Optional[str] = None
+    google_ads_client_secret: Optional[str] = None
+    google_ads_refresh_token: Optional[str] = None
+    gunosy_ads_api_key: Optional[str] = None
+
     # Whisper
     whisper_model_size: str = "base"
     whisper_device: str = "cpu"

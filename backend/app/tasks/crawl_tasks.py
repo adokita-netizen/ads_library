@@ -108,8 +108,26 @@ async def _crawl_platforms(
     category: str | None,
     limit_per_platform: int,
 ) -> dict:
-    """Run async crawling."""
-    manager = CrawlerManager.create_default()
+    """Run async crawling with all platform tokens from config."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    manager = CrawlerManager.create_default(
+        meta_token=settings.meta_access_token,
+        tiktok_token=settings.tiktok_access_token,
+        youtube_api_key=settings.youtube_api_key,
+        x_twitter_bearer=settings.x_twitter_bearer_token,
+        line_token=settings.line_api_access_token,
+        yahoo_api_key=settings.yahoo_ads_api_key,
+        yahoo_api_secret=settings.yahoo_ads_api_secret,
+        pinterest_token=settings.pinterest_access_token,
+        smartnews_api_key=settings.smartnews_ads_api_key,
+        google_ads_developer_token=settings.google_ads_developer_token,
+        google_ads_client_id=settings.google_ads_client_id,
+        google_ads_client_secret=settings.google_ads_client_secret,
+        google_ads_refresh_token=settings.google_ads_refresh_token,
+        gunosy_api_key=settings.gunosy_ads_api_key,
+    )
     try:
         results = await manager.search_all_platforms(
             query=query,
@@ -131,5 +149,9 @@ def _map_platform(platform: str) -> AdPlatformEnum:
         "x_twitter": AdPlatformEnum.X_TWITTER,
         "line": AdPlatformEnum.LINE,
         "yahoo": AdPlatformEnum.YAHOO,
+        "pinterest": AdPlatformEnum.PINTEREST,
+        "smartnews": AdPlatformEnum.SMARTNEWS,
+        "google_ads": AdPlatformEnum.GOOGLE_ADS,
+        "gunosy": AdPlatformEnum.GUNOSY,
     }
     return mapping.get(platform, AdPlatformEnum.OTHER)

@@ -85,7 +85,13 @@ class AdAnalysisResponse(BaseModel):
 
 class CrawlRequest(BaseModel):
     query: str
-    platforms: list[str] = Field(default=["facebook", "youtube", "tiktok"])
+    platforms: list[str] = Field(
+        default=[
+            "facebook", "instagram", "youtube", "tiktok",
+            "yahoo", "x_twitter", "line", "pinterest",
+            "smartnews", "google_ads", "gunosy",
+        ]
+    )
     category: Optional[str] = None
     limit_per_platform: int = Field(default=20, ge=1, le=100)
     auto_analyze: bool = False

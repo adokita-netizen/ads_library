@@ -28,6 +28,10 @@ class AdPlatformEnum(str, enum.Enum):
     X_TWITTER = "x_twitter"
     LINE = "line"
     YAHOO = "yahoo"
+    PINTEREST = "pinterest"
+    SMARTNEWS = "smartnews"
+    GOOGLE_ADS = "google_ads"
+    GUNOSY = "gunosy"
     OTHER = "other"
 
 

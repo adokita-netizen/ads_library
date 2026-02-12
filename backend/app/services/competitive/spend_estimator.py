@@ -22,6 +22,10 @@ PLATFORM_CPM_DEFAULTS = {
     "x_twitter": {"avg": 350, "min": 150, "max": 700, "std": 140},
     "line": {"avg": 380, "min": 180, "max": 750, "std": 150},
     "yahoo": {"avg": 420, "min": 200, "max": 850, "std": 160},
+    "pinterest": {"avg": 320, "min": 150, "max": 650, "std": 130},
+    "smartnews": {"avg": 350, "min": 150, "max": 700, "std": 140},
+    "google_ads": {"avg": 450, "min": 200, "max": 1000, "std": 180},
+    "gunosy": {"avg": 300, "min": 120, "max": 600, "std": 120},
 }
 
 # Genre-specific CPM multipliers (relative to platform average)

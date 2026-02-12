@@ -10,6 +10,13 @@ from app.services.crawling.base_crawler import BaseCrawler, CrawledAd
 from app.services.crawling.meta_crawler import MetaAdLibraryCrawler
 from app.services.crawling.tiktok_crawler import TikTokAdCrawler
 from app.services.crawling.youtube_crawler import YouTubeAdCrawler
+from app.services.crawling.yahoo_crawler import YahooAdCrawler
+from app.services.crawling.x_twitter_crawler import XTwitterAdCrawler
+from app.services.crawling.line_crawler import LineAdCrawler
+from app.services.crawling.pinterest_crawler import PinterestAdCrawler
+from app.services.crawling.smartnews_crawler import SmartNewsAdCrawler
+from app.services.crawling.google_ads_crawler import GoogleAdsCrawler
+from app.services.crawling.gunosy_crawler import GunosyAdCrawler
 
 logger = structlog.get_logger()
 
@@ -23,19 +30,75 @@ class CrawlerManager:
     def register_crawler(self, platform: str, crawler: BaseCrawler):
         self._crawlers[platform] = crawler
 
+    @property
+    def registered_platforms(self) -> list[str]:
+        """Return list of registered platform names."""
+        return list(self._crawlers.keys())
+
     @classmethod
     def create_default(
         cls,
         meta_token: Optional[str] = None,
         tiktok_token: Optional[str] = None,
         youtube_api_key: Optional[str] = None,
+        x_twitter_bearer: Optional[str] = None,
+        line_token: Optional[str] = None,
+        yahoo_api_key: Optional[str] = None,
+        yahoo_api_secret: Optional[str] = None,
+        pinterest_token: Optional[str] = None,
+        smartnews_api_key: Optional[str] = None,
+        google_ads_developer_token: Optional[str] = None,
+        google_ads_client_id: Optional[str] = None,
+        google_ads_client_secret: Optional[str] = None,
+        google_ads_refresh_token: Optional[str] = None,
+        gunosy_api_key: Optional[str] = None,
     ) -> "CrawlerManager":
-        """Create manager with default crawlers for all platforms."""
+        """Create manager with default crawlers for all supported platforms.
+
+        All crawlers work in scraping-fallback mode even without API tokens.
+        Providing tokens enables richer API-based data collection.
+        """
         manager = cls()
+
+        # Meta (Facebook + Instagram)
         manager.register_crawler("facebook", MetaAdLibraryCrawler(access_token=meta_token))
         manager.register_crawler("instagram", MetaAdLibraryCrawler(access_token=meta_token))
+
+        # YouTube (Google Ads Transparency - video only)
         manager.register_crawler("youtube", YouTubeAdCrawler(api_key=youtube_api_key))
+
+        # TikTok
         manager.register_crawler("tiktok", TikTokAdCrawler(access_token=tiktok_token))
+
+        # Yahoo! JAPAN
+        manager.register_crawler("yahoo", YahooAdCrawler(
+            api_key=yahoo_api_key,
+            api_secret=yahoo_api_secret,
+        ))
+
+        # X (Twitter)
+        manager.register_crawler("x_twitter", XTwitterAdCrawler(bearer_token=x_twitter_bearer))
+
+        # LINE
+        manager.register_crawler("line", LineAdCrawler(access_token=line_token))
+
+        # Pinterest
+        manager.register_crawler("pinterest", PinterestAdCrawler(access_token=pinterest_token))
+
+        # SmartNews
+        manager.register_crawler("smartnews", SmartNewsAdCrawler(api_key=smartnews_api_key))
+
+        # Google Ads (search/display/shopping - non-YouTube)
+        manager.register_crawler("google_ads", GoogleAdsCrawler(
+            developer_token=google_ads_developer_token,
+            client_id=google_ads_client_id,
+            client_secret=google_ads_client_secret,
+            refresh_token=google_ads_refresh_token,
+        ))
+
+        # Gunosy
+        manager.register_crawler("gunosy", GunosyAdCrawler(api_key=gunosy_api_key))
+
         return manager
 
     async def search_all_platforms(
@@ -137,6 +200,10 @@ class CrawlerManager:
             "x_twitter": AdPlatformEnum.X_TWITTER,
             "line": AdPlatformEnum.LINE,
             "yahoo": AdPlatformEnum.YAHOO,
+            "pinterest": AdPlatformEnum.PINTEREST,
+            "smartnews": AdPlatformEnum.SMARTNEWS,
+            "google_ads": AdPlatformEnum.GOOGLE_ADS,
+            "gunosy": AdPlatformEnum.GUNOSY,
         }
         return mapping.get(platform, AdPlatformEnum.OTHER)
 
