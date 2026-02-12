@@ -313,3 +313,175 @@ export interface LPCompareResult {
   improvement_opportunities: string[];
   quick_wins: string[];
 }
+
+// ==================== Competitive Intelligence Types ====================
+
+// Spend estimation with confidence ranges
+export interface SpendEstimateResult {
+  ad_id: number;
+  estimated_spend: number;
+  confidence_ranges: {
+    p10: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+  };
+  cpm_info: {
+    platform_avg: number;
+    genre_adjusted: number;
+    seasonal_factor: number;
+    user_calibrated?: number;
+  };
+  estimation_method: string;
+  confidence_level: number;
+}
+
+export interface CPMCalibrationItem {
+  id: number;
+  platform: string;
+  genre?: string;
+  actual_cpm: number;
+  actual_cpv?: number;
+  notes?: string;
+  created_at: string;
+}
+
+// Similarity search
+export interface SimilarAdResult {
+  ad_id: number;
+  similarity: number;
+  title?: string;
+  platform?: string;
+  advertiser_name?: string;
+  auto_appeal_axes?: string[];
+  auto_expression_type?: string;
+  auto_structure_type?: string;
+}
+
+// Destination analytics
+export interface LPReuseItem {
+  url_hash: string;
+  url: string;
+  domain?: string;
+  title?: string;
+  genre?: string;
+  product_name?: string;
+  advertiser_count: number;
+  ad_count: number;
+  advertisers: string[];
+}
+
+export interface CreativeVariationResult {
+  lp_id: number;
+  url: string;
+  domain?: string;
+  title?: string;
+  genre?: string;
+  quality_score?: number;
+  creative_count: number;
+  advertiser_count: number;
+  total_spend_30d: number;
+  creatives: Array<{
+    ad_id: number;
+    title?: string;
+    platform: string;
+    advertiser_name?: string;
+    duration_seconds?: number;
+    total_spend_30d: number;
+    total_views_30d: number;
+  }>;
+}
+
+// Alert detection
+export interface AlertItem {
+  id: number;
+  alert_type: string;
+  severity: string;
+  entity_type: string;
+  entity_name?: string;
+  title: string;
+  description?: string;
+  metric_before?: number;
+  metric_after?: number;
+  change_percent?: number;
+  context_data?: Record<string, unknown>;
+  is_dismissed: boolean;
+  detected_at: string;
+}
+
+// Two-stage classification
+export interface ClassificationTag {
+  id: number;
+  ad_id: number;
+  field_name: string;
+  value: string;
+  confidence: number;
+  status: string;
+  classified_by: string;
+  confirmed_by?: string;
+  confirmed_at?: string;
+  previous_value?: string;
+}
+
+// Trend prediction
+export interface TrendPredictionItem {
+  ad_id: number;
+  momentum_score: number;
+  hit_probability: number;
+  predicted_hit: boolean;
+  growth_phase: string;
+  days_active?: number;
+  velocity: {
+    view_1d: number;
+    view_3d: number;
+    view_7d: number;
+    view_acceleration: number;
+    spend_1d: number;
+    spend_3d: number;
+    spend_7d: number;
+    spend_acceleration: number;
+  };
+  genre?: string;
+  genre_percentile?: number;
+  predicted_peak_spend?: number;
+  title?: string;
+  platform?: string;
+  advertiser_name?: string;
+}
+
+// LP Funnels
+export interface FunnelItem {
+  id: number;
+  funnel_name?: string;
+  root_domain?: string;
+  advertiser_name?: string;
+  genre?: string;
+  product_name?: string;
+  total_steps: number;
+  funnel_type?: string;
+  estimated_total_spend?: number;
+  ad_count?: number;
+  steps: Array<{
+    step_order: number;
+    step_type: string;
+    url?: string;
+    page_title?: string;
+    estimated_dropoff_rate?: number;
+  }>;
+}
+
+// LP Fingerprint
+export interface LPFingerprintItem {
+  id: number;
+  snapshot_date: string;
+  content_hash?: string;
+  structure_hash?: string;
+  offer_fingerprint?: string;
+  offer_cluster_id?: number;
+  offer_price?: string;
+  offer_discount_percent?: number;
+  offer_guarantee_text?: string;
+  changes_detected?: string[];
+  change_magnitude?: number;
+}

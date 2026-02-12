@@ -11,8 +11,9 @@ import AIExpertView from "@/components/ai/AIExpertView";
 import TeamSpaceView from "@/components/workspace/TeamSpaceView";
 import MyListView from "@/components/workspace/MyListView";
 import StoreView from "@/components/workspace/StoreView";
+import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
 
-type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "team" | "mylist" | "store";
+type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store";
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<ViewType>("search");
@@ -38,6 +39,8 @@ export default function Home() {
         return <AIExpertView />;
       case "creative":
         return <CreativeStudio />;
+      case "competitive":
+        return <CompetitiveIntelView />;
       case "team":
         return <TeamSpaceView />;
       case "mylist":

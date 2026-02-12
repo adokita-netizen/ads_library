@@ -26,6 +26,17 @@ from app.models.ad_metrics import (
     NotificationConfig,
     SavedItem,
 )
+from app.models.competitive_intel import (
+    SpendEstimate,
+    CPMCalibration,
+    AdEmbedding,
+    LPFingerprint,
+    AlertLog,
+    AdClassificationTag,
+    LPFunnel,
+    FunnelStep,
+    TrendPrediction,
+)
 
 __all__ = [
     "Ad",
@@ -53,4 +64,13 @@ __all__ = [
     "ProductRanking",
     "NotificationConfig",
     "SavedItem",
+    "SpendEstimate",
+    "CPMCalibration",
+    "AdEmbedding",
+    "LPFingerprint",
+    "AlertLog",
+    "AdClassificationTag",
+    "LPFunnel",
+    "FunnelStep",
+    "TrendPrediction",
 ]

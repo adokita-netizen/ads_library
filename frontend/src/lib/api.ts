@@ -163,4 +163,65 @@ export const notificationsApi = {
     api.delete(`/notifications/saved/${id}`),
 };
 
+// Competitive Intelligence API
+export const competitiveApi = {
+  // Spend estimation
+  estimateSpend: (data: { ad_id: number; view_count_increase: number; platform: string; genre?: string }) =>
+    api.post("/competitive/spend/estimate", data),
+  saveCPMCalibration: (data: { platform: string; genre?: string; actual_cpm: number; actual_cpv?: number; notes?: string }) =>
+    api.post("/competitive/spend/calibrate", data),
+  listCalibrations: () =>
+    api.get("/competitive/spend/calibrations"),
+
+  // Similarity search
+  similaritySearch: (data: { ad_id?: number; query_text?: string; limit?: number; embedding_field?: string; min_similarity?: number }) =>
+    api.post("/competitive/similarity/search", data),
+  generateEmbedding: (adId: number) =>
+    api.post(`/competitive/similarity/generate/${adId}`),
+
+  // Destination analytics
+  getLPReuse: (params?: { genre?: string; min_advertisers?: number; limit?: number }) =>
+    api.get("/competitive/destination/lp-reuse", { params }),
+  getCreativeVariation: (lpId: number) =>
+    api.get(`/competitive/destination/creative-variation/${lpId}`),
+  getAdvertiserDestinations: (advertiserName: string) =>
+    api.get(`/competitive/destination/advertiser-portfolio/${advertiserName}`),
+  getGenreDestinationOverview: (genre: string, periodDays?: number) =>
+    api.get(`/competitive/destination/genre-overview/${genre}`, { params: { period_days: periodDays } }),
+
+  // Alert detection
+  runAlertDetection: (watchedAdvertisers?: string[]) =>
+    api.post("/competitive/alerts/detect", watchedAdvertisers),
+  getAlertHistory: (params?: { alert_type?: string; severity?: string; days?: number; limit?: number }) =>
+    api.get("/competitive/alerts/history", { params }),
+  dismissAlert: (alertId: number) =>
+    api.post(`/competitive/alerts/${alertId}/dismiss`),
+
+  // Two-stage classification
+  getClassificationTags: (adId: number) =>
+    api.get(`/competitive/classification/tags/${adId}`),
+  createClassificationTag: (data: { ad_id: number; field_name: string; value: string; confidence?: number; classified_by?: string }) =>
+    api.post("/competitive/classification/tag", data),
+  confirmClassification: (data: { tag_id: number; confirmed_value?: string; confirmed_by?: string }) =>
+    api.post("/competitive/classification/confirm", data),
+  listProvisionalTags: (limit?: number) =>
+    api.get("/competitive/classification/provisional", { params: { limit } }),
+
+  // Trend prediction
+  getTrendPredictions: (limit?: number) =>
+    api.get("/competitive/trends/predictions", { params: { limit } }),
+  getEarlyHitCandidates: (params?: { max_days_active?: number; min_momentum?: number }) =>
+    api.get("/competitive/trends/early-hits", { params }),
+
+  // LP Funnels
+  listFunnels: (params?: { genre?: string; advertiser?: string; limit?: number }) =>
+    api.get("/competitive/funnels", { params }),
+
+  // LP Fingerprinting
+  getLPFingerprint: (lpId: number) =>
+    api.get(`/competitive/fingerprint/lp/${lpId}`),
+  getOfferClusters: (params?: { genre?: string; limit?: number }) =>
+    api.get("/competitive/fingerprint/clusters", { params }),
+};
+
 export default api;
