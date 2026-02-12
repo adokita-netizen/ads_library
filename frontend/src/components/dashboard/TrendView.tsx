@@ -17,16 +17,6 @@ interface TrendItem {
   trendScore: number;
 }
 
-const mockTrends: TrendItem[] = [
-  { rank: 1, productName: "スキンケアセラムV3", platform: "youtube", genre: "美容・コスメ", change: 2, spendEstimate: 8500000, playCount: 1250000, trendScore: 98 },
-  { rank: 2, productName: "ダイエットサプリメントX", platform: "tiktok", genre: "健康食品", change: 5, spendEstimate: 6200000, playCount: 980000, trendScore: 94 },
-  { rank: 3, productName: "育毛トニックPRO", platform: "facebook", genre: "ヘアケア", change: -1, spendEstimate: 5100000, playCount: 720000, trendScore: 88 },
-  { rank: 4, productName: "プロテインバーFIT", platform: "instagram", genre: "健康食品", change: 0, spendEstimate: 4300000, playCount: 650000, trendScore: 82 },
-  { rank: 5, productName: "美白クリームルーチェ", platform: "youtube", genre: "美容・コスメ", change: 3, spendEstimate: 3800000, playCount: 580000, trendScore: 78 },
-  { rank: 6, productName: "アイクリームモイスト", platform: "tiktok", genre: "美容・コスメ", change: 12, spendEstimate: 3200000, playCount: 510000, trendScore: 75 },
-  { rank: 7, productName: "酵素ドリンクナチュラ", platform: "line", genre: "健康食品", change: -3, spendEstimate: 2800000, playCount: 430000, trendScore: 70 },
-  { rank: 8, productName: "CBDオイルリラクス", platform: "facebook", genre: "健康・リラックス", change: 1, spendEstimate: 2400000, playCount: 380000, trendScore: 66 },
-];
 
 const platformLabels: Record<string, string> = {
   youtube: "YT",
@@ -74,7 +64,7 @@ function formatNumber(n: number): string {
 export default function TrendView() {
   const [period, setPeriod] = useState<TrendPeriod>("daily");
   const [category, setCategory] = useState<TrendCategory>("all");
-  const [trends, setTrends] = useState<TrendItem[]>(mockTrends);
+  const [trends, setTrends] = useState<TrendItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -100,8 +90,7 @@ export default function TrendView() {
           setTrends(mapped);
         }
       } catch (error) {
-        console.warn("API unavailable, using mock data:", error);
-        // keep mock data as fallback
+        console.error("Failed to fetch trends:", error);
       } finally {
         setLoading(false);
       }
@@ -149,23 +138,27 @@ export default function TrendView() {
       <div className="grid grid-cols-4 gap-3 px-5 py-3 bg-[#f8f9fc]">
         <div className="card py-3">
           <p className="text-[10px] text-gray-400 font-medium">急上昇商材</p>
-          <p className="text-xl font-bold text-gray-900 mt-1">24</p>
-          <p className="text-[10px] text-emerald-600 mt-0.5">+8 vs 前期</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            {trends.filter((t) => t.change > 0).length}
+          </p>
         </div>
         <div className="card py-3">
-          <p className="text-[10px] text-gray-400 font-medium">新規出稿</p>
-          <p className="text-xl font-bold text-gray-900 mt-1">156</p>
-          <p className="text-[10px] text-emerald-600 mt-0.5">+23 vs 前期</p>
+          <p className="text-[10px] text-gray-400 font-medium">トラッキング中</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">{trends.length}</p>
         </div>
         <div className="card py-3">
           <p className="text-[10px] text-gray-400 font-medium">市場推定消化額</p>
-          <p className="text-xl font-bold text-gray-900 mt-1">¥4.2億</p>
-          <p className="text-[10px] text-emerald-600 mt-0.5">+12% vs 前期</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            {formatYen(trends.reduce((sum, t) => sum + t.spendEstimate, 0))}
+          </p>
         </div>
         <div className="card py-3">
           <p className="text-[10px] text-gray-400 font-medium">トレンドスコア平均</p>
-          <p className="text-xl font-bold text-gray-900 mt-1">76.4</p>
-          <p className="text-[10px] text-red-500 mt-0.5">-2.1 vs 前期</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            {trends.length > 0
+              ? (trends.reduce((sum, t) => sum + t.trendScore, 0) / trends.length).toFixed(1)
+              : "-"}
+          </p>
         </div>
       </div>
 
@@ -192,6 +185,13 @@ export default function TrendView() {
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
                     <span className="text-xs text-gray-400">読み込み中...</span>
                   </div>
+                </td>
+              </tr>
+            )}
+            {!loading && trends.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center py-12">
+                  <p className="text-xs text-gray-400">トレンドデータがありません</p>
                 </td>
               </tr>
             )}

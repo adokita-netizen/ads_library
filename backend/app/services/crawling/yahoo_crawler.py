@@ -165,6 +165,8 @@ class YahooAdCrawler(BaseCrawler):
                     "approval_status": ad_data.get("approvalStatus"),
                     "display_url": ad_info.get("displayUrl"),
                     "final_url": ad_info.get("finalUrl"),
+                    "destination_url": ad_info.get("finalUrl") or ad_info.get("displayUrl"),
+                    "destination_type": "LP" if ad_info.get("finalUrl") or ad_info.get("displayUrl") else None,
                 },
             )
         except Exception as e:
@@ -185,6 +187,14 @@ class YahooAdCrawler(BaseCrawler):
             thumbnail_el = card.select_one("img.thumbnail, img")
             thumbnail_url = thumbnail_el.get("src") if thumbnail_el else None
 
+            # Extract destination URL from ad link
+            link_el = card.select_one("a[href]:not([href*='yahoo.co.jp']):not([href*='yahoo.com'])")
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "yahoo." not in href:
+                    destination_url = href
+
             return CrawledAd(
                 external_id=ad_id or f"yahoo_{hash(str(card)):#010x}",
                 platform="yahoo",
@@ -193,7 +203,11 @@ class YahooAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
-                metadata={"source": "yahoo_transparency_scrape"},
+                metadata={
+                    "source": "yahoo_transparency_scrape",
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("yahoo_scrape_parse_failed", error=str(e))

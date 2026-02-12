@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # === Request schemas ===
@@ -11,6 +11,16 @@ from pydantic import BaseModel, Field
 class LPCrawlRequest(BaseModel):
     """Request to crawl and analyze a landing page."""
     url: str
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("URLを入力してください")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URLはhttp://またはhttps://で始まる必要があります")
+        return v
     ad_id: Optional[int] = None
     genre: Optional[str] = None
     product_name: Optional[str] = None
@@ -23,6 +33,17 @@ class LPBatchCrawlRequest(BaseModel):
     urls: list[str] = Field(..., min_length=1, max_length=50)
     genre: Optional[str] = None
     auto_analyze: bool = True
+
+    @field_validator("urls")
+    @classmethod
+    def validate_urls(cls, v: list[str]) -> list[str]:
+        validated = []
+        for url in v:
+            url = url.strip()
+            if not url.startswith(("http://", "https://")):
+                raise ValueError(f"無効なURL: {url}")
+            validated.append(url)
+        return validated
 
 
 class OwnLPImportRequest(BaseModel):

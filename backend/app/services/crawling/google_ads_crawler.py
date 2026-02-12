@@ -226,6 +226,7 @@ class GoogleAdsCrawler(BaseCrawler):
             description = descriptions[0].get("text") if descriptions else None
 
             final_urls = ad.get("finalUrls", [])
+            destination_url = final_urls[0] if final_urls else None
             video_id = ad.get("videoAd", {}).get("video", {}).get("id")
             video_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else None
 
@@ -242,6 +243,8 @@ class GoogleAdsCrawler(BaseCrawler):
                     "campaign_name": campaign.get("name"),
                     "channel_type": campaign.get("advertisingChannelType"),
                     "final_urls": final_urls,
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
                     "responsive_headlines": [h.get("text") for h in headlines],
                     "responsive_descriptions": [d.get("text") for d in descriptions],
                 },
@@ -266,6 +269,16 @@ class GoogleAdsCrawler(BaseCrawler):
             img_el = element.select_one("img.thumbnail, img.creative-image, img")
             thumbnail_url = img_el.get("src") if img_el else None
 
+            # Extract destination URL from ad links
+            link_el = element.select_one(
+                "a[href]:not([href*='google.com']):not([href*='transparencyreport'])"
+            )
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "google.com" not in href:
+                    destination_url = href
+
             date_el = element.select_one(".date-range, .delivery-date")
             first_seen = None
             if date_el:
@@ -286,6 +299,8 @@ class GoogleAdsCrawler(BaseCrawler):
                 metadata={
                     "source": "google_ads_transparency",
                     "ad_format": ad_format,
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
                 },
             )
         except Exception as e:

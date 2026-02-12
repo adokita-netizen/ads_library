@@ -149,6 +149,15 @@ class XTwitterAdCrawler(BaseCrawler):
                 video_url = media.get("video_url")
                 thumbnail_url = media.get("preview_image_url")
 
+            # Extract destination URL from card data
+            card_data = ad_data.get("card", {}) or {}
+            destination_url = (
+                ad_data.get("website_url")
+                or ad_data.get("card_url")
+                or card_data.get("url")
+                or card_data.get("website_url")
+            )
+
             return CrawledAd(
                 external_id=ad_id,
                 platform="x_twitter",
@@ -172,6 +181,8 @@ class XTwitterAdCrawler(BaseCrawler):
                         "replies": ad_data.get("reply_count"),
                         "clicks": ad_data.get("click_count"),
                     },
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
                 },
             )
         except Exception as e:
@@ -189,6 +200,14 @@ class XTwitterAdCrawler(BaseCrawler):
             video_el = card.select_one("video source")
             video_url = video_el.get("src") if video_el else None
 
+            # Extract destination URL from scraped card
+            link_el = card.select_one("a[data-card-url], a.card-link, a[href]:not([href*='x.com']):not([href*='twitter.com'])")
+            destination_url = None
+            if link_el:
+                href = link_el.get("href", "")
+                if href.startswith("http") and "x.com" not in href and "twitter.com" not in href:
+                    destination_url = href
+
             return CrawledAd(
                 external_id=ad_id or f"x_{hash(str(card)):#010x}",
                 platform="x_twitter",
@@ -196,7 +215,11 @@ class XTwitterAdCrawler(BaseCrawler):
                 description=desc_el.get_text(strip=True) if desc_el else None,
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
-                metadata={"source": "x_transparency_scrape"},
+                metadata={
+                    "source": "x_transparency_scrape",
+                    "destination_url": destination_url,
+                    "destination_type": "LP" if destination_url else None,
+                },
             )
         except Exception as e:
             logger.error("x_twitter_scrape_parse_failed", error=str(e))

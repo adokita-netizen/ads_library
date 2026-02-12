@@ -1,95 +1,58 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { adsApi } from "@/lib/api";
+import { adsApi, predictionsApi, lpAnalysisApi } from "@/lib/api";
 
 interface ProductDetailModalProps {
   adId: number;
   onClose: () => void;
 }
 
-// Mock data for the selected product
-const mockProduct = {
-  id: 1,
-  managementId: "AD-2025-00147",
-  productName: "スキンケアセラムV3",
-  advertiserName: "ビューティーラボ株式会社",
-  genre: "美容・コスメ",
-  totalSpend: 128000000,
-  totalPlays: 45200000,
-  publishedDate: "2025-12-15",
-  duration: 30,
-  platforms: ["youtube", "facebook", "instagram", "tiktok"],
-  destinationType: "記事LP",
-  destination: "https://lp.example.com/serum-v3",
-};
+interface ProductData {
+  id: number;
+  managementId: string;
+  productName: string;
+  advertiserName: string;
+  genre: string;
+  totalSpend: number;
+  totalPlays: number;
+  publishedDate: string;
+  duration: number;
+  platforms: string[];
+  destinationType: string;
+  destination: string;
+}
 
-// Heatmap data: rows = months, cols = days
-const heatmapMonths = ["2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"];
-const generateHeatmap = () => {
-  return heatmapMonths.map(() => {
-    return Array.from({ length: 31 }, () => {
-      const r = Math.random();
-      if (r < 0.3) return 0;
-      if (r < 0.5) return 1;
-      if (r < 0.7) return 2;
-      if (r < 0.85) return 3;
-      return 4;
-    });
-  });
-};
+interface AnalysisData {
+  ctr_prediction?: number;
+  cvr_prediction?: number;
+  winning_probability?: number;
+  fatigue_score?: number;
+  estimated_remaining_days?: number;
+  hook_types?: string[];
+  structure_type?: string;
+  transcription?: string;
+  scenes?: Array<Record<string, unknown>>;
+}
 
-const heatmapData = generateHeatmap();
-
-const heatmapColors = [
-  "bg-gray-100",     // 0 - no activity
-  "bg-blue-100",     // 1 - low
-  "bg-blue-300",     // 2 - medium
-  "bg-[#4A7DFF]",    // 3 - high
-  "bg-blue-700",     // 4 - very high
-];
-
-// Spend trend line data (monthly)
-const spendTrend = [
-  { month: "7月", spend: 12000000 },
-  { month: "8月", spend: 18000000 },
-  { month: "9月", spend: 22000000 },
-  { month: "10月", spend: 28000000 },
-  { month: "11月", spend: 24000000 },
-  { month: "12月", spend: 24000000 },
-];
-
-// Media distribution
-const mediaDistribution = [
-  { platform: "YouTube", percentage: 42, color: "bg-red-500" },
-  { platform: "Facebook", percentage: 25, color: "bg-blue-600" },
-  { platform: "Instagram", percentage: 20, color: "bg-gradient-to-r from-purple-500 to-pink-500" },
-  { platform: "TikTok", percentage: 13, color: "bg-gray-900" },
-];
-
-// Format distribution
-const formatDistribution = [
-  { format: "動画 (30秒)", percentage: 55 },
-  { format: "動画 (15秒)", percentage: 25 },
-  { format: "バナー", percentage: 15 },
-  { format: "カルーセル", percentage: 5 },
-];
-
-// Competitor data
-const competitors = [
-  { name: "コスメブランドA", similarity: 92, adCount: 45, genre: "美容・コスメ" },
-  { name: "スキンケアB社", similarity: 85, adCount: 32, genre: "美容・コスメ" },
-  { name: "ビューティーC", similarity: 78, adCount: 28, genre: "美容・コスメ" },
-  { name: "ナチュラルD", similarity: 71, adCount: 19, genre: "美容・コスメ" },
-];
-
-// Related ads table data
-const relatedAds = [
-  { id: "V-001", platform: "youtube", duration: 30, publishedDate: "2025-12-15", plays: 12500000, spend: 35000000, status: "配信中" },
-  { id: "V-002", platform: "facebook", duration: 15, publishedDate: "2025-12-18", plays: 8200000, spend: 28000000, status: "配信中" },
-  { id: "V-003", platform: "instagram", duration: 30, publishedDate: "2025-11-20", plays: 15800000, spend: 42000000, status: "配信中" },
-  { id: "V-004", platform: "tiktok", duration: 15, publishedDate: "2025-11-25", plays: 8700000, spend: 23000000, status: "終了" },
-];
+interface LPAnalysisData {
+  id: number;
+  url: string;
+  domain: string;
+  title: string;
+  qualityScore: number;
+  conversionScore: number;
+  trustScore: number;
+  primaryAppeal: string;
+  secondaryAppeal: string;
+  ctaCount: number;
+  testimonialCount: number;
+  wordCount: number;
+  hasPricing: boolean;
+  priceText: string;
+  heroHeadline: string;
+  status: string;
+}
 
 const platformLabels: Record<string, string> = {
   youtube: "YT", shorts: "S", tiktok: "TT", facebook: "FB",
@@ -118,41 +81,164 @@ type TabType = "overview" | "creatives" | "competitors" | "analysis" | "lp-analy
 
 export default function ProductDetailModal({ adId, onClose }: ProductDetailModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-  const [product, setProduct] = useState(mockProduct);
+  const [product, setProduct] = useState<ProductData | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lpData, setLpData] = useState<LPAnalysisData | null>(null);
+  const [lpAnalyzing, setLpAnalyzing] = useState(false);
+  const [lpSearched, setLpSearched] = useState(false);
 
   useEffect(() => {
-    const fetchAdData = async () => {
+    const fetchData = async () => {
       try {
-        const response = await adsApi.get(adId);
-        const data = response.data;
-        if (data) {
+        const [adResponse, analysisResponse] = await Promise.allSettled([
+          adsApi.get(adId),
+          adsApi.getAnalysis(adId),
+        ]);
+
+        if (adResponse.status === "fulfilled" && adResponse.value.data) {
+          const data = adResponse.value.data;
           setProduct({
             id: data.id || adId,
-            managementId: data.external_id || data.management_id || mockProduct.managementId,
-            productName: data.product_name || data.title || mockProduct.productName,
-            advertiserName: data.advertiser_name || mockProduct.advertiserName,
-            genre: data.category || data.genre || mockProduct.genre,
-            totalSpend: data.cumulative_spend || data.total_spend || product.totalSpend,
-            totalPlays: data.view_count || data.cumulative_views || product.totalPlays,
-            publishedDate: data.published_date || data.created_at || product.publishedDate,
-            duration: data.duration_seconds || data.duration || mockProduct.duration,
-            platforms: data.platforms || product.platforms,
-            destinationType: data.destination_type || product.destinationType,
-            destination: data.destination_url || data.destination || product.destination,
+            managementId: data.external_id || data.management_id || `AD-${adId}`,
+            productName: data.product_name || data.title || "",
+            advertiserName: data.advertiser_name || "",
+            genre: data.category || data.genre || "",
+            totalSpend: data.cumulative_spend || data.total_spend || 0,
+            totalPlays: data.view_count || data.cumulative_views || 0,
+            publishedDate: data.published_date || data.created_at || "",
+            duration: data.duration_seconds || data.duration || 0,
+            platforms: data.platforms || [data.platform].filter(Boolean),
+            destinationType: data.destination_type || "",
+            destination: data.destination_url || data.destination || "",
           });
         }
+
+        if (analysisResponse.status === "fulfilled" && analysisResponse.value.data) {
+          setAnalysis(analysisResponse.value.data);
+        }
       } catch (error) {
-        console.warn("API unavailable, using mock data:", error);
-        // keep mock data as fallback
+        console.error("Failed to fetch ad data:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchAdData();
+    fetchData();
   }, [adId]);
 
-  const maxSpend = Math.max(...spendTrend.map((d) => d.spend));
+  // Fetch existing LP analysis when LP tab is activated
+  useEffect(() => {
+    if (activeTab !== "lp-analysis" || !product?.destination || lpSearched) return;
+    const fetchLPData = async () => {
+      try {
+        const response = await lpAnalysisApi.list({ url: product.destination });
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items) && items.length > 0) {
+          const lp = items[0] as Record<string, unknown>;
+          setLpData({
+            id: (lp.id as number) || 0,
+            url: (lp.url as string) || product.destination,
+            domain: (lp.domain as string) || "",
+            title: (lp.title as string) || "",
+            qualityScore: (lp.quality_score as number) || 0,
+            conversionScore: (lp.conversion_score as number) || 0,
+            trustScore: (lp.trust_score as number) || 0,
+            primaryAppeal: (lp.primary_appeal as string) || "",
+            secondaryAppeal: (lp.secondary_appeal as string) || "",
+            ctaCount: (lp.cta_count as number) || 0,
+            testimonialCount: (lp.testimonial_count as number) || 0,
+            wordCount: (lp.word_count as number) || 0,
+            hasPricing: (lp.has_pricing as boolean) || false,
+            priceText: (lp.price_text as string) || "",
+            heroHeadline: (lp.hero_headline as string) || "",
+            status: (lp.status as string) || "",
+          });
+        }
+      } catch {
+        // No existing analysis found - that's ok
+      } finally {
+        setLpSearched(true);
+      }
+    };
+    fetchLPData();
+  }, [activeTab, product?.destination, lpSearched]);
+
+  const handleStartLPAnalysis = async () => {
+    if (!product?.destination) return;
+    setLpAnalyzing(true);
+    try {
+      await lpAnalysisApi.crawl({
+        url: product.destination,
+        ad_id: product.id,
+        genre: product.genre || undefined,
+        product_name: product.productName || undefined,
+        advertiser_name: product.advertiserName || undefined,
+        auto_analyze: true,
+      });
+      // After triggering, poll for results
+      let attempts = 0;
+      const poll = async () => {
+        attempts++;
+        try {
+          const response = await lpAnalysisApi.list({ url: product.destination });
+          const items = response.data?.items || response.data?.results || response.data;
+          if (Array.isArray(items) && items.length > 0) {
+            const lp = items[0] as Record<string, unknown>;
+            const status = (lp.status as string) || "";
+            if (status === "analyzed" || status === "completed" || (lp.quality_score as number) > 0) {
+              setLpData({
+                id: (lp.id as number) || 0,
+                url: (lp.url as string) || product.destination,
+                domain: (lp.domain as string) || "",
+                title: (lp.title as string) || "",
+                qualityScore: (lp.quality_score as number) || 0,
+                conversionScore: (lp.conversion_score as number) || 0,
+                trustScore: (lp.trust_score as number) || 0,
+                primaryAppeal: (lp.primary_appeal as string) || "",
+                secondaryAppeal: (lp.secondary_appeal as string) || "",
+                ctaCount: (lp.cta_count as number) || 0,
+                testimonialCount: (lp.testimonial_count as number) || 0,
+                wordCount: (lp.word_count as number) || 0,
+                hasPricing: (lp.has_pricing as boolean) || false,
+                priceText: (lp.price_text as string) || "",
+                heroHeadline: (lp.hero_headline as string) || "",
+                status,
+              });
+              setLpAnalyzing(false);
+              return;
+            }
+          }
+        } catch {
+          // Still processing
+        }
+        if (attempts < 15) {
+          setTimeout(poll, 3000);
+        } else {
+          setLpAnalyzing(false);
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch (error) {
+      console.error("Failed to start LP analysis:", error);
+      setLpAnalyzing(false);
+    }
+  };
+
+  // Fetch predictions when analysis tab is activated
+  useEffect(() => {
+    if (activeTab !== "analysis" || !product || analysis?.ctr_prediction) return;
+    const fetchPredictions = async () => {
+      try {
+        const response = await predictionsApi.predict({ ad_id: adId });
+        if (response.data) {
+          setAnalysis((prev) => ({ ...prev, ...response.data }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch predictions:", error);
+      }
+    };
+    fetchPredictions();
+  }, [activeTab, adId, product, analysis?.ctr_prediction]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-8 pb-8">
@@ -160,16 +246,17 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            {/* Thumbnail placeholder */}
             <div className="w-16 h-10 rounded bg-gray-200 flex items-center justify-center">
               <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-[15px] font-bold text-gray-900">{product.productName}</h2>
+              <h2 className="text-[15px] font-bold text-gray-900">
+                {product?.productName || "読み込み中..."}
+              </h2>
               <p className="text-[11px] text-gray-400">
-                {product.advertiserName} · {product.managementId} · {product.genre}
+                {product ? `${product.advertiserName} · ${product.managementId} · ${product.genre}` : ""}
               </p>
             </div>
           </div>
@@ -195,9 +282,7 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
         <div className="flex gap-0 px-6 border-b border-gray-200 bg-[#f8f9fc]">
           {([
             { id: "overview", label: "概要" },
-            { id: "creatives", label: "クリエイティブ一覧" },
             { id: "lp-analysis", label: "遷移先LP分析" },
-            { id: "competitors", label: "競合分析" },
             { id: "analysis", label: "AI分析" },
           ] as { id: TabType; label: string }[]).map((tab) => (
             <button
@@ -222,7 +307,14 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
               <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
             </div>
           )}
-          {activeTab === "overview" && (
+
+          {!loading && !product && (
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-xs">広告データを取得できませんでした</p>
+            </div>
+          )}
+
+          {!loading && product && activeTab === "overview" && (
             <div className="space-y-5">
               {/* Top Stats */}
               <div className="grid grid-cols-4 gap-3">
@@ -244,425 +336,255 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                 </div>
               </div>
 
-              {/* Heatmap: 全媒体の出稿状況 */}
+              {/* Platform breakdown */}
               <div className="card">
-                <h3 className="text-[13px] font-bold text-gray-900 mb-3">全媒体の出稿状況</h3>
-                <div className="space-y-1.5">
-                  {heatmapMonths.map((month, mIdx) => (
-                    <div key={month} className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-14 shrink-0">{month}</span>
-                      <div className="flex gap-px">
-                        {heatmapData[mIdx].map((val, dIdx) => (
-                          <div
-                            key={dIdx}
-                            className={`heatmap-cell ${heatmapColors[val]}`}
-                            title={`${month}-${(dIdx + 1).toString().padStart(2, "0")}: レベル${val}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                <h3 className="text-[13px] font-bold text-gray-900 mb-3">出稿媒体</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {product.platforms.map((p) => (
+                    <span key={p} className={`platform-icon ${platformColors[p] || "bg-gray-200"}`}>
+                      {platformLabels[p] || p}
+                    </span>
                   ))}
                 </div>
-                <div className="flex items-center gap-1.5 mt-3 justify-end">
-                  <span className="text-[9px] text-gray-400">少</span>
-                  {heatmapColors.map((color, i) => (
-                    <div key={i} className={`w-3 h-3 rounded-sm ${color}`} />
-                  ))}
-                  <span className="text-[9px] text-gray-400">多</span>
-                </div>
               </div>
 
-              {/* Charts row */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Spend Trend */}
+              {/* Destination */}
+              {product.destination && (
                 <div className="card">
-                  <h3 className="text-[13px] font-bold text-gray-900 mb-3">予想消化額推移</h3>
-                  <div className="space-y-2">
-                    {spendTrend.map((d) => (
-                      <div key={d.month} className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 w-8 shrink-0">{d.month}</span>
-                        <div className="flex-1 h-5 bg-gray-50 rounded overflow-hidden">
-                          <div
-                            className="h-full bg-[#4A7DFF] rounded transition-all"
-                            style={{ width: `${(d.spend / maxSpend) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] font-medium text-gray-700 w-16 text-right">{formatYen(d.spend)}</span>
-                      </div>
-                    ))}
+                  <h3 className="text-[13px] font-bold text-gray-900 mb-2">遷移先</h3>
+                  <div className="flex items-center gap-2">
+                    {product.destinationType && (
+                      <span className="badge text-[9px] bg-purple-100 text-purple-700">{product.destinationType}</span>
+                    )}
+                    <a href={product.destination} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#4A7DFF] hover:underline break-all">
+                      {product.destination}
+                    </a>
                   </div>
                 </div>
-
-                {/* Media Distribution */}
-                <div className="card">
-                  <h3 className="text-[13px] font-bold text-gray-900 mb-3">出稿媒体</h3>
-                  <div className="space-y-3">
-                    {mediaDistribution.map((m) => (
-                      <div key={m.platform}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-gray-700 font-medium">{m.platform}</span>
-                          <span className="text-[11px] text-gray-500">{m.percentage}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${m.color}`}
-                            style={{ width: `${m.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                    <h4 className="text-[12px] font-bold text-gray-700 mb-2">形式</h4>
-                    <div className="space-y-1.5">
-                      {formatDistribution.map((f) => (
-                        <div key={f.format} className="flex items-center justify-between">
-                          <span className="text-[11px] text-gray-600">{f.format}</span>
-                          <span className="text-[11px] text-gray-500">{f.percentage}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Related Ads */}
-              <div className="card">
-                <h3 className="text-[13px] font-bold text-gray-900 mb-3">この商材の広告一覧</h3>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>媒体</th>
-                      <th className="text-center">秒数</th>
-                      <th>公開日</th>
-                      <th className="text-right">再生回数</th>
-                      <th className="text-right">予想消化額</th>
-                      <th>ステータス</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {relatedAds.map((ad) => (
-                      <tr key={ad.id}>
-                        <td className="text-[11px] font-mono text-gray-400">{ad.id}</td>
-                        <td>
-                          <span className={`platform-icon ${platformColors[ad.platform]}`}>
-                            {platformLabels[ad.platform]}
-                          </span>
-                        </td>
-                        <td className="text-center text-[12px] text-gray-600">{ad.duration}秒</td>
-                        <td className="text-[11px] text-gray-500">{ad.publishedDate}</td>
-                        <td className="text-right text-[12px] text-gray-700">{formatNumber(ad.plays)}</td>
-                        <td className="text-right text-[13px] font-semibold text-gray-900">{formatYen(ad.spend)}</td>
-                        <td>
-                          <span className={`badge text-[10px] ${
-                            ad.status === "配信中" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
-                          }`}>
-                            {ad.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              )}
             </div>
           )}
 
-          {activeTab === "creatives" && (
+          {!loading && product && activeTab === "lp-analysis" && (
             <div className="space-y-4">
-              <p className="text-[13px] text-gray-500">この商材の全クリエイティブバリエーションを表示します。</p>
-              <div className="grid grid-cols-3 gap-3">
-                {relatedAds.map((ad) => (
-                  <div key={ad.id} className="card hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="w-full aspect-video bg-gray-100 rounded-md mb-3 flex items-center justify-center relative">
-                      <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                      </svg>
-                      <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1.5 rounded">
-                        0:{ad.duration.toString().padStart(2, "0")}
-                      </span>
-                      <span className={`absolute top-1 left-1 platform-icon ${platformColors[ad.platform]}`}>
-                        {platformLabels[ad.platform]}
-                      </span>
-                    </div>
+              {product.destination ? (
+                <>
+                  {/* Destination URL info */}
+                  <div className="card bg-gradient-to-r from-purple-50 to-blue-50">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-mono text-gray-400">{ad.id}</span>
-                      <span className={`badge text-[9px] ${
-                        ad.status === "配信中" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
-                      }`}>
-                        {ad.status}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-gray-500">{ad.publishedDate}</span>
-                      <span className="text-[12px] font-semibold text-gray-900">{formatYen(ad.spend)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "competitors" && (
-            <div className="space-y-4">
-              <p className="text-[13px] text-gray-500">同ジャンルの競合商材を類似度順で表示します。</p>
-              <div className="space-y-2">
-                {competitors.map((comp) => (
-                  <div key={comp.name} className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-400">
-                        {comp.name.charAt(0)}
-                      </div>
                       <div>
-                        <p className="text-[13px] font-medium text-gray-900">{comp.name}</p>
-                        <p className="text-[10px] text-gray-400">{comp.genre} · 広告{comp.adCount}件</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          {product.destinationType && (
+                            <span className="badge text-[9px] bg-purple-100 text-purple-700">{product.destinationType}</span>
+                          )}
+                          <span className="text-[11px] text-gray-500">遷移先LP</span>
+                        </div>
+                        <a href={product.destination} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#4A7DFF] hover:underline break-all">
+                          {product.destination}
+                        </a>
                       </div>
+                      {!lpData && !lpAnalyzing && (
+                        <button
+                          className="btn-primary text-xs whitespace-nowrap ml-4"
+                          onClick={handleStartLPAnalysis}
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                          </svg>
+                          LP分析を実行
+                        </button>
+                      )}
+                      {lpAnalyzing && (
+                        <div className="flex items-center gap-2 ml-4">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+                          <span className="text-[11px] text-gray-500">分析中...</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-[10px] text-gray-400">類似度</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-[#4A7DFF]"
-                              style={{ width: `${comp.similarity}%` }}
-                            />
-                          </div>
-                          <span className="text-[12px] font-bold text-gray-900">{comp.similarity}%</span>
+                  </div>
+
+                  {/* LP Analysis Results */}
+                  {lpData && (
+                    <>
+                      {/* Title & Domain */}
+                      {lpData.title && (
+                        <div className="card">
+                          <h3 className="text-[13px] font-bold text-gray-900">{lpData.title}</h3>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{lpData.domain}</p>
+                          {lpData.heroHeadline && (
+                            <p className="text-[11px] text-gray-600 mt-2 italic">&ldquo;{lpData.heroHeadline}&rdquo;</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Scores */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">品質スコア</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.qualityScore >= 70 ? "text-emerald-600" : lpData.qualityScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.qualityScore || "-"}
+                          </p>
+                        </div>
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">CV可能性</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.conversionScore >= 70 ? "text-emerald-600" : lpData.conversionScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.conversionScore || "-"}
+                          </p>
+                        </div>
+                        <div className="card text-center py-4">
+                          <p className="text-[10px] text-gray-400 font-medium">信頼性スコア</p>
+                          <p className={`text-2xl font-bold mt-1 ${lpData.trustScore >= 70 ? "text-emerald-600" : lpData.trustScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                            {lpData.trustScore || "-"}
+                          </p>
                         </div>
                       </div>
-                      <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+
+                      {/* Appeal axes */}
+                      {(lpData.primaryAppeal || lpData.secondaryAppeal) && (
+                        <div className="card">
+                          <h3 className="text-[13px] font-bold text-gray-900 mb-2">訴求軸</h3>
+                          <div className="flex items-center gap-2">
+                            {lpData.primaryAppeal && (
+                              <span className="badge text-[10px] bg-blue-100 text-blue-700">{lpData.primaryAppeal}</span>
+                            )}
+                            {lpData.secondaryAppeal && (
+                              <span className="badge text-[10px] bg-gray-100 text-gray-600">{lpData.secondaryAppeal}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* LP Structure details */}
+                      <div className="card">
+                        <h3 className="text-[13px] font-bold text-gray-900 mb-3">LP構成情報</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">CTA数</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.ctaCount}</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">お客様の声</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.testimonialCount}件</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">文字数</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.wordCount ? lpData.wordCount.toLocaleString() : "-"}文字</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                            <span className="text-[11px] text-gray-500">価格表示</span>
+                            <span className="text-[12px] font-medium text-gray-900">{lpData.hasPricing ? lpData.priceText || "あり" : "なし"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Re-analyze button */}
+                      <div className="flex justify-center">
+                        <button
+                          className="btn-secondary text-xs"
+                          onClick={handleStartLPAnalysis}
+                          disabled={lpAnalyzing}
+                        >
+                          {lpAnalyzing ? "分析中..." : "再分析"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* No analysis yet but searched */}
+                  {!lpData && !lpAnalyzing && lpSearched && (
+                    <div className="text-center py-8 text-gray-400">
+                      <svg className="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                       </svg>
+                      <p className="text-xs">この遷移先LPはまだ分析されていません</p>
+                      <p className="text-[10px] mt-1">上の「LP分析を実行」ボタンから分析を開始できます</p>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-xs">遷移先LPの情報がありません</p>
+                  <p className="text-[10px] mt-1">この広告にはLP遷移先URLが設定されていません</p>
+                </div>
+              )}
             </div>
           )}
 
-          {activeTab === "lp-analysis" && (
+          {!loading && product && activeTab === "analysis" && (
             <div className="space-y-4">
-              {/* LP Info */}
-              <div className="card bg-gradient-to-r from-purple-50 to-blue-50">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="badge text-[9px] bg-purple-100 text-purple-700">記事LP</span>
-                  <span className="text-[11px] text-gray-500">遷移先LP分析結果</span>
-                </div>
-                <p className="text-[13px] font-bold text-gray-900 mb-1">
-                  【医師監修】話題の美容セラムが初回980円
-                </p>
-                <p className="text-[10px] text-[#4A7DFF] break-all">
-                  {product.destination}
-                </p>
-              </div>
-
-              {/* Scores */}
-              <div className="grid grid-cols-4 gap-2">
-                <div className="card py-2 text-center">
-                  <p className="text-[9px] text-gray-400">LP品質</p>
-                  <p className="text-lg font-bold text-[#4A7DFF]">88</p>
-                </div>
-                <div className="card py-2 text-center">
-                  <p className="text-[9px] text-gray-400">CV力</p>
-                  <p className="text-lg font-bold text-emerald-600">85</p>
-                </div>
-                <div className="card py-2 text-center">
-                  <p className="text-[9px] text-gray-400">信頼性</p>
-                  <p className="text-lg font-bold text-amber-600">90</p>
-                </div>
-                <div className="card py-2 text-center">
-                  <p className="text-[9px] text-gray-400">緊急性</p>
-                  <p className="text-lg font-bold text-red-500">72</p>
-                </div>
-              </div>
-
-              {/* Page flow */}
-              <div className="card">
-                <h4 className="text-[12px] font-bold text-gray-900 mb-2">LP構成フロー</h4>
-                <div className="flex items-center flex-wrap gap-1">
-                  {["hero", "problem", "solution", "authority", "testimonial", "comparison", "pricing", "cta"].map((s, i) => (
-                    <div key={s} className="flex items-center">
-                      <span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-700">{s}</span>
-                      {i < 7 && <span className="text-gray-300 mx-0.5">→</span>}
+              {analysis ? (
+                <>
+                  {/* Prediction scores */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="card text-center py-4">
+                      <p className="text-[10px] text-gray-400 font-medium">推定CTR</p>
+                      <p className="text-2xl font-bold text-[#4A7DFF] mt-1">
+                        {analysis.ctr_prediction ? `${(analysis.ctr_prediction * 100).toFixed(1)}%` : "-"}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Appeal axes */}
-              <div className="card">
-                <h4 className="text-[12px] font-bold text-gray-900 mb-2">訴求軸分析</h4>
-                <div className="space-y-2">
-                  {[
-                    { axis: "権威性（医師監修）", strength: 90, color: "bg-amber-500" },
-                    { axis: "社会的証明（口コミ）", strength: 78, color: "bg-emerald-500" },
-                    { axis: "ベネフィット訴求", strength: 72, color: "bg-blue-500" },
-                    { axis: "価格訴求", strength: 65, color: "bg-orange-500" },
-                    { axis: "緊急性", strength: 55, color: "bg-red-500" },
-                  ].map((a) => (
-                    <div key={a.axis}>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[11px] text-gray-700">{a.axis}</span>
-                        <span className="text-[11px] font-semibold text-gray-700">{a.strength}</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${a.color}`} style={{ width: `${a.strength}%` }} />
-                      </div>
+                    <div className="card text-center py-4">
+                      <p className="text-[10px] text-gray-400 font-medium">推定CVR</p>
+                      <p className="text-2xl font-bold text-[#4A7DFF] mt-1">
+                        {analysis.cvr_prediction ? `${(analysis.cvr_prediction * 100).toFixed(1)}%` : "-"}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="card text-center py-4">
+                      <p className="text-[10px] text-gray-400 font-medium">勝ちスコア</p>
+                      <p className="text-2xl font-bold text-[#4A7DFF] mt-1">
+                        {analysis.winning_probability ? Math.round(analysis.winning_probability) : "-"}
+                      </p>
+                    </div>
+                  </div>
 
-              {/* USPs */}
-              <div className="card">
-                <h4 className="text-[12px] font-bold text-gray-900 mb-2">抽出USP</h4>
-                <div className="space-y-2">
-                  {[
-                    { category: "権威性", text: "皮膚科医監修の高濃度美容セラム", prominence: 92 },
-                    { category: "効果実感", text: "92%が14日で肌変化を実感", prominence: 88 },
-                    { category: "独自性", text: "特許取得の浸透技術「ナノデリバリー」", prominence: 78 },
-                    { category: "価格", text: "初回限定980円、返金保証付き", prominence: 70 },
-                  ].map((usp, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
-                      <span className="badge text-[8px] bg-gray-200 text-gray-600 shrink-0 mt-0.5">{usp.category}</span>
-                      <div className="flex-1">
-                        <p className="text-[11px] text-gray-800">{usp.text}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-[#4A7DFF]" style={{ width: `${usp.prominence}%` }} />
-                          </div>
-                          <span className="text-[9px] text-gray-400">重要度 {usp.prominence}</span>
+                  {/* Fatigue */}
+                  {analysis.fatigue_score !== undefined && (
+                    <div className="card">
+                      <h3 className="text-[13px] font-bold text-gray-900 mb-3">広告疲労度</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-20 h-20">
+                          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="14" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+                            <circle
+                              cx="18" cy="18" r="14" fill="none" stroke="#4A7DFF" strokeWidth="3"
+                              strokeDasharray={`${2 * Math.PI * 14}`}
+                              strokeDashoffset={`${2 * Math.PI * 14 * (1 - analysis.fatigue_score / 100)}`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900">
+                            {Math.round(analysis.fatigue_score)}%
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[12px] text-gray-600">
+                            現在の疲労度は
+                            <span className={`font-semibold ${analysis.fatigue_score > 60 ? "text-red-600" : analysis.fatigue_score > 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                              {analysis.fatigue_score > 60 ? "高め" : analysis.fatigue_score > 30 ? "やや上昇傾向" : "低め"}
+                            </span>
+                            です。
+                            {analysis.estimated_remaining_days && (
+                              <>推定残存有効期間は<span className="font-semibold text-gray-900">約{analysis.estimated_remaining_days}日</span>です。</>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  )}
 
-              {/* Target persona */}
-              <div className="card">
-                <h4 className="text-[12px] font-bold text-gray-900 mb-2">推定ターゲットペルソナ</h4>
-                <div className="p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="badge text-[9px] bg-blue-200 text-blue-800">女性</span>
-                    <span className="badge text-[9px] bg-blue-200 text-blue-800">30-40代</span>
-                  </div>
-                  <p className="text-[11px] text-gray-700 leading-relaxed">
-                    30-40代の女性で、肌のエイジングサイン（シミ・くすみ・たるみ）に悩んでいる。
-                    これまで様々なスキンケアを試してきたが満足できず、科学的根拠のある商品を求めている。
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {["シミ", "くすみ", "たるみ", "乾燥", "毛穴"].map((c) => (
-                      <span key={c} className="rounded bg-white px-1.5 py-0.5 text-[9px] text-blue-700 border border-blue-200">
-                        {c}
-                      </span>
-                    ))}
-                  </div>
+                  {/* Transcription */}
+                  {analysis.transcription && (
+                    <div className="card">
+                      <h3 className="text-[13px] font-bold text-gray-900 mb-2">音声テキスト（文字起こし）</h3>
+                      <p className="text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap">{analysis.transcription}</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-xs">AI分析データがありません</p>
+                  <p className="text-[10px] mt-1">この広告を分析するには、広告ライブラリから分析を実行してください</p>
                 </div>
-              </div>
-
-              {/* Strengths & Weaknesses */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="card">
-                  <h4 className="text-[12px] font-bold text-emerald-700 mb-2">強み</h4>
-                  <div className="space-y-1">
-                    {["医師監修の権威性が強い", "口コミの数と質が充実", "初回価格のインパクト", "CTA配置が適切"].map((s, i) => (
-                      <div key={i} className="flex items-start gap-1.5">
-                        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        <span className="text-[10px] text-gray-700">{s}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="card">
-                  <h4 className="text-[12px] font-bold text-red-600 mb-2">弱み・改善点</h4>
-                  <div className="space-y-1">
-                    {["ビフォーアフター画像が不足", "FAQセクションが薄い", "返金条件の説明不足", "モバイル最適化に課題"].map((w, i) => (
-                      <div key={i} className="flex items-start gap-1.5">
-                        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400" />
-                        <span className="text-[10px] text-gray-700">{w}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "analysis" && (
-            <div className="space-y-4">
-              <div className="card">
-                <h3 className="text-[13px] font-bold text-gray-900 mb-2">AI分析サマリー</h3>
-                <div className="space-y-3 text-[12px] text-gray-600 leading-relaxed">
-                  <p>
-                    <span className="font-semibold text-gray-900">フック分析:</span>{" "}
-                    冒頭3秒で「悩み共感型」のフックを使用。ターゲット層（30-40代女性）の肌悩みに直接訴求しており、
-                    視聴継続率が業界平均を32%上回っています。
-                  </p>
-                  <p>
-                    <span className="font-semibold text-gray-900">構成パターン:</span>{" "}
-                    「問題提起 → 解決策提示 → 社会的証明 → CTA」の王道構成を採用。
-                    特に中盤の医師監修ポイントが信頼性構築に効果的です。
-                  </p>
-                  <p>
-                    <span className="font-semibold text-gray-900">勝ちパターン要素:</span>{" "}
-                    テキストオーバーレイの使用率が高く（画面の65%にテキスト表示）、音声OFFでも内容が伝わる設計。
-                    ビフォーアフター演出が視聴者のCVR向上に寄与しています。
-                  </p>
-                  <p>
-                    <span className="font-semibold text-gray-900">改善提案:</span>{" "}
-                    CTAボタンのタイミングを現在の25秒地点から20秒地点に前倒しすることで、
-                    推定CVRが15-20%向上する可能性があります。また、サムネイルに人物の顔を大きく配置することで
-                    クリック率の改善が見込めます。
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="card text-center py-4">
-                  <p className="text-[10px] text-gray-400 font-medium">推定CTR</p>
-                  <p className="text-2xl font-bold text-[#4A7DFF] mt-1">3.2%</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">業界平均+1.1%</p>
-                </div>
-                <div className="card text-center py-4">
-                  <p className="text-[10px] text-gray-400 font-medium">推定CVR</p>
-                  <p className="text-2xl font-bold text-[#4A7DFF] mt-1">1.8%</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">業界平均+0.6%</p>
-                </div>
-                <div className="card text-center py-4">
-                  <p className="text-[10px] text-gray-400 font-medium">勝ちスコア</p>
-                  <p className="text-2xl font-bold text-[#4A7DFF] mt-1">87</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">上位8%</p>
-                </div>
-              </div>
-
-              <div className="card">
-                <h3 className="text-[13px] font-bold text-gray-900 mb-3">広告疲労度</h3>
-                <div className="flex items-center gap-4">
-                  <div className="relative w-20 h-20">
-                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
-                      <circle cx="18" cy="18" r="14" fill="none" stroke="#f3f4f6" strokeWidth="3" />
-                      <circle
-                        cx="18" cy="18" r="14" fill="none" stroke="#4A7DFF" strokeWidth="3"
-                        strokeDasharray="88" strokeDashoffset="53" strokeLinecap="round"
-                      />
-                    </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900">40%</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[12px] text-gray-600">
-                      現在の疲労度は<span className="font-semibold text-amber-600">やや上昇傾向</span>です。
-                      推定残存有効期間は<span className="font-semibold text-gray-900">約21日</span>です。
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      新しいクリエイティブバリエーションの準備を推奨します。
-                    </p>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
