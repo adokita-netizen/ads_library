@@ -666,10 +666,17 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
         limit_per_platform: limit,
         auto_analyze: true,
       });
-      setMessage(res.data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
-      setTimeout(() => onSuccess(), 2000);
-    } catch {
-      setMessage("クロールの開始に失敗しました。バックエンドの接続を確認してください。");
+      const data = res.data;
+      if (data?.status === "error") {
+        setMessage(data.message || "クロール中にエラーが発生しました");
+        setCrawling(false);
+      } else {
+        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
+        setTimeout(() => onSuccess(), 2000);
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setMessage(detail || "クロールの開始に失敗しました。バックエンドの接続を確認してください。");
       setCrawling(false);
     }
   };
