@@ -177,26 +177,30 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
         const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number }>("/rankings/products", { params });
         const items = data?.items || data?.rankings || data?.results;
         if (Array.isArray(items) && items.length > 0) {
-          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
-            id: (item.ad_id as number) || idx + 1,
-            rank: (item.rank as number) || idx + 1,
-            thumbnail: (item.thumbnail as string) || "",
-            duration: (item.duration_seconds as number) || 0,
-            platform: (item.platform as string) || "youtube",
-            managementId: (item.management_id as string) || `AD-${item.ad_id || idx + 1}`,
-            productName: (item.product_name as string) || "不明",
-            genre: (item.genre as string) || "",
-            destinationType: (item.destination_type as string) || "",
-            playIncrease: (item.view_increase as number) || 0,
-            spendIncrease: (item.spend_increase as number) || 0,
-            spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
-            isHit: (item.is_hit as boolean) || false,
-            totalPlays: (item.cumulative_views as number) || 0,
-            totalSpend: (item.cumulative_spend as number) || 0,
-            publishedDate: (item.published_date as string) || (item.created_at as string) || "",
-            adUrl: (item.ad_url as string) || "",
-            destination: (item.destination_url as string) || "",
-          }));
+          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => {
+            const adId = (item.ad_id as number) || (item.id as number) || idx + 1;
+            const platformRaw = ((item.platform as string) || "").toLowerCase();
+            return {
+              id: adId,
+              rank: (item.rank as number) || idx + 1,
+              thumbnail: (item.thumbnail as string) || "",
+              duration: (item.duration_seconds as number) || 0,
+              platform: platformRaw || "youtube",
+              managementId: (item.management_id as string) || `AD-${adId}`,
+              productName: (item.product_name as string) || "不明",
+              genre: (item.genre as string) || "",
+              destinationType: (item.destination_type as string) || "",
+              playIncrease: (item.view_increase as number) || 0,
+              spendIncrease: (item.spend_increase as number) || 0,
+              spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
+              isHit: (item.is_hit as boolean) || false,
+              totalPlays: (item.cumulative_views as number) || 0,
+              totalSpend: (item.cumulative_spend as number) || 0,
+              publishedDate: (item.published_date as string) || (item.created_at as string) || "",
+              adUrl: (item.ad_url as string) || "",
+              destination: (item.destination_url as string) || "",
+            };
+          });
           setAds(mapped);
         } else {
           setAds([]);
@@ -216,11 +220,6 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
-
-    // Apply media filter (client-side for additional filtering beyond API)
-    if (filters.media !== "all") {
-      result = result.filter((a) => a.platform === filters.media);
-    }
 
     // Apply search filter
     if (filters.search) {

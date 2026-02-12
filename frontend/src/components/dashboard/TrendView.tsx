@@ -98,11 +98,11 @@ export default function TrendView() {
           const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
             rank: (item.rank as number) || idx + 1,
             productName: (item.product_name as string) || "不明",
-            platform: (item.platform as string) || "youtube",
+            platform: ((item.platform as string) || "").toLowerCase() || "youtube",
             genre: (item.genre as string) || "",
-            change: (item.rank_change as number) || (item.change as number) || 0,
-            spendEstimate: (item.spend_estimate as number) || (item.spend_increase as number) || 0,
-            playCount: (item.play_count as number) || (item.view_increase as number) || 0,
+            change: (item.rank_change as number) || 0,
+            spendEstimate: (item.spend_increase as number) || 0,
+            playCount: (item.view_increase as number) || 0,
             trendScore: (item.trend_score as number) || 0,
           }));
           setTrends(mapped);
