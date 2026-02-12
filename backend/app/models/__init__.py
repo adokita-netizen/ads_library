@@ -13,6 +13,13 @@ from app.models.campaign import Campaign, CampaignAd
 from app.models.creative import GeneratedCreative, CreativeTemplate
 from app.models.prediction import PerformancePrediction, AdFatigueLog
 from app.models.user import User
+from app.models.landing_page import (
+    LandingPage,
+    LPSection,
+    USPPattern,
+    AppealAxisAnalysis,
+    LPAnalysis,
+)
 
 __all__ = [
     "Ad",
@@ -31,4 +38,9 @@ __all__ = [
     "PerformancePrediction",
     "AdFatigueLog",
     "User",
+    "LandingPage",
+    "LPSection",
+    "USPPattern",
+    "AppealAxisAnalysis",
+    "LPAnalysis",
 ]

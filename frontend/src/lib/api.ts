@@ -96,4 +96,24 @@ export const authApi = {
   refresh: (token: string) => api.post("/auth/refresh", { refresh_token: token }),
 };
 
+// LP Analysis API
+export const lpAnalysisApi = {
+  crawl: (data: { url: string; ad_id?: number; genre?: string; product_name?: string; advertiser_name?: string; auto_analyze?: boolean }) =>
+    api.post("/lp-analysis/crawl", data),
+  batchCrawl: (data: { urls: string[]; genre?: string; auto_analyze?: boolean }) =>
+    api.post("/lp-analysis/batch-crawl", data),
+  list: (params?: Record<string, unknown>) =>
+    api.get("/lp-analysis/list", { params }),
+  getDetail: (id: number) =>
+    api.get(`/lp-analysis/${id}`),
+  getUSPs: (id: number) =>
+    api.get(`/lp-analysis/${id}/usps`),
+  getAppealAxes: (id: number) =>
+    api.get(`/lp-analysis/${id}/appeal-axes`),
+  competitorInsight: (data: { genre: string; limit?: number }) =>
+    api.post("/lp-analysis/competitor-insight", data),
+  uspFlow: (data: { product_name: string; product_description: string; target_audience: string; genre: string; competitor_lp_ids?: number[] }) =>
+    api.post("/lp-analysis/usp-flow", data),
+};
+
 export default api;

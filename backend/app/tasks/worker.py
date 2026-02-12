@@ -25,6 +25,7 @@ celery_app.conf.update(
         "app.tasks.analysis_tasks.*": {"queue": "analysis"},
         "app.tasks.crawl_tasks.*": {"queue": "crawl"},
         "app.tasks.generation_tasks.*": {"queue": "generation"},
+        "app.tasks.lp_tasks.*": {"queue": "analysis"},
     },
     task_default_queue="default",
     beat_schedule={},
@@ -33,4 +34,5 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks([
     "app.tasks.analysis_tasks",
     "app.tasks.crawl_tasks",
+    "app.tasks.lp_tasks",
 ])

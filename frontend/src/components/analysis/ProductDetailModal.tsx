@@ -113,7 +113,7 @@ function formatNumber(n: number): string {
   return n.toLocaleString();
 }
 
-type TabType = "overview" | "creatives" | "competitors" | "analysis";
+type TabType = "overview" | "creatives" | "competitors" | "analysis" | "lp-analysis";
 
 export default function ProductDetailModal({ adId, onClose }: ProductDetailModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -163,6 +163,7 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
           {([
             { id: "overview", label: "概要" },
             { id: "creatives", label: "クリエイティブ一覧" },
+            { id: "lp-analysis", label: "遷移先LP分析" },
             { id: "competitors", label: "競合分析" },
             { id: "analysis", label: "AI分析" },
           ] as { id: TabType; label: string }[]).map((tab) => (
@@ -399,6 +400,155 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "lp-analysis" && (
+            <div className="space-y-4">
+              {/* LP Info */}
+              <div className="card bg-gradient-to-r from-purple-50 to-blue-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="badge text-[9px] bg-purple-100 text-purple-700">記事LP</span>
+                  <span className="text-[11px] text-gray-500">遷移先LP分析結果</span>
+                </div>
+                <p className="text-[13px] font-bold text-gray-900 mb-1">
+                  【医師監修】話題の美容セラムが初回980円
+                </p>
+                <p className="text-[10px] text-[#4A7DFF] break-all">
+                  {mockProduct.destination}
+                </p>
+              </div>
+
+              {/* Scores */}
+              <div className="grid grid-cols-4 gap-2">
+                <div className="card py-2 text-center">
+                  <p className="text-[9px] text-gray-400">LP品質</p>
+                  <p className="text-lg font-bold text-[#4A7DFF]">88</p>
+                </div>
+                <div className="card py-2 text-center">
+                  <p className="text-[9px] text-gray-400">CV力</p>
+                  <p className="text-lg font-bold text-emerald-600">85</p>
+                </div>
+                <div className="card py-2 text-center">
+                  <p className="text-[9px] text-gray-400">信頼性</p>
+                  <p className="text-lg font-bold text-amber-600">90</p>
+                </div>
+                <div className="card py-2 text-center">
+                  <p className="text-[9px] text-gray-400">緊急性</p>
+                  <p className="text-lg font-bold text-red-500">72</p>
+                </div>
+              </div>
+
+              {/* Page flow */}
+              <div className="card">
+                <h4 className="text-[12px] font-bold text-gray-900 mb-2">LP構成フロー</h4>
+                <div className="flex items-center flex-wrap gap-1">
+                  {["hero", "problem", "solution", "authority", "testimonial", "comparison", "pricing", "cta"].map((s, i) => (
+                    <div key={s} className="flex items-center">
+                      <span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-700">{s}</span>
+                      {i < 7 && <span className="text-gray-300 mx-0.5">→</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Appeal axes */}
+              <div className="card">
+                <h4 className="text-[12px] font-bold text-gray-900 mb-2">訴求軸分析</h4>
+                <div className="space-y-2">
+                  {[
+                    { axis: "権威性（医師監修）", strength: 90, color: "bg-amber-500" },
+                    { axis: "社会的証明（口コミ）", strength: 78, color: "bg-emerald-500" },
+                    { axis: "ベネフィット訴求", strength: 72, color: "bg-blue-500" },
+                    { axis: "価格訴求", strength: 65, color: "bg-orange-500" },
+                    { axis: "緊急性", strength: 55, color: "bg-red-500" },
+                  ].map((a) => (
+                    <div key={a.axis}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[11px] text-gray-700">{a.axis}</span>
+                        <span className="text-[11px] font-semibold text-gray-700">{a.strength}</span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${a.color}`} style={{ width: `${a.strength}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* USPs */}
+              <div className="card">
+                <h4 className="text-[12px] font-bold text-gray-900 mb-2">抽出USP</h4>
+                <div className="space-y-2">
+                  {[
+                    { category: "権威性", text: "皮膚科医監修の高濃度美容セラム", prominence: 92 },
+                    { category: "効果実感", text: "92%が14日で肌変化を実感", prominence: 88 },
+                    { category: "独自性", text: "特許取得の浸透技術「ナノデリバリー」", prominence: 78 },
+                    { category: "価格", text: "初回限定980円、返金保証付き", prominence: 70 },
+                  ].map((usp, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
+                      <span className="badge text-[8px] bg-gray-200 text-gray-600 shrink-0 mt-0.5">{usp.category}</span>
+                      <div className="flex-1">
+                        <p className="text-[11px] text-gray-800">{usp.text}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-[#4A7DFF]" style={{ width: `${usp.prominence}%` }} />
+                          </div>
+                          <span className="text-[9px] text-gray-400">重要度 {usp.prominence}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target persona */}
+              <div className="card">
+                <h4 className="text-[12px] font-bold text-gray-900 mb-2">推定ターゲットペルソナ</h4>
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="badge text-[9px] bg-blue-200 text-blue-800">女性</span>
+                    <span className="badge text-[9px] bg-blue-200 text-blue-800">30-40代</span>
+                  </div>
+                  <p className="text-[11px] text-gray-700 leading-relaxed">
+                    30-40代の女性で、肌のエイジングサイン（シミ・くすみ・たるみ）に悩んでいる。
+                    これまで様々なスキンケアを試してきたが満足できず、科学的根拠のある商品を求めている。
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {["シミ", "くすみ", "たるみ", "乾燥", "毛穴"].map((c) => (
+                      <span key={c} className="rounded bg-white px-1.5 py-0.5 text-[9px] text-blue-700 border border-blue-200">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Strengths & Weaknesses */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="card">
+                  <h4 className="text-[12px] font-bold text-emerald-700 mb-2">強み</h4>
+                  <div className="space-y-1">
+                    {["医師監修の権威性が強い", "口コミの数と質が充実", "初回価格のインパクト", "CTA配置が適切"].map((s, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span className="text-[10px] text-gray-700">{s}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="card">
+                  <h4 className="text-[12px] font-bold text-red-600 mb-2">弱み・改善点</h4>
+                  <div className="space-y-1">
+                    {["ビフォーアフター画像が不足", "FAQセクションが薄い", "返金条件の説明不足", "モバイル最適化に課題"].map((w, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400" />
+                        <span className="text-[10px] text-gray-700">{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

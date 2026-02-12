@@ -6,7 +6,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.endpoints import ads, auth, analytics, creative, predictions
+from app.api.endpoints import ads, auth, analytics, creative, predictions, lp_analysis
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
@@ -61,6 +61,7 @@ app.include_router(ads.router, prefix=API_PREFIX)
 app.include_router(creative.router, prefix=API_PREFIX)
 app.include_router(predictions.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
+app.include_router(lp_analysis.router, prefix=API_PREFIX)
 
 
 @app.get("/")

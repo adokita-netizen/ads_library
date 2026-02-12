@@ -6,8 +6,9 @@ import AdLibraryTable from "@/components/dashboard/AdLibraryTable";
 import TrendView from "@/components/dashboard/TrendView";
 import ProductDetailModal from "@/components/analysis/ProductDetailModal";
 import CreativeStudio from "@/components/creative/CreativeStudio";
+import LPAnalysisView from "@/components/lp/LPAnalysisView";
 
-type ViewType = "search" | "trend" | "analysis" | "ai-expert" | "creative" | "team" | "mylist" | "store";
+type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "team" | "mylist" | "store";
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<ViewType>("search");
@@ -27,6 +28,8 @@ export default function Home() {
         return <TrendView />;
       case "analysis":
         return <AdLibraryTable onAdSelect={handleAdSelect} />;
+      case "lp-analysis":
+        return <LPAnalysisView />;
       case "ai-expert":
       case "creative":
         return <CreativeStudio />;

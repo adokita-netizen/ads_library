@@ -97,3 +97,129 @@ export interface GeneratedScript {
   hashtags: string[];
   a_b_test_notes: string;
 }
+
+// LP Analysis types
+export interface LandingPageSummary {
+  id: number;
+  url: string;
+  final_url?: string;
+  domain?: string;
+  title?: string;
+  meta_description?: string;
+  lp_type: string;
+  genre?: string;
+  advertiser_name?: string;
+  product_name?: string;
+  status: string;
+  word_count?: number;
+  image_count?: number;
+  cta_count?: number;
+  testimonial_count?: number;
+  estimated_read_time_seconds?: number;
+  hero_headline?: string;
+  primary_cta_text?: string;
+  has_pricing?: boolean;
+  price_text?: string;
+  crawled_at?: string;
+  analyzed_at?: string;
+  created_at: string;
+}
+
+export interface LPSection {
+  section_order: number;
+  section_type: string;
+  heading?: string;
+  body_text?: string;
+  has_image: boolean;
+  has_video: boolean;
+  has_cta: boolean;
+  cta_text?: string;
+}
+
+export interface USPPattern {
+  id: number;
+  usp_category: string;
+  usp_text: string;
+  usp_headline?: string;
+  supporting_evidence?: string;
+  prominence_score?: number;
+  position_in_page?: string;
+  keywords?: string[];
+}
+
+export interface AppealAxis {
+  appeal_axis: string;
+  strength_score: number;
+  evidence_texts?: string[];
+}
+
+export interface LPAnalysisDetail {
+  overall_quality_score?: number;
+  conversion_potential_score?: number;
+  trust_score?: number;
+  urgency_score?: number;
+  page_flow_pattern?: string;
+  structure_summary?: string;
+  inferred_target_gender?: string;
+  inferred_target_age_range?: string;
+  inferred_target_concerns?: string[];
+  target_persona_summary?: string;
+  primary_appeal_axis?: string;
+  secondary_appeal_axis?: string;
+  appeal_strategy_summary?: string;
+  competitive_positioning?: string;
+  differentiation_points?: string[];
+  headline_effectiveness?: number;
+  cta_effectiveness?: number;
+  emotional_triggers?: string[];
+  power_words?: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  reusable_patterns?: string[];
+  improvement_suggestions?: string[];
+  full_analysis_text?: string;
+}
+
+export interface CompetitorAppealPattern {
+  appeal_axis: string;
+  avg_strength: number;
+  usage_count: number;
+  sample_texts: string[];
+}
+
+export interface GenreInsight {
+  genre: string;
+  total_lps_analyzed: number;
+  dominant_appeal: string;
+  appeal_distribution: CompetitorAppealPattern[];
+  common_usps: Array<{
+    category: string;
+    count: number;
+    avg_prominence: number;
+    top_keywords: string[];
+    sample_texts: string[];
+  }>;
+  avg_quality_score: number;
+  common_structures: string[];
+  target_personas: Array<{
+    gender: string;
+    age_range: string;
+    concerns: string[];
+  }>;
+}
+
+export interface USPFlowRecommendation {
+  recommended_primary_usp: string;
+  recommended_appeal_axis: string;
+  article_lp_structure: Array<{
+    section: string;
+    purpose: string;
+    content_guide: string;
+    appeal_technique: string;
+  }>;
+  headline_suggestions: string[];
+  differentiation_opportunities: string[];
+  competitor_gaps: string[];
+  estimated_effectiveness: number;
+  reasoning: string;
+}
