@@ -2,46 +2,53 @@
 
 import { useState } from "react";
 import Sidebar from "@/components/common/Sidebar";
-import DashboardView from "@/components/dashboard/DashboardView";
-import AdLibrary from "@/components/dashboard/AdLibrary";
-import AnalysisView from "@/components/analysis/AnalysisView";
+import AdLibraryTable from "@/components/dashboard/AdLibraryTable";
+import TrendView from "@/components/dashboard/TrendView";
+import ProductDetailModal from "@/components/analysis/ProductDetailModal";
 import CreativeStudio from "@/components/creative/CreativeStudio";
-import CompetitorView from "@/components/dashboard/CompetitorView";
 
-type ViewType = "dashboard" | "library" | "analysis" | "creative" | "competitor";
+type ViewType = "search" | "trend" | "analysis" | "ai-expert" | "creative" | "team" | "mylist" | "store";
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>("dashboard");
+  const [currentView, setCurrentView] = useState<ViewType>("search");
   const [selectedAdId, setSelectedAdId] = useState<number | null>(null);
+  const [showProductDetail, setShowProductDetail] = useState(false);
 
   const handleAdSelect = (adId: number) => {
     setSelectedAdId(adId);
-    setCurrentView("analysis");
+    setShowProductDetail(true);
   };
 
   const renderView = () => {
     switch (currentView) {
-      case "dashboard":
-        return <DashboardView />;
-      case "library":
-        return <AdLibrary onAdSelect={handleAdSelect} />;
+      case "search":
+        return <AdLibraryTable onAdSelect={handleAdSelect} />;
+      case "trend":
+        return <TrendView />;
       case "analysis":
-        return <AnalysisView adId={selectedAdId} />;
+        return <AdLibraryTable onAdSelect={handleAdSelect} />;
+      case "ai-expert":
       case "creative":
         return <CreativeStudio />;
-      case "competitor":
-        return <CompetitorView />;
       default:
-        return <DashboardView />;
+        return <AdLibraryTable onAdSelect={handleAdSelect} />;
     }
   };
 
   return (
-    <div className="flex h-screen">
-      <Sidebar currentView={currentView} onViewChange={setCurrentView} />
-      <main className="flex-1 overflow-auto bg-gray-50 p-6">
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar currentView={currentView} onViewChange={(v) => setCurrentView(v as ViewType)} />
+      <main className="flex-1 overflow-hidden flex flex-col">
         {renderView()}
       </main>
+
+      {/* Product Detail Modal */}
+      {showProductDetail && selectedAdId && (
+        <ProductDetailModal
+          adId={selectedAdId}
+          onClose={() => setShowProductDetail(false)}
+        />
+      )}
     </div>
   );
 }
