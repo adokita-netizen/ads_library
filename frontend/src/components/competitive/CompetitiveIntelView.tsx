@@ -5,57 +5,6 @@ import { competitiveApi } from "@/lib/api";
 
 type CITab = "spend" | "similarity" | "destination" | "alerts" | "trends" | "classification";
 
-// ===== Mock Data =====
-
-const mockSpendEstimate = {
-  ad_id: 1,
-  estimated_spend: 450000,
-  confidence_ranges: { p10: 280000, p25: 350000, p50: 450000, p75: 560000, p90: 680000 },
-  cpm_info: { platform_avg: 400, genre_adjusted: 520, seasonal_factor: 1.1, user_calibrated: null as number | null },
-  estimation_method: "cpm_model",
-  confidence_level: 0.45,
-};
-
-const mockCalibrations = [
-  { id: 1, platform: "youtube", genre: "美容・コスメ", actual_cpm: 480, notes: "Q4実績", created_at: "2025-12-20" },
-  { id: 2, platform: "tiktok", genre: "健康食品", actual_cpm: 320, notes: "11月実績", created_at: "2025-12-15" },
-];
-
-const mockSimilarAds = [
-  { ad_id: 101, similarity: 0.92, title: "美容セラム 口コミ動画 #2", platform: "YouTube", advertiser_name: "ビューティーラボ", auto_appeal_axes: ["authority", "social_proof"], auto_expression_type: "review" },
-  { ad_id: 102, similarity: 0.87, title: "エイジングケア 比較動画", platform: "TikTok", advertiser_name: "コスメティックス", auto_appeal_axes: ["comparison", "benefit"], auto_expression_type: "comparison" },
-  { ad_id: 103, similarity: 0.81, title: "医師監修セラム LP動画", platform: "Instagram", advertiser_name: "スキンケアプロ", auto_appeal_axes: ["authority", "benefit"], auto_expression_type: "authority" },
-  { ad_id: 104, similarity: 0.76, title: "肌悩み解決 UGC風", platform: "YouTube", advertiser_name: "ナチュラルコスメ", auto_appeal_axes: ["problem_solution", "emotional"], auto_expression_type: "ugc" },
-  { ad_id: 105, similarity: 0.72, title: "初回980円 限定オファー", platform: "Facebook", advertiser_name: "ヘルスビューティー", auto_appeal_axes: ["price", "urgency"], auto_expression_type: "tutorial" },
-];
-
-const mockLPReuse = [
-  { url_hash: "abc123", url: "https://lp.example.com/serum-v3", domain: "lp.example.com", title: "美容セラムV3 記事LP", genre: "美容・コスメ", advertiser_count: 4, ad_count: 12, advertisers: ["ビューティーラボ", "コスメA", "スキンケアB", "美容C"] },
-  { url_hash: "def456", url: "https://lp.example.com/diet-x", domain: "lp.example.com", title: "ダイエットX LP", genre: "健康食品", advertiser_count: 3, ad_count: 8, advertisers: ["ヘルスケアジャパン", "サプリA", "ダイエットB"] },
-  { url_hash: "ghi789", url: "https://shop.example.com/tonic", domain: "shop.example.com", title: "育毛トニック LP", genre: "ヘアケア", advertiser_count: 2, ad_count: 6, advertisers: ["ヘアケアプロ", "トニックA"] },
-];
-
-const mockAlerts = [
-  { id: 1, alert_type: "spend_surge", severity: "high", entity_type: "ad", entity_name: "セラムV3 動画広告", title: "消化額急増: セラムV3 (+280%)", description: "直近3日間の予想消化額が前期間比3.8倍に急増。¥120,000 → ¥456,000", change_percent: 280, detected_at: "2025-12-23T10:30:00Z", is_dismissed: false },
-  { id: 2, alert_type: "new_competitor_ad", severity: "medium", entity_type: "advertiser", entity_name: "コスメティックス", title: "競合新規出稿: コスメティックス (3件)", description: "コスメティックスが3件の新しい広告を出稿。媒体: YouTube, Instagram", detected_at: "2025-12-23T08:15:00Z", is_dismissed: false },
-  { id: 3, alert_type: "category_trend", severity: "high", entity_type: "genre", entity_name: "美容・コスメ", title: "ジャンル急伸: 美容・コスメ (+45%)", description: "美容・コスメの週間予想消化額が45%増加", change_percent: 45, detected_at: "2025-12-22T15:00:00Z", is_dismissed: false },
-  { id: 4, alert_type: "lp_swap", severity: "medium", entity_type: "lp", entity_name: "ビューティーラボ", title: "LP変更検出: ビューティーラボ", description: "遷移先LPが変更されました: lp.example.com", detected_at: "2025-12-22T12:00:00Z", is_dismissed: false },
-  { id: 5, alert_type: "spend_surge", severity: "medium", entity_type: "ad", entity_name: "ダイエットサプリX", title: "新規高消化: ダイエットサプリX (¥200,000)", description: "新規出稿で3日間の予想消化額が¥200,000に到達", change_percent: 100, detected_at: "2025-12-21T09:00:00Z", is_dismissed: true },
-];
-
-const mockTrendPredictions = [
-  { ad_id: 201, momentum_score: 92, hit_probability: 0.85, predicted_hit: true, growth_phase: "growth", days_active: 4, genre: "美容・コスメ", genre_percentile: 95, title: "【新発売】美容セラムZ", platform: "YouTube", advertiser_name: "コスメA", velocity: { view_1d: 15000, view_7d: 8000, spend_1d: 120000, spend_7d: 65000, view_acceleration: 0.6, spend_acceleration: 0.5, view_3d: 12000, spend_3d: 100000 } },
-  { ad_id: 202, momentum_score: 78, hit_probability: 0.72, predicted_hit: true, growth_phase: "growth", days_active: 6, genre: "健康食品", genre_percentile: 88, title: "プロテインバー 15秒", platform: "TikTok", advertiser_name: "フィットB", velocity: { view_1d: 8000, view_7d: 5000, spend_1d: 80000, spend_7d: 45000, view_acceleration: 0.4, spend_acceleration: 0.3, view_3d: 6500, spend_3d: 65000 } },
-  { ad_id: 203, momentum_score: 65, hit_probability: 0.55, predicted_hit: false, growth_phase: "launch", days_active: 2, genre: "ヘアケア", genre_percentile: 75, title: "育毛トニック 新CM", platform: "YouTube", advertiser_name: "ヘアプロC", velocity: { view_1d: 5000, view_7d: 2500, spend_1d: 50000, spend_7d: 25000, view_acceleration: 0.8, spend_acceleration: 0.7, view_3d: 4000, spend_3d: 40000 } },
-  { ad_id: 204, momentum_score: 48, hit_probability: 0.35, predicted_hit: false, growth_phase: "peak", days_active: 14, genre: "美容・コスメ", genre_percentile: 60, title: "アイクリーム レビュー", platform: "Instagram", advertiser_name: "コスメD", velocity: { view_1d: 3000, view_7d: 3200, spend_1d: 30000, spend_7d: 32000, view_acceleration: -0.05, spend_acceleration: -0.02, view_3d: 3100, spend_3d: 31000 } },
-];
-
-const mockProvisionalTags = [
-  { id: 1, ad_id: 301, field_name: "genre", value: "美容・コスメ", confidence: 0.65, classified_by: "auto_fast", created_at: "2025-12-23T09:00:00Z" },
-  { id: 2, ad_id: 302, field_name: "genre", value: "健康食品", confidence: 0.55, classified_by: "auto_fast", created_at: "2025-12-23T08:30:00Z" },
-  { id: 3, ad_id: 303, field_name: "product_name", value: "ダイエットサプリZ", confidence: 0.48, classified_by: "auto_fast", created_at: "2025-12-23T08:00:00Z" },
-  { id: 4, ad_id: 304, field_name: "appeal_axis", value: "authority", confidence: 0.72, classified_by: "auto_fast", created_at: "2025-12-22T16:00:00Z" },
-];
 
 // ===== Helper Labels =====
 
@@ -127,19 +76,19 @@ export default function CompetitiveIntelView() {
   const [similarQuery, setSimilarQuery] = useState("");
 
   // API state for alerts
-  const [alerts, setAlerts] = useState(mockAlerts);
+  const [alerts, setAlerts] = useState<Array<Record<string, unknown>>>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
 
   // API state for trends
-  const [trendPredictions, setTrendPredictions] = useState(mockTrendPredictions);
+  const [trendPredictions, setTrendPredictions] = useState<Array<Record<string, unknown>>>([]);
   const [trendsLoading, setTrendsLoading] = useState(true);
 
   // API state for calibrations
-  const [calibrations, setCalibrations] = useState(mockCalibrations);
+  const [calibrations, setCalibrations] = useState<Array<Record<string, unknown>>>([]);
   const [calibSaving, setCalibSaving] = useState(false);
 
   // API state for similarity
-  const [similarAds, setSimilarAds] = useState(mockSimilarAds);
+  const [similarAds, setSimilarAds] = useState<Array<Record<string, unknown>>>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
 
   // Fetch alerts
@@ -148,11 +97,11 @@ export default function CompetitiveIntelView() {
       try {
         const response = await competitiveApi.getAlertHistory();
         const items = response.data?.items || response.data?.results || response.data;
-        if (Array.isArray(items) && items.length > 0) {
+        if (Array.isArray(items)) {
           setAlerts(items);
         }
       } catch (error) {
-        console.warn("Alerts API unavailable, using mock data:", error);
+        console.error("Failed to fetch alerts:", error);
       } finally {
         setAlertsLoading(false);
       }
@@ -191,7 +140,7 @@ export default function CompetitiveIntelView() {
           setTrendPredictions(unique);
         }
       } catch (error) {
-        console.warn("Trends API unavailable, using mock data:", error);
+        console.error("Failed to fetch trends:", error);
       } finally {
         setTrendsLoading(false);
       }
@@ -205,11 +154,11 @@ export default function CompetitiveIntelView() {
       try {
         const response = await competitiveApi.listCalibrations();
         const items = response.data?.items || response.data?.results || response.data;
-        if (Array.isArray(items) && items.length > 0) {
+        if (Array.isArray(items)) {
           setCalibrations(items);
         }
       } catch (error) {
-        console.warn("Calibrations API unavailable, using mock data:", error);
+        console.error("Failed to fetch calibrations:", error);
       }
     };
     fetchCalibrations();
@@ -262,12 +211,11 @@ export default function CompetitiveIntelView() {
         limit: 10,
       });
       const items = response.data?.items || response.data?.results || response.data;
-      if (Array.isArray(items) && items.length > 0) {
+      if (Array.isArray(items)) {
         setSimilarAds(items);
       }
     } catch (error) {
-      console.warn("Similarity search API unavailable, using mock data:", error);
-      setSimilarAds(mockSimilarAds);
+      console.error("Failed to perform similarity search:", error);
     } finally {
       setSimilarLoading(false);
     }

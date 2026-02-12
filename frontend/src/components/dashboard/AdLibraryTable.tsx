@@ -45,93 +45,6 @@ interface MockAd {
   destination: string;
 }
 
-// Mock data matching DPro style
-const mockAds: MockAd[] = [
-  {
-    id: 1, rank: 1, thumbnail: "", duration: 30, platform: "youtube",
-    managementId: "AD-2025-00147", productName: "スキンケアセラムV3", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 1250000, spendIncrease: 8500000,
-    spendBar: 95, isHit: true, totalPlays: 45200000, totalSpend: 128000000,
-    publishedDate: "2025-12-15", adUrl: "https://ads.example.com/v/147", destination: "https://lp.example.com/serum-v3"
-  },
-  {
-    id: 2, rank: 2, thumbnail: "", duration: 15, platform: "tiktok",
-    managementId: "AD-2025-00283", productName: "ダイエットサプリメントX", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 980000, spendIncrease: 6200000,
-    spendBar: 82, isHit: true, totalPlays: 32100000, totalSpend: 95000000,
-    publishedDate: "2025-12-18", adUrl: "https://ads.example.com/v/283", destination: "https://shop.example.com/diet-x"
-  },
-  {
-    id: 3, rank: 3, thumbnail: "", duration: 60, platform: "facebook",
-    managementId: "AD-2025-00391", productName: "育毛トニックPRO", genre: "ヘアケア",
-    destinationType: "記事LP", playIncrease: 720000, spendIncrease: 5100000,
-    spendBar: 68, isHit: false, totalPlays: 28500000, totalSpend: 82000000,
-    publishedDate: "2025-12-10", adUrl: "https://ads.example.com/v/391", destination: "https://lp.example.com/tonic-pro"
-  },
-  {
-    id: 4, rank: 4, thumbnail: "", duration: 20, platform: "instagram",
-    managementId: "AD-2025-00412", productName: "プロテインバーFIT", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 650000, spendIncrease: 4300000,
-    spendBar: 58, isHit: false, totalPlays: 22300000, totalSpend: 67000000,
-    publishedDate: "2025-12-20", adUrl: "https://ads.example.com/v/412", destination: "https://shop.example.com/fit-bar"
-  },
-  {
-    id: 5, rank: 5, thumbnail: "", duration: 45, platform: "youtube",
-    managementId: "AD-2025-00523", productName: "美白クリームルーチェ", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 580000, spendIncrease: 3800000,
-    spendBar: 50, isHit: false, totalPlays: 19800000, totalSpend: 58000000,
-    publishedDate: "2025-12-08", adUrl: "https://ads.example.com/v/523", destination: "https://lp.example.com/luce"
-  },
-  {
-    id: 6, rank: 6, thumbnail: "", duration: 10, platform: "shorts",
-    managementId: "AD-2025-00634", productName: "アイクリームモイスト", genre: "美容・コスメ",
-    destinationType: "EC直接", playIncrease: 510000, spendIncrease: 3200000,
-    spendBar: 42, isHit: false, totalPlays: 16500000, totalSpend: 45000000,
-    publishedDate: "2025-12-22", adUrl: "https://ads.example.com/v/634", destination: "https://shop.example.com/eyecream"
-  },
-  {
-    id: 7, rank: 7, thumbnail: "", duration: 30, platform: "tiktok",
-    managementId: "AD-2025-00745", productName: "酵素ドリンクナチュラ", genre: "健康食品",
-    destinationType: "記事LP", playIncrease: 430000, spendIncrease: 2800000,
-    spendBar: 37, isHit: false, totalPlays: 14200000, totalSpend: 39000000,
-    publishedDate: "2025-12-05", adUrl: "https://ads.example.com/v/745", destination: "https://lp.example.com/natura"
-  },
-  {
-    id: 8, rank: 8, thumbnail: "", duration: 25, platform: "facebook",
-    managementId: "AD-2025-00856", productName: "CBDオイルリラクス", genre: "健康・リラックス",
-    destinationType: "EC直接", playIncrease: 380000, spendIncrease: 2400000,
-    spendBar: 32, isHit: false, totalPlays: 12100000, totalSpend: 34000000,
-    publishedDate: "2025-12-12", adUrl: "https://ads.example.com/v/856", destination: "https://shop.example.com/cbd"
-  },
-  {
-    id: 9, rank: 9, thumbnail: "", duration: 15, platform: "line",
-    managementId: "AD-2025-00967", productName: "マウスウォッシュクリア", genre: "オーラルケア",
-    destinationType: "記事LP", playIncrease: 320000, spendIncrease: 2100000,
-    spendBar: 28, isHit: false, totalPlays: 10500000, totalSpend: 28000000,
-    publishedDate: "2025-12-17", adUrl: "https://ads.example.com/v/967", destination: "https://lp.example.com/mouthwash"
-  },
-  {
-    id: 10, rank: 10, thumbnail: "", duration: 35, platform: "yahoo",
-    managementId: "AD-2025-01078", productName: "葉酸サプリママケア", genre: "健康食品",
-    destinationType: "EC直接", playIncrease: 280000, spendIncrease: 1800000,
-    spendBar: 24, isHit: false, totalPlays: 8900000, totalSpend: 24000000,
-    publishedDate: "2025-12-14", adUrl: "https://ads.example.com/v/1078", destination: "https://shop.example.com/mamacare"
-  },
-  {
-    id: 11, rank: 11, thumbnail: "", duration: 20, platform: "x",
-    managementId: "AD-2025-01189", productName: "シワ改善クリームリペア", genre: "美容・コスメ",
-    destinationType: "記事LP", playIncrease: 240000, spendIncrease: 1500000,
-    spendBar: 20, isHit: false, totalPlays: 7600000, totalSpend: 21000000,
-    publishedDate: "2025-12-19", adUrl: "https://ads.example.com/v/1189", destination: "https://lp.example.com/repair"
-  },
-  {
-    id: 12, rank: 12, thumbnail: "", duration: 60, platform: "youtube",
-    managementId: "AD-2025-01290", productName: "除毛クリームスムース", genre: "美容・コスメ",
-    destinationType: "EC直接", playIncrease: 210000, spendIncrease: 1300000,
-    spendBar: 17, isHit: false, totalPlays: 6800000, totalSpend: 18000000,
-    publishedDate: "2025-12-06", adUrl: "https://ads.example.com/v/1290", destination: "https://shop.example.com/smooth"
-  },
-];
 
 const platformLabels: Record<string, string> = {
   youtube: "YT",
@@ -208,7 +121,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const [ads, setAds] = useState<MockAd[]>(mockAds);
+  const [ads, setAds] = useState<MockAd[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -247,8 +160,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           setAds(mapped);
         }
       } catch (error) {
-        console.warn("API unavailable, using mock data:", error);
-        // keep mock data as fallback
+        console.error("Failed to fetch ad data:", error);
       } finally {
         setLoading(false);
       }
@@ -398,6 +310,15 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           <div className="flex items-center justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
             <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
+          </div>
+        )}
+        {!loading && filteredAds.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <svg className="w-10 h-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+            <p className="text-xs">データがありません</p>
+            <p className="text-[10px] mt-1">広告をクロールするか、フィルター条件を変更してください</p>
           </div>
         )}
         <table className="data-table">
