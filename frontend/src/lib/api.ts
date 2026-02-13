@@ -288,4 +288,16 @@ export const competitiveApi = {
     api.get("/competitive/fingerprint/clusters", { params }),
 };
 
+// Settings API
+export const settingsApi = {
+  getPlatforms: () => api.get("/settings/api-keys/platforms"),
+  listKeys: () => api.get("/settings/api-keys"),
+  setKey: (data: { platform: string; key_name: string; key_value: string }) =>
+    api.post("/settings/api-keys", data),
+  deleteKey: (data: { platform: string; key_name: string }) =>
+    api.delete("/settings/api-keys", { data }),
+  testKey: (data: { platform: string; key_name: string; key_value: string }) =>
+    api.post("/settings/api-keys/test", data),
+};
+
 export default api;

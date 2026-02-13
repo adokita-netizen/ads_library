@@ -12,8 +12,9 @@ import TeamSpaceView from "@/components/workspace/TeamSpaceView";
 import MyListView from "@/components/workspace/MyListView";
 import StoreView from "@/components/workspace/StoreView";
 import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
+import APIKeysSettings from "@/components/settings/APIKeysSettings";
 
-type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store";
+type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store" | "settings";
 
 /** Connectivity banner — auto-hides after successful check, shows data test */
 function ConnectivityBanner() {
@@ -140,6 +141,8 @@ export default function Home() {
         return <MyListView />;
       case "store":
         return <StoreView />;
+      case "settings":
+        return <APIKeysSettings />;
       default:
         return <AdLibraryTable onAdSelect={handleAdSelect} />;
     }

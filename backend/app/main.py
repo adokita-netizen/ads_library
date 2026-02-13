@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.endpoints import ads, auth, analytics, creative, predictions, lp_analysis, rankings, notifications, competitive_intel
+from app.api.endpoints import settings as settings_endpoints
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
         import app.models.analysis  # noqa: F401
         import app.models.user  # noqa: F401
         import app.models.landing_page  # noqa: F401
+        import app.models.api_key  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
         logger.info("database_tables_ensured")
     except Exception as e:
@@ -138,6 +140,7 @@ app.include_router(lp_analysis.router, prefix=API_PREFIX)
 app.include_router(rankings.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(competitive_intel.router, prefix=API_PREFIX)
+app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 
 
 @app.get("/")
