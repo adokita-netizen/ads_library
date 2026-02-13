@@ -3,6 +3,7 @@
 import uuid
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.schemas.ad import (
     CrawlResponse,
 )
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/ads", tags=["ads"])
 settings = get_settings()
 
@@ -156,8 +158,8 @@ async def upload_ad_video(
             analyze_ad_task.delay(ad.id)
             ad.status = AdStatusEnum.PROCESSING
             await db.flush()
-        except Exception:
-            pass  # Analysis failure is non-critical; ad is still saved
+        except Exception as e:
+            logger.warning("auto_analyze_dispatch_failed", ad_id=ad.id, error=str(e))
 
     return {
         "id": ad.id,
@@ -429,8 +431,8 @@ async def delete_ad(
         try:
             storage = get_storage_client()
             storage.delete_file(ad.s3_key)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("storage_delete_failed", ad_id=ad_id, s3_key=ad.s3_key, error=str(e))
 
     await db.delete(ad)
     return {"message": "Ad deleted successfully"}

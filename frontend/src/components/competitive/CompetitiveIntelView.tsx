@@ -68,24 +68,29 @@ const expressionTypeLabels: Record<string, string> = {
   tutorial: "チュートリアル",
 };
 
-// Default data for visualization examples
-const mockSpendEstimate = {
+// Spend estimate example (shown as example visualization; real estimates use the API)
+const exampleSpendEstimate = {
   confidence_ranges: { p10: 150000, p25: 280000, p50: 450000, p75: 650000, p90: 900000 },
-  estimation_method: "model",
   confidence_level: 0.72,
-  cpm_info: { seasonal_factor: 1.15 },
 };
 
-const mockLPReuse: Array<{ url_hash: string; genre: string; advertiser_count: number; ad_count: number; title: string; domain: string; advertisers: string[] }> = [
-  { url_hash: "lp1", genre: "EC・D2C", advertiser_count: 5, ad_count: 12, title: "初回限定キャンペーンLP", domain: "example.com", advertisers: ["広告主A", "広告主B", "広告主C", "広告主D", "広告主E"] },
-  { url_hash: "lp2", genre: "美容", advertiser_count: 3, ad_count: 8, title: "美容サプリLP", domain: "beauty-shop.jp", advertisers: ["ブランドX", "ブランドY", "ブランドZ"] },
-];
+interface LPReuseItem {
+  url_hash: string;
+  genre: string;
+  advertiser_count: number;
+  ad_count: number;
+  title: string;
+  domain: string;
+  advertisers: string[];
+}
 
-const mockProvisionalTags: Array<{ id: number; ad_id: number; field_name: string; value: string; confidence: number }> = [
-  { id: 1, ad_id: 101, field_name: "genre", value: "EC・D2C", confidence: 0.65 },
-  { id: 2, ad_id: 102, field_name: "product_name", value: "スキンケアセット", confidence: 0.42 },
-  { id: 3, ad_id: 103, field_name: "genre", value: "健康食品", confidence: 0.78 },
-];
+interface ProvisionalTagItem {
+  id: number;
+  ad_id: number;
+  field_name: string;
+  value: string;
+  confidence: number;
+}
 
 interface TrendPrediction {
   ad_id: number;
@@ -171,6 +176,14 @@ export default function CompetitiveIntelView() {
   const [similarAds, setSimilarAds] = useState<SimilarAdItem[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
 
+  // API state for destination (LP reuse)
+  const [lpReuse, setLpReuse] = useState<LPReuseItem[]>([]);
+  const [lpReuseLoading, setLpReuseLoading] = useState(true);
+
+  // API state for classification (provisional tags)
+  const [provisionalTags, setProvisionalTags] = useState<ProvisionalTagItem[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
+
   // Error state
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -247,6 +260,42 @@ export default function CompetitiveIntelView() {
       }
     };
     fetchCalibrations();
+  }, []);
+
+  // Fetch LP reuse data
+  useEffect(() => {
+    const fetchLPReuse = async () => {
+      try {
+        const response = await competitiveApi.getLPReuse({ min_advertisers: 2, limit: 10 });
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items)) {
+          setLpReuse(items);
+        }
+      } catch (error) {
+        console.error("Failed to fetch LP reuse:", error);
+      } finally {
+        setLpReuseLoading(false);
+      }
+    };
+    fetchLPReuse();
+  }, []);
+
+  // Fetch provisional tags
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await competitiveApi.listProvisionalTags(20);
+        const items = response.data?.items || response.data?.results || response.data;
+        if (Array.isArray(items)) {
+          setProvisionalTags(items);
+        }
+      } catch (error) {
+        console.error("Failed to fetch provisional tags:", error);
+      } finally {
+        setTagsLoading(false);
+      }
+    };
+    fetchTags();
   }, []);
 
   // Dismiss alert handler
@@ -528,23 +577,23 @@ export default function CompetitiveIntelView() {
               <div className="flex items-center gap-4 mb-4">
                 <div className="text-center">
                   <p className="text-[9px] text-gray-400">P10 (低)</p>
-                  <p className="text-[14px] font-bold text-gray-400">¥{(mockSpendEstimate.confidence_ranges.p10 / 10000).toFixed(1)}万</p>
+                  <p className="text-[14px] font-bold text-gray-400">¥{(exampleSpendEstimate.confidence_ranges.p10 / 10000).toFixed(1)}万</p>
                 </div>
                 <div className="text-center">
                   <p className="text-[9px] text-gray-400">P25</p>
-                  <p className="text-[14px] font-bold text-blue-400">¥{(mockSpendEstimate.confidence_ranges.p25 / 10000).toFixed(1)}万</p>
+                  <p className="text-[14px] font-bold text-blue-400">¥{(exampleSpendEstimate.confidence_ranges.p25 / 10000).toFixed(1)}万</p>
                 </div>
                 <div className="text-center bg-blue-50 rounded-lg px-4 py-2">
                   <p className="text-[9px] text-[#4A7DFF] font-bold">P50 (中央値)</p>
-                  <p className="text-[20px] font-bold text-[#4A7DFF]">¥{(mockSpendEstimate.confidence_ranges.p50 / 10000).toFixed(1)}万</p>
+                  <p className="text-[20px] font-bold text-[#4A7DFF]">¥{(exampleSpendEstimate.confidence_ranges.p50 / 10000).toFixed(1)}万</p>
                 </div>
                 <div className="text-center">
                   <p className="text-[9px] text-gray-400">P75</p>
-                  <p className="text-[14px] font-bold text-blue-400">¥{(mockSpendEstimate.confidence_ranges.p75 / 10000).toFixed(1)}万</p>
+                  <p className="text-[14px] font-bold text-blue-400">¥{(exampleSpendEstimate.confidence_ranges.p75 / 10000).toFixed(1)}万</p>
                 </div>
                 <div className="text-center">
                   <p className="text-[9px] text-gray-400">P90 (高)</p>
-                  <p className="text-[14px] font-bold text-gray-400">¥{(mockSpendEstimate.confidence_ranges.p90 / 10000).toFixed(1)}万</p>
+                  <p className="text-[14px] font-bold text-gray-400">¥{(exampleSpendEstimate.confidence_ranges.p90 / 10000).toFixed(1)}万</p>
                 </div>
               </div>
 
@@ -563,9 +612,9 @@ export default function CompetitiveIntelView() {
               </div>
 
               <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500">
-                <span>推定方法: {mockSpendEstimate.estimation_method === "calibrated" ? "キャリブレーション済" : "CPMモデル"}</span>
-                <span>信頼度: {(mockSpendEstimate.confidence_level * 100).toFixed(0)}%</span>
-                <span>季節性係数: ×{mockSpendEstimate.cpm_info.seasonal_factor}</span>
+                <span>推定方法: CPMモデル</span>
+                <span>信頼度: {(exampleSpendEstimate.confidence_level * 100).toFixed(0)}%</span>
+                <span className="text-gray-400">(例: 実際の推定はAPIで計算されます)</span>
               </div>
             </div>
 
@@ -718,8 +767,17 @@ export default function CompetitiveIntelView() {
             {/* LP Reuse ranking */}
             <div className="card">
               <h4 className="text-[12px] font-bold text-gray-900 mb-3">LP再利用ランキング（複数広告主が使用するLP）</h4>
+              {lpReuseLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+                  <span className="ml-2 text-[11px] text-gray-400">読み込み中...</span>
+                </div>
+              )}
+              {!lpReuseLoading && lpReuse.length === 0 && (
+                <p className="text-[11px] text-gray-400 py-4 text-center">LP再利用データがありません。広告をクロールしてデータを蓄積してください。</p>
+              )}
               <div className="space-y-2">
-                {mockLPReuse.map((lp, i) => (
+                {lpReuse.map((lp, i) => (
                   <div key={lp.url_hash} className="p-3 bg-gray-50 rounded-lg hover:bg-blue-50/50 transition-colors cursor-pointer">
                     <div className="flex items-start gap-3">
                       <span className="shrink-0 w-7 h-7 rounded-full bg-[#4A7DFF] text-white text-[11px] font-bold flex items-center justify-center">
@@ -770,11 +828,22 @@ export default function CompetitiveIntelView() {
             <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[12px] font-bold text-gray-900">レビュー待ち（暫定分類）</h4>
-                <span className="text-[10px] text-amber-600 font-medium">{mockProvisionalTags.length}件</span>
+                <span className="text-[10px] text-amber-600 font-medium">
+                  {tagsLoading ? "..." : `${provisionalTags.length}件`}
+                </span>
               </div>
 
+              {tagsLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                  <span className="ml-2 text-[11px] text-gray-400">読み込み中...</span>
+                </div>
+              )}
+              {!tagsLoading && provisionalTags.length === 0 && (
+                <p className="text-[11px] text-gray-400 py-4 text-center">レビュー待ちの暫定タグはありません。</p>
+              )}
               <div className="space-y-2">
-                {mockProvisionalTags.map(tag => (
+                {provisionalTags.map(tag => (
                   <div key={tag.id} className="flex items-center gap-3 p-2 bg-amber-50/50 rounded-lg border border-amber-200/50">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-0.5">

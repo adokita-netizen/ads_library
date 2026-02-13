@@ -120,7 +120,11 @@ def get_product_rankings(
 
 
 def _fallback_ad_list(session, genre, platform, page, page_size, period):
-    """When no pre-computed rankings exist, rank ads by view_count from the Ad table."""
+    """When no pre-computed rankings exist, rank ads by view_count.
+
+    Computes basic hit_score and trend_score from available data and marks
+    demo ads so the frontend can distinguish real vs demo data.
+    """
     query = session.query(Ad)
 
     if platform:
@@ -136,9 +140,22 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
         .all()
     )
 
+    # Compute max view_count for relative scoring
+    max_views = max((ad.view_count or 0 for ad in ads), default=1) or 1
+
     items = []
     for rank, ad in enumerate(ads, start=(page - 1) * page_size + 1):
         metadata = ad.ad_metadata or {}
+        views = ad.view_count or 0
+        likes = ad.like_count or 0
+
+        # Basic hit_score: normalized view count (0-100)
+        hit_score = round(min(100, (views / max_views) * 100))
+        # Basic trend_score: engagement rate proxy (likes/views ratio, scaled)
+        engagement = (likes / views * 100) if views > 0 else 0
+        trend_score = round(min(100, engagement * 10))
+
+        is_demo = bool(metadata.get("is_demo"))
         items.append({
             "rank": rank,
             "previous_rank": None,
@@ -148,13 +165,14 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "advertiser_name": ad.advertiser_name or "",
             "genre": str(ad.category.value) if ad.category else "",
             "platform": str(ad.platform.value) if ad.platform else "",
-            "view_increase": ad.view_count or 0,
+            "view_increase": views,
             "spend_increase": 0,
-            "cumulative_views": ad.view_count or 0,
+            "cumulative_views": views,
             "cumulative_spend": 0,
-            "is_hit": False,
-            "hit_score": 0,
-            "trend_score": 0,
+            "is_hit": hit_score >= 80,
+            "hit_score": hit_score,
+            "trend_score": trend_score,
+            "is_demo": is_demo,
             "thumbnail": ad.thumbnail_s3_key or "",
             "duration_seconds": ad.duration_seconds or 0,
             "management_id": ad.external_id or f"AD-{ad.id}",
@@ -173,6 +191,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
         "total": total,
         "page": page,
         "page_size": page_size,
+        "is_fallback": True,
         "items": items,
     }
 

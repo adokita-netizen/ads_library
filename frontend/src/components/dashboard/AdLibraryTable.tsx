@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
@@ -161,20 +161,46 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
   const [fetchError, setFetchError] = useState("");
 
+  const [isFallback, setIsFallback] = useState(false);
+
+  // Debounce search input to avoid excessive API calls
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => setDebouncedSearch(filters.search), 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [filters.search]);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setFetchError("");
       try {
-        const params: Record<string, string | number | undefined> = {};
-        if (filters.media !== "all") params.platform = filters.media;
-        if (filters.genre !== "all") params.genre = filters.genre;
-        if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
-        else if (filters.interval === "30days") params.period = "monthly";
-        else params.period = "daily";
+        const searchText = debouncedSearch.trim();
+        let data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number; is_fallback?: boolean };
 
-        // Use native fetch (same transport as health check) instead of axios
-        const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number }>("/rankings/products", { params });
+        if (searchText) {
+          // Use Pro-Search endpoint for text search
+          const params: Record<string, string | number | undefined> = {
+            q: searchText,
+            search_scope: "all",
+          };
+          if (filters.media !== "all") params.platform = filters.media;
+          if (filters.genre !== "all") params.genre = filters.genre;
+          data = await fetchApi("/rankings/search", { params });
+          setIsFallback(false);
+        } else {
+          // Use rankings endpoint for browsing
+          const params: Record<string, string | number | undefined> = {};
+          if (filters.media !== "all") params.platform = filters.media;
+          if (filters.genre !== "all") params.genre = filters.genre;
+          if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
+          else if (filters.interval === "30days") params.period = "monthly";
+          else params.period = "daily";
+          data = await fetchApi("/rankings/products", { params });
+          setIsFallback(Boolean(data?.is_fallback));
+        }
+
         const items = data?.items || data?.rankings || data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => {
@@ -187,8 +213,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
               duration: (item.duration_seconds as number) || 0,
               platform: platformRaw || "youtube",
               managementId: (item.management_id as string) || `AD-${adId}`,
-              productName: (item.product_name as string) || "不明",
-              genre: (item.genre as string) || "",
+              productName: (item.product_name as string) || (item.title as string) || "不明",
+              genre: (item.genre as string) || (item.category as string) || "",
               destinationType: (item.destination_type as string) || "",
               playIncrease: (item.view_increase as number) || 0,
               spendIncrease: (item.spend_increase as number) || 0,
@@ -217,7 +243,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
     };
     fetchData();
     setCurrentPage(1);
-  }, [filters.media, filters.genre, filters.interval, fetchTrigger]);
+  }, [filters.media, filters.genre, filters.interval, debouncedSearch, fetchTrigger]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
@@ -368,6 +394,13 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           {filteredAds.length}件の結果
         </span>
       </div>
+
+      {/* Data source indicator */}
+      {!loading && isFallback && ads.length > 0 && (
+        <div className="mx-4 mt-1 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-700">
+          ランキング集計前のデータです。表示はリアルタイム再生数順になっています。
+        </div>
+      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto custom-scrollbar">
