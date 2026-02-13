@@ -1,5 +1,6 @@
 """Video ad script generation using LLMs."""
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -138,20 +139,24 @@ class ScriptGenerator:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": self._get_system_prompt(language),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.8,
-                max_tokens=3000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": self._get_system_prompt(language),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.8,
+                    max_tokens=3000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             import json
             script_data = json.loads(content)
@@ -319,29 +324,33 @@ Output in JSON format with this structure:
             try:
                 client = self._get_client()
                 import json
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": self._get_system_prompt("ja"),
-                        },
-                        {
-                            "role": "user",
-                            "content": f"""以下のベース台本の{prompt_instruction}を作成してください。
+                response = await asyncio.to_thread(
+                    lambda: client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": self._get_system_prompt("ja"),
+                            },
+                            {
+                                "role": "user",
+                                "content": f"""以下のベース台本の{prompt_instruction}を作成してください。
 バリエーション {i + 1}/{num_variations}
 
 【ベース台本】
 {json.dumps(base_script.to_dict(), ensure_ascii=False, indent=2)}
 
 {prompt_instruction}として、異なるアプローチの台本をJSON形式で出力してください。""",
-                        },
-                    ],
-                    temperature=0.9,
-                    max_tokens=3000,
-                    response_format={"type": "json_object"},
+                            },
+                        ],
+                        temperature=0.9,
+                        max_tokens=3000,
+                        response_format={"type": "json_object"},
+                    )
                 )
 
+                if not response.choices or not response.choices[0].message.content:
+                    raise ValueError("LLM returned empty response")
                 content = response.choices[0].message.content
                 script_data = json.loads(content)
                 variation = self._parse_script_response(

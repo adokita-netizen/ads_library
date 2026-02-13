@@ -1,5 +1,6 @@
 """Competitor LP Intelligence - analyze regional/target patterns across competitors."""
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -245,24 +246,28 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "あなたはD2C/EC広告のLP戦略コンサルタントです。"
-                            "競合分析データを基に、USP設計から記事LP構成までの導線を設計します。"
-                            "データドリブンな提案を心がけ、競合との差別化を重視してください。"
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.4,
-                max_tokens=3000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "あなたはD2C/EC広告のLP戦略コンサルタントです。"
+                                "競合分析データを基に、USP設計から記事LP構成までの導線を設計します。"
+                                "データドリブンな提案を心がけ、競合との差別化を重視してください。"
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.4,
+                    max_tokens=3000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             data = json.loads(response.choices[0].message.content)
             return self._parse_flow_recommendation(data)
 

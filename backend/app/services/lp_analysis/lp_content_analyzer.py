@@ -1,5 +1,6 @@
 """LP Content Analyzer - USP extraction, appeal axis detection, structure analysis using LLM."""
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -219,25 +220,29 @@ class LPContentAnalyzer:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "あなたはD2C・EC広告のLPを分析するプロのマーケティングアナリストです。"
-                            "USP（独自の売り）、訴求軸、ターゲット分析、競合ポジショニングを"
-                            "正確に分析し、自社のLP制作に活用できるインサイトを提供してください。"
-                            "特に記事LP→商品ページへの導線設計の観点で分析してください。"
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=4000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "あなたはD2C・EC広告のLPを分析するプロのマーケティングアナリストです。"
+                                "USP（独自の売り）、訴求軸、ターゲット分析、競合ポジショニングを"
+                                "正確に分析し、自社のLP制作に活用できるインサイトを提供してください。"
+                                "特に記事LP→商品ページへの導線設計の観点で分析してください。"
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=4000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             data = json.loads(response.choices[0].message.content)
             return self._parse_llm_response(data)
 
