@@ -2,8 +2,31 @@
 
 from functools import lru_cache
 from typing import Optional
+from urllib.parse import urlparse
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+
+def _normalize_database_url(url: str, driver: str = "asyncpg") -> str:
+    """Normalize database URL for different providers (Supabase, Render, etc.).
+
+    Handles:
+    - postgres:// -> postgresql+asyncpg:// (or postgresql://)
+    - postgresql:// -> postgresql+asyncpg:// (for async)
+    - Already correct URLs pass through unchanged
+    """
+    if not url:
+        return url
+    if driver == "asyncpg":
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return url.replace(prefix, "postgresql+asyncpg://", 1)
+    else:
+        for prefix in ("postgres://", "postgresql+asyncpg://"):
+            if url.startswith(prefix):
+                return url.replace(prefix, "postgresql://", 1)
+    return url
 
 
 class Settings(BaseSettings):
@@ -16,21 +39,42 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-to-a-secure-random-string"
     api_v1_prefix: str = "/api/v1"
 
-    # Database
+    # Database — accepts DATABASE_URL in any format (postgres://, postgresql://)
+    # Supabase, Render, Railway all provide DATABASE_URL automatically
     database_url: str = "postgresql+asyncpg://vaap:vaap_password@localhost:5432/vaap_db"
-    database_url_sync: str = "postgresql://vaap:vaap_password@localhost:5432/vaap_db"
+    database_url_sync: str = ""
 
-    # Redis
+    # Database pool — smaller defaults for free-tier hosting
+    db_pool_size: int = 5
+    db_max_overflow: int = 3
+
+    # Redis — accepts Upstash redis:// or rediss:// (TLS) URLs
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
-    # MinIO / S3
+    # MinIO / S3 (optional in cloud deploy)
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket_name: str = "vaap-storage"
     minio_use_ssl: bool = False
+
+    @model_validator(mode="after")
+    def _derive_urls(self) -> "Settings":
+        """Auto-derive database_url_sync and normalize URL schemes."""
+        # Normalize async URL
+        self.database_url = _normalize_database_url(self.database_url, driver="asyncpg")
+        # Auto-derive sync URL if not explicitly set
+        if not self.database_url_sync:
+            self.database_url_sync = _normalize_database_url(
+                self.database_url, driver="sync"
+            )
+        else:
+            self.database_url_sync = _normalize_database_url(
+                self.database_url_sync, driver="sync"
+            )
+        return self
 
     # AI API Keys
     openai_api_key: Optional[str] = None
