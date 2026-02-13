@@ -286,16 +286,18 @@ def _inline_crawl(
 ) -> int:
     """Run the real crawlers inline (same logic as Celery task, but synchronous)."""
     import asyncio
+    import concurrent.futures
     from app.tasks.crawl_tasks import _crawl_platforms, _map_platform
 
-    # Run async crawlers in a new event loop
-    loop = asyncio.new_event_loop()
-    try:
-        results = loop.run_until_complete(
+    # Run async crawlers in a thread to avoid event loop conflicts with FastAPI
+    def _run():
+        return asyncio.run(
             _crawl_platforms(query, platforms, category, limit_per_platform)
         )
-    finally:
-        loop.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_run)
+        results = future.result(timeout=120)
 
     # Save to DB
     saved = 0

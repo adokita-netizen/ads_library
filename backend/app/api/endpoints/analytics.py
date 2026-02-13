@@ -33,7 +33,10 @@ async def get_dashboard_stats(
         select(Ad.platform, func.count(Ad.id))
         .group_by(Ad.platform)
     )
-    ads_by_platform = {str(row[0]): row[1] for row in platform_result.all()}
+    ads_by_platform = {
+        (row[0].value if hasattr(row[0], 'value') else str(row[0])): row[1]
+        for row in platform_result.all()
+    }
 
     # Ads by category
     category_result = await db.execute(
@@ -41,7 +44,10 @@ async def get_dashboard_stats(
         .where(Ad.category.isnot(None))
         .group_by(Ad.category)
     )
-    ads_by_category = {str(row[0]): row[1] for row in category_result.all()}
+    ads_by_category = {
+        (row[0].value if hasattr(row[0], 'value') else str(row[0])): row[1]
+        for row in category_result.all()
+    }
 
     # Average winning score
     avg_score_result = await db.execute(
@@ -95,7 +101,7 @@ async def get_competitor_analysis(
     # Platform distribution
     platform_counts = {}
     for ad in ads:
-        platform = str(ad.platform)
+        platform = ad.platform.value if hasattr(ad.platform, 'value') else str(ad.platform)
         platform_counts[platform] = platform_counts.get(platform, 0) + 1
 
     # Sentiment analysis
@@ -110,8 +116,14 @@ async def get_competitor_analysis(
 
     keyword_counts = {}
     for kw in all_keywords:
-        keyword = kw if isinstance(kw, str) else kw.get("keyword", "")
-        keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+        if isinstance(kw, str):
+            keyword = kw
+        elif isinstance(kw, dict):
+            keyword = kw.get("keyword", "") or kw.get("text", "")
+        else:
+            keyword = str(kw)
+        if keyword:
+            keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
     top_keywords = sorted(keyword_counts.items(), key=lambda x: -x[1])[:20]
 
     # Winning score stats

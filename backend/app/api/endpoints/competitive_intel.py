@@ -166,7 +166,7 @@ async def list_calibrations(
                     "actual_cpm": c.actual_cpm,
                     "actual_cpv": c.actual_cpv,
                     "notes": c.notes,
-                    "created_at": c.created_at.isoformat(),
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
                 }
                 for c in calibs
             ]
@@ -346,7 +346,11 @@ async def run_alert_detection(
     session = SyncSessionLocal()
     try:
         detector = AlertDetector()
-        alerts = detector.run_all_detections(session, watched_advertisers=watched_advertisers)
+        try:
+            alerts = detector.run_all_detections(session, watched_advertisers=watched_advertisers)
+        except Exception as e:
+            logger.error("alert_detection_failed", error=str(e))
+            return {"total_alerts": 0, "items": [], "error": "アラート検出中にエラーが発生しました"}
 
         return {
             "total_alerts": len(alerts),
@@ -363,7 +367,7 @@ async def run_alert_detection(
                     "metric_after": a.metric_after,
                     "change_percent": a.change_percent,
                     "context_data": a.context_data,
-                    "detected_at": a.detected_at.isoformat(),
+                    "detected_at": a.detected_at.isoformat() if a.detected_at else None,
                 }
                 for a in alerts
             ],
@@ -405,7 +409,7 @@ async def get_alert_history(
                     "description": a.description,
                     "change_percent": a.change_percent,
                     "is_dismissed": a.is_dismissed,
-                    "detected_at": a.detected_at.isoformat(),
+                    "detected_at": a.detected_at.isoformat() if a.detected_at else None,
                 }
                 for a in alerts
             ],
@@ -576,7 +580,7 @@ async def list_provisional_tags(
                     "value": t.value,
                     "confidence": t.confidence,
                     "classified_by": t.classified_by,
-                    "created_at": t.created_at.isoformat(),
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
                 }
                 for t in tags
             ],
@@ -733,7 +737,7 @@ async def get_lp_fingerprint(lp_id: int):
             "snapshots": [
                 {
                     "id": fp.id,
-                    "snapshot_date": fp.snapshot_date.isoformat(),
+                    "snapshot_date": fp.snapshot_date.isoformat() if fp.snapshot_date else None,
                     "content_hash": fp.content_hash,
                     "structure_hash": fp.structure_hash,
                     "offer_fingerprint": fp.offer_fingerprint,

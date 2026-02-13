@@ -321,13 +321,20 @@ async def generate_usp_flow(request: USPFlowRequest):
             })
 
         ci = CompetitorIntelligence()
-        recommendation = await ci.generate_usp_flow_recommendation(
-            product_name=request.product_name,
-            product_description=request.product_description,
-            target_audience=request.target_audience,
-            genre=request.genre,
-            competitor_analyses=competitor_analyses,
-        )
+        try:
+            recommendation = await ci.generate_usp_flow_recommendation(
+                product_name=request.product_name,
+                product_description=request.product_description,
+                target_audience=request.target_audience,
+                genre=request.genre,
+                competitor_analyses=competitor_analyses,
+            )
+        except Exception as e:
+            logger.error("usp_flow_generation_failed", error=str(e))
+            raise HTTPException(status_code=500, detail="USPフロー推奨の生成に失敗しました")
+
+        if not recommendation:
+            raise HTTPException(status_code=500, detail="USPフロー推奨の生成に失敗しました")
 
         return USPFlowResponse(
             recommended_primary_usp=recommendation.recommended_primary_usp,
@@ -448,33 +455,42 @@ async def list_own_lps(
 
         lps = query.order_by(LandingPage.created_at.desc()).all()
 
+        # Pre-fetch competitor counts and avg quality per genre in bulk (avoid N+1)
+        genres = list({lp.genre for lp in lps if lp.genre})
+        genre_comp_counts: dict[str, int] = {}
+        genre_avg_quality: dict[str, float | None] = {}
+        if genres:
+            from sqlalchemy import func as sqla_func
+            # Count competitors per genre
+            count_results = session.query(
+                LandingPage.genre,
+                sqla_func.count(LandingPage.id),
+            ).filter(
+                LandingPage.genre.in_(genres),
+                LandingPage.is_own == False,  # noqa: E712
+                LandingPage.status == "completed",
+            ).group_by(LandingPage.genre).all()
+            for g, c in count_results:
+                genre_comp_counts[g] = c
+
+            # Avg quality per genre
+            quality_results = session.query(
+                LandingPage.genre,
+                sqla_func.avg(LPAnalysis.overall_quality_score),
+            ).join(LPAnalysis, LPAnalysis.landing_page_id == LandingPage.id).filter(
+                LandingPage.genre.in_(genres),
+                LandingPage.is_own == False,  # noqa: E712
+                LandingPage.status == "completed",
+                LPAnalysis.overall_quality_score.isnot(None),
+            ).group_by(LandingPage.genre).all()
+            for g, avg_q in quality_results:
+                genre_avg_quality[g] = round(float(avg_q), 1) if avg_q else None
+
         own_responses = []
         for lp in lps:
-            # Count competitors in same genre
-            comp_count = 0
-            avg_quality = None
-            if lp.genre:
-                comp_query = session.query(LandingPage).filter(
-                    LandingPage.genre == lp.genre,
-                    LandingPage.is_own == False,  # noqa: E712
-                    LandingPage.status == "completed",
-                )
-                comp_count = comp_query.count()
-
-                # Get avg quality from analyses
-                comp_analyses = session.query(LPAnalysis).join(LandingPage).filter(
-                    LandingPage.genre == lp.genre,
-                    LandingPage.is_own == False,  # noqa: E712
-                    LandingPage.status == "completed",
-                ).all()
-                if comp_analyses:
-                    scores = [a.overall_quality_score for a in comp_analyses if a.overall_quality_score]
-                    if scores:
-                        avg_quality = round(sum(scores) / len(scores), 1)
-
             resp = OwnLPResponse.model_validate(lp)
-            resp.competitor_count_in_genre = comp_count
-            resp.avg_competitor_quality = avg_quality
+            resp.competitor_count_in_genre = genre_comp_counts.get(lp.genre, 0) if lp.genre else 0
+            resp.avg_competitor_quality = genre_avg_quality.get(lp.genre) if lp.genre else None
             own_responses.append(resp)
 
         return OwnLPListResponse(own_lps=own_responses, total=len(own_responses))
