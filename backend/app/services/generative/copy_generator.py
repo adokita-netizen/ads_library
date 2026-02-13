@@ -1,5 +1,6 @@
 """Ad copy and banner text generation using LLMs."""
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -134,20 +135,24 @@ JSON形式で以下の構造で出力してください:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたは高いCTRを実現する広告コピーライターです。媒体特性とターゲットに最適化したコピーを作成してください。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.85,
-                max_tokens=2000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは高いCTRを実現する広告コピーライターです。媒体特性とターゲットに最適化したコピーを作成してください。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.85,
+                    max_tokens=2000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             data = json.loads(content)
 
@@ -207,20 +212,24 @@ JSON形式で以下の構造で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたはコンバージョン率の高いLPコピーを作成するプロのマーケターです。心理学的アプローチを活用し、ターゲットの悩みに寄り添うコピーを作成してください。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.8,
-                max_tokens=3000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたはコンバージョン率の高いLPコピーを作成するプロのマーケターです。心理学的アプローチを活用し、ターゲットの悩みに寄り添うコピーを作成してください。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.8,
+                    max_tokens=3000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             data = json.loads(content)
 
@@ -272,20 +281,24 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたは広告クリエイティブの分析と制作のプロフェッショナルです。成功パターンの本質を理解し、新しい商品に応用する能力に長けています。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.85,
-                max_tokens=2500,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは広告クリエイティブの分析と制作のプロフェッショナルです。成功パターンの本質を理解し、新しい商品に応用する能力に長けています。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.85,
+                    max_tokens=2500,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             data = json.loads(content)
 

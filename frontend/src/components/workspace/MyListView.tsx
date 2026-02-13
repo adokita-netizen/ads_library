@@ -24,6 +24,7 @@ export default function MyListView() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [savedItems, setSavedItems] = useState<Array<{ id: number; type: string; label: string; notes: string; folder: string; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSaved = async () => {
@@ -41,8 +42,9 @@ export default function MyListView() {
           }));
           setSavedItems(mapped);
         }
-      } catch (error) {
-        console.error("Failed to fetch saved items:", error);
+      } catch (err) {
+        console.error("Failed to fetch saved items:", err);
+        setError("マイリストの取得に失敗しました");
       } finally {
         setLoading(false);
       }
@@ -75,6 +77,14 @@ export default function MyListView() {
           </span>
         </div>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mx-5 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-[12px] text-red-700 flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-2">&times;</button>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 px-5 py-2 border-b border-gray-200 bg-[#f8f9fc]">

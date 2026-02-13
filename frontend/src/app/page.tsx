@@ -79,9 +79,12 @@ function ConnectivityBanner() {
   }
 
   if (status === "error") {
+    const friendlyDetail = detail.includes("TypeError: fetch failed")
+      ? "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
+      : detail;
     return (
       <div className="bg-red-50 border-b border-red-200 px-4 py-1.5 text-xs text-red-700">
-        API接続エラー: {detail}
+        API接続エラー: {friendlyDetail}
         <button className="ml-2 underline" onClick={() => window.location.reload()}>再読み込み</button>
       </div>
     );

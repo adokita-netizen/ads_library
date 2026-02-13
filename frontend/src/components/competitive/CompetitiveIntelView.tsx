@@ -171,6 +171,9 @@ export default function CompetitiveIntelView() {
   const [similarAds, setSimilarAds] = useState<SimilarAdItem[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
 
+  // Error state
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   // Fetch alerts
   useEffect(() => {
     const fetchAlerts = async () => {
@@ -182,6 +185,7 @@ export default function CompetitiveIntelView() {
         }
       } catch (error) {
         console.error("Failed to fetch alerts:", error);
+        setErrorMessage("アラート履歴の取得に失敗しました");
       } finally {
         setAlertsLoading(false);
       }
@@ -221,6 +225,7 @@ export default function CompetitiveIntelView() {
         }
       } catch (error) {
         console.error("Failed to fetch trends:", error);
+        setErrorMessage("トレンド予測データの取得に失敗しました");
       } finally {
         setTrendsLoading(false);
       }
@@ -296,6 +301,7 @@ export default function CompetitiveIntelView() {
       }
     } catch (error) {
       console.error("Failed to perform similarity search:", error);
+      setErrorMessage("類似検索に失敗しました");
     } finally {
       setSimilarLoading(false);
     }
@@ -311,6 +317,14 @@ export default function CompetitiveIntelView() {
           </p>
         </div>
       </div>
+
+      {/* Error banner */}
+      {errorMessage && (
+        <div className="mx-5 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-[12px] text-red-700 flex justify-between items-center">
+          <span>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-600 ml-2">&times;</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0 px-5 border-b border-gray-200 bg-[#f8f9fc] overflow-x-auto">

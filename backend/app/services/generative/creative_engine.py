@@ -1,5 +1,6 @@
 """Unified creative generation engine."""
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -133,20 +134,24 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたはショート動画広告制作のプロディレクターです。バズる動画の構成を熟知し、視聴者を最後まで惹きつけるストーリーボードを作成します。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.8,
-                max_tokens=2500,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたはショート動画広告制作のプロディレクターです。バズる動画の構成を熟知し、視聴者を最後まで惹きつけるストーリーボードを作成します。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.8,
+                    max_tokens=2500,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             data = json.loads(content)
 
@@ -208,20 +213,24 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたは広告パフォーマンス改善の専門家です。データに基づいた具体的で実行可能な改善提案を行います。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは広告パフォーマンス改善の専門家です。データに基づいた具体的で実行可能な改善提案を行います。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             content = response.choices[0].message.content
             data = json.loads(content)
 
@@ -283,20 +292,24 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたは広告A/Bテストの設計専門家です。統計的に有意な結果が得られるテスト計画を設計します。",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.7,
-                max_tokens=2500,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは広告A/Bテストの設計専門家です。統計的に有意な結果が得られるテスト計画を設計します。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=2500,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             return json.loads(response.choices[0].message.content)
 
         except Exception as e:

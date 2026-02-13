@@ -1,5 +1,6 @@
 """LP Comparator - compare own LP against competitor LPs."""
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -184,24 +185,28 @@ JSON形式で出力:
 
         try:
             client = self._get_client()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "あなたはLP最適化の専門コンサルタントです。"
-                            "自社LPと競合LPの比較データを分析し、"
-                            "具体的で実行可能な改善提案を行ってください。"
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=1500,
-                response_format={"type": "json_object"},
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "あなたはLP最適化の専門コンサルタントです。"
+                                "自社LPと競合LPの比較データを分析し、"
+                                "具体的で実行可能な改善提案を行ってください。"
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=1500,
+                    response_format={"type": "json_object"},
+                )
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                raise ValueError("LLM returned empty response")
             data = json.loads(response.choices[0].message.content)
             result.strengths_vs_competitors = data.get("strengths_vs_competitors", [])
             result.improvement_opportunities = data.get("improvement_opportunities", [])
