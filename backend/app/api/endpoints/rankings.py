@@ -19,6 +19,18 @@ from app.services.ranking.ranking_service import RankingService
 logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
+# Meta platform groups "facebook" and "instagram" under a single umbrella.
+META_PLATFORMS = ["facebook", "instagram"]
+
+
+def _resolve_platform_filter(query, column, platform: str | None):
+    """Apply platform filter, resolving 'meta' to both Facebook and Instagram."""
+    if not platform:
+        return query
+    if platform.lower() == "meta":
+        return query.filter(column.in_(META_PLATFORMS))
+    return query.filter(column == platform)
+
 
 def _sanitize_csv(value: str | None) -> str:
     """Sanitize value for CSV to prevent formula injection."""
@@ -120,11 +132,14 @@ def get_product_rankings(
 
 
 def _fallback_ad_list(session, genre, platform, page, page_size, period):
-    """When no pre-computed rankings exist, rank ads by view_count from the Ad table."""
+    """When no pre-computed rankings exist, rank ads by view_count.
+
+    Computes basic hit_score and trend_score from available data and marks
+    demo ads so the frontend can distinguish real vs demo data.
+    """
     query = session.query(Ad)
 
-    if platform:
-        query = query.filter(Ad.platform == platform)
+    query = _resolve_platform_filter(query, Ad.platform, platform)
     if genre:
         query = query.filter(Ad.category == genre)
 
@@ -136,9 +151,22 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
         .all()
     )
 
+    # Compute max view_count for relative scoring
+    max_views = max((ad.view_count or 0 for ad in ads), default=1) or 1
+
     items = []
     for rank, ad in enumerate(ads, start=(page - 1) * page_size + 1):
         metadata = ad.ad_metadata or {}
+        views = ad.view_count or 0
+        likes = ad.like_count or 0
+
+        # Basic hit_score: normalized view count (0-100)
+        hit_score = round(min(100, (views / max_views) * 100))
+        # Basic trend_score: engagement rate proxy (likes/views ratio, scaled)
+        engagement = (likes / views * 100) if views > 0 else 0
+        trend_score = round(min(100, engagement * 10))
+
+        is_demo = bool(metadata.get("is_demo"))
         items.append({
             "rank": rank,
             "previous_rank": None,
@@ -148,13 +176,14 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "advertiser_name": ad.advertiser_name or "",
             "genre": str(ad.category.value) if ad.category else "",
             "platform": str(ad.platform.value) if ad.platform else "",
-            "view_increase": ad.view_count or 0,
+            "view_increase": views,
             "spend_increase": 0,
-            "cumulative_views": ad.view_count or 0,
+            "cumulative_views": views,
             "cumulative_spend": 0,
-            "is_hit": False,
-            "hit_score": 0,
-            "trend_score": 0,
+            "is_hit": hit_score >= 80,
+            "hit_score": hit_score,
+            "trend_score": trend_score,
+            "is_demo": is_demo,
             "thumbnail": ad.thumbnail_s3_key or "",
             "duration_seconds": ad.duration_seconds or 0,
             "management_id": ad.external_id or f"AD-{ad.id}",
@@ -173,6 +202,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
         "total": total,
         "page": page,
         "page_size": page_size,
+        "is_fallback": True,
         "items": items,
     }
 
@@ -303,8 +333,7 @@ def pro_search(
             )
             if genre:
                 ad_query = ad_query.filter(Ad.category == genre)
-            if platform:
-                ad_query = ad_query.filter(Ad.platform == platform)
+            ad_query = _resolve_platform_filter(ad_query, Ad.platform, platform)
             if advertiser:
                 ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
 
@@ -332,8 +361,7 @@ def pro_search(
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
                 .filter(Transcription.text.ilike(f"%{q}%"))
             )
-            if platform:
-                transcript_query = transcript_query.filter(Ad.platform == platform)
+            transcript_query = _resolve_platform_filter(transcript_query, Ad.platform, platform)
 
             total_count += transcript_query.count()
             transcripts = transcript_query.offset(offset).limit(page_size).all()
@@ -358,8 +386,7 @@ def pro_search(
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
                 .filter(TextDetection.text.ilike(f"%{q}%"))
             )
-            if platform:
-                text_query = text_query.filter(Ad.platform == platform)
+            text_query = _resolve_platform_filter(text_query, Ad.platform, platform)
 
             total_count += text_query.count()
             texts = text_query.offset(offset).limit(page_size).all()
@@ -509,8 +536,7 @@ def export_ads_csv(
         query = session.query(Ad)
         if genre:
             query = query.filter(Ad.category == genre)
-        if platform:
-            query = query.filter(Ad.platform == platform)
+        query = _resolve_platform_filter(query, Ad.platform, platform)
         if advertiser:
             query = query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
 

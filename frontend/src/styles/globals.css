@@ -72,6 +72,7 @@
   }
   .platform-youtube { @apply bg-red-500; }
   .platform-tiktok { @apply bg-gray-900; }
+  .platform-meta { @apply bg-blue-500; }
   .platform-instagram { @apply bg-gradient-to-br from-purple-500 to-pink-500; }
   .platform-facebook { @apply bg-blue-600; }
   .platform-x { @apply bg-gray-900; }

@@ -169,6 +169,13 @@ export default function CreativeStudio() {
                 <option value="tiktok">TikTok</option>
                 <option value="instagram">Instagram</option>
                 <option value="facebook">Facebook</option>
+                <option value="x_twitter">X (Twitter)</option>
+                <option value="line">LINE</option>
+                <option value="yahoo">Yahoo!</option>
+                <option value="pinterest">Pinterest</option>
+                <option value="smartnews">SmartNews</option>
+                <option value="google_ads">Google Ads</option>
+                <option value="gunosy">Gunosy</option>
               </select>
             </div>
 
