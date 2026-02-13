@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 
 interface KeyDefinition {
@@ -26,6 +26,58 @@ interface KeyStatus {
   is_set: boolean;
   masked_value: string | null;
   updated_at: string | null;
+}
+
+// ── localStorage helpers for offline API key storage ────────────
+const LOCAL_KEYS_STORAGE_KEY = "vaap_api_keys_local";
+
+interface LocalKeyEntry {
+  platform: string;
+  key_name: string;
+  key_value: string;
+  saved_at: string;
+}
+
+function getLocalKeys(): LocalKeyEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_KEYS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalKey(platform: string, key_name: string, key_value: string): void {
+  const keys = getLocalKeys();
+  const idx = keys.findIndex((k) => k.platform === platform && k.key_name === key_name);
+  const entry: LocalKeyEntry = { platform, key_name, key_value, saved_at: new Date().toISOString() };
+  if (idx >= 0) {
+    keys[idx] = entry;
+  } else {
+    keys.push(entry);
+  }
+  localStorage.setItem(LOCAL_KEYS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function deleteLocalKey(platform: string, key_name: string): void {
+  const keys = getLocalKeys().filter((k) => !(k.platform === platform && k.key_name === key_name));
+  localStorage.setItem(LOCAL_KEYS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function maskValue(value: string): string {
+  if (value.length <= 8) return "*".repeat(value.length);
+  return value.slice(0, 4) + "*".repeat(value.length - 8) + value.slice(-4);
+}
+
+function localKeysToStatuses(localKeys: LocalKeyEntry[]): KeyStatus[] {
+  return localKeys.map((k) => ({
+    platform: k.platform,
+    key_name: k.key_name,
+    is_set: true,
+    masked_value: maskValue(k.key_value),
+    updated_at: k.saved_at,
+  }));
 }
 
 // Fallback platform definitions — always show key input sections even when backend is unreachable
@@ -155,9 +207,37 @@ export default function APIKeysSettings() {
   const [editingKey, setEditingKey] = useState<{ platform: string; key_name: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
   const [backendAvailable, setBackendAvailable] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const hasSyncedRef = useRef(false);
+  const backendAvailableRef = useRef(true);
+
+  // Sync locally stored keys to the backend when it becomes available
+  const syncLocalKeysToBackend = useCallback(async () => {
+    const localKeys = getLocalKeys();
+    if (localKeys.length === 0) return;
+
+    setSyncing(true);
+    let syncedCount = 0;
+    for (const key of localKeys) {
+      try {
+        await fetchApi("/settings/api-keys", {
+          method: "POST",
+          body: { platform: key.platform, key_name: key.key_name, key_value: key.key_value },
+        });
+        deleteLocalKey(key.platform, key.key_name);
+        syncedCount++;
+      } catch {
+        // If sync fails for a key, keep it in localStorage for next attempt
+      }
+    }
+    setSyncing(false);
+    if (syncedCount > 0) {
+      setMessage({ type: "success", text: `${syncedCount}件のAPIキーをサーバーに同期しました` });
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -167,20 +247,43 @@ export default function APIKeysSettings() {
       ]);
       if (platformsData?.platforms && platformsData.platforms.length > 0) {
         setPlatforms(platformsData.platforms);
+        const wasUnavailable = !backendAvailableRef.current;
         setBackendAvailable(true);
+        backendAvailableRef.current = true;
+
+        // Merge server keys with any remaining local keys
+        const serverKeys = keysData?.keys || [];
+        const localKeys = getLocalKeys();
+        const localStatuses = localKeysToStatuses(
+          localKeys.filter(
+            (lk) => !serverKeys.some((sk) => sk.platform === lk.platform && sk.key_name === lk.key_name)
+          )
+        );
+        setKeyStatuses([...serverKeys, ...localStatuses]);
+
+        // Auto-sync local keys if backend just became available
+        if (wasUnavailable && localKeys.length > 0 && !hasSyncedRef.current) {
+          hasSyncedRef.current = true;
+          syncLocalKeysToBackend();
+        }
       } else {
         setPlatforms(FALLBACK_PLATFORMS);
         setBackendAvailable(false);
+        backendAvailableRef.current = false;
+        // Load from localStorage when backend is unavailable
+        setKeyStatuses(localKeysToStatuses(getLocalKeys()));
       }
-      setKeyStatuses(keysData?.keys || []);
     } catch (err) {
       console.error("Failed to load settings:", err);
       setPlatforms(FALLBACK_PLATFORMS);
       setBackendAvailable(false);
+      backendAvailableRef.current = false;
+      // Load from localStorage when backend is unavailable
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncLocalKeysToBackend]);
 
   useEffect(() => {
     loadData();
@@ -203,12 +306,22 @@ export default function APIKeysSettings() {
         method: "POST",
         body: { platform, key_name: keyName, key_value: editValue.trim() },
       });
+      // Also save to localStorage as a backup
+      saveLocalKey(platform, keyName, editValue.trim());
       setMessage({ type: "success", text: "保存しました" });
       setEditingKey(null);
       setEditValue("");
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "保存に失敗しました" });
+      // Backend unavailable — save to localStorage as fallback
+      saveLocalKey(platform, keyName, editValue.trim());
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
+      setMessage({
+        type: "info",
+        text: "ローカルに保存しました。サーバー接続時に自動で同期されます。",
+      });
+      setEditingKey(null);
+      setEditValue("");
       console.error(err);
     } finally {
       setSaving(false);
@@ -222,10 +335,14 @@ export default function APIKeysSettings() {
         method: "DELETE",
         body: { platform, key_name: keyName },
       });
+      deleteLocalKey(platform, keyName);
       setMessage({ type: "success", text: "削除しました" });
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "削除に失敗しました" });
+      // Also remove from localStorage
+      deleteLocalKey(platform, keyName);
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
+      setMessage({ type: "success", text: "ローカルから削除しました" });
       console.error(err);
     }
   };
@@ -260,12 +377,22 @@ export default function APIKeysSettings() {
         </div>
       </div>
 
+      {/* Syncing indicator */}
+      {syncing && (
+        <div className="mx-5 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-2">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          ローカルに保存したAPIキーをサーバーに同期中...
+        </div>
+      )}
+
       {/* Message */}
       {message && (
         <div
           className={`mx-5 mt-3 px-3 py-2 rounded text-xs ${
             message.type === "success"
               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : message.type === "info"
+              ? "bg-blue-50 text-blue-700 border border-blue-200"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}
         >
@@ -279,8 +406,8 @@ export default function APIKeysSettings() {
       {/* Backend unavailable warning */}
       {!loading && !backendAvailable && (
         <div className="mx-5 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-          バックエンドサーバーに接続できません。APIキーの保存はサーバー起動後に行えます。
-          <button className="ml-2 underline font-medium" onClick={() => { setLoading(true); loadData(); }}>
+          バックエンドサーバーに接続できません。APIキーはローカルに保存され、サーバー復帰時に自動同期されます。
+          <button className="ml-2 underline font-medium" onClick={() => { setLoading(true); hasSyncedRef.current = false; loadData(); }}>
             再接続
           </button>
         </div>
