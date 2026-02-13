@@ -25,8 +25,92 @@ interface KeyStatus {
   updated_at: string | null;
 }
 
+// Fallback platform definitions — always show key input sections even when backend is unreachable
+const FALLBACK_PLATFORMS: PlatformDefinition[] = [
+  {
+    platform: "youtube", label: "YouTube",
+    keys: [{ key_name: "api_key", label: "YouTube Data API Key", placeholder: "AIzaSy..." }],
+    docs_url: "https://console.cloud.google.com/apis/credentials",
+    setup_guide: "Google Cloud Console → APIとサービス → 認証情報 → APIキーを作成 → YouTube Data API v3を有効化",
+  },
+  {
+    platform: "meta", label: "Meta (Facebook / Instagram)",
+    keys: [{ key_name: "access_token", label: "Meta Graph API アクセストークン", placeholder: "EAAGm0PX..." }],
+    docs_url: "https://developers.facebook.com/tools/explorer/",
+    setup_guide: "Meta for Developers → Graph APIエクスプローラー → アクセストークンを生成 → ads_read権限を付与",
+  },
+  {
+    platform: "tiktok", label: "TikTok",
+    keys: [{ key_name: "access_token", label: "TikTok Marketing API トークン", placeholder: "" }],
+    docs_url: "https://business-api.tiktok.com/portal/docs",
+    setup_guide: "TikTok for Business → Marketing API → アプリ作成 → アクセストークン取得",
+  },
+  {
+    platform: "x_twitter", label: "X (Twitter)",
+    keys: [{ key_name: "bearer_token", label: "Bearer Token", placeholder: "AAAAAAAAAA..." }],
+    docs_url: "https://developer.x.com/en/portal/dashboard",
+    setup_guide: "X Developer Portal → Projects & Apps → キーとトークン → Bearer Tokenを生成",
+  },
+  {
+    platform: "line", label: "LINE",
+    keys: [{ key_name: "access_token", label: "LINE Ads API アクセストークン", placeholder: "" }],
+    docs_url: "https://developers.line.biz/",
+    setup_guide: "LINE Developers → LINE公式アカウント → Messaging APIチャネル → チャネルアクセストークン発行",
+  },
+  {
+    platform: "yahoo", label: "Yahoo!広告",
+    keys: [
+      { key_name: "api_key", label: "Yahoo! Ads API アプリケーションID", placeholder: "" },
+      { key_name: "api_secret", label: "Yahoo! Ads API シークレット", placeholder: "" },
+    ],
+    docs_url: "https://ads-developers.yahoo.co.jp/",
+    setup_guide: "Yahoo!デベロッパーネットワーク → アプリケーション登録 → Client IDとSecretを取得",
+  },
+  {
+    platform: "pinterest", label: "Pinterest",
+    keys: [{ key_name: "access_token", label: "Pinterest API アクセストークン", placeholder: "pina_..." }],
+    docs_url: "https://developers.pinterest.com/",
+    setup_guide: "Pinterest for Business → アプリ作成 → OAuth認証フロー → アクセストークン取得",
+  },
+  {
+    platform: "smartnews", label: "SmartNews",
+    keys: [{ key_name: "api_key", label: "SmartNews Ads API キー", placeholder: "" }],
+    docs_url: "https://developers.smartnews.com/",
+    setup_guide: "SmartNews Ads → パートナーAPI申請 → APIキー発行",
+  },
+  {
+    platform: "google_ads", label: "Google Ads",
+    keys: [
+      { key_name: "developer_token", label: "開発者トークン", placeholder: "" },
+      { key_name: "client_id", label: "OAuth Client ID", placeholder: "xxx.apps.googleusercontent.com" },
+      { key_name: "client_secret", label: "OAuth Client Secret", placeholder: "" },
+      { key_name: "refresh_token", label: "OAuth Refresh Token", placeholder: "1//0..." },
+    ],
+    docs_url: "https://developers.google.com/google-ads/api/docs/get-started/introduction",
+    setup_guide: "Google Ads API Center → 開発者トークン申請 → Google Cloud Console → OAuth 2.0クライアント作成 → Refresh Token取得",
+  },
+  {
+    platform: "gunosy", label: "Gunosy",
+    keys: [{ key_name: "api_key", label: "Gunosy Ads API キー", placeholder: "" }],
+    docs_url: "https://gunosy.co.jp/ad/",
+    setup_guide: "Gunosy Ads → 広告APIアクセス申請 → APIキー発行",
+  },
+  {
+    platform: "openai", label: "OpenAI (AI分析用)",
+    keys: [{ key_name: "api_key", label: "OpenAI API Key", placeholder: "sk-..." }],
+    docs_url: "https://platform.openai.com/api-keys",
+    setup_guide: "OpenAI Platform → API Keys → Create new secret key",
+  },
+  {
+    platform: "anthropic", label: "Anthropic (AI分析用)",
+    keys: [{ key_name: "api_key", label: "Anthropic API Key", placeholder: "sk-ant-..." }],
+    docs_url: "https://console.anthropic.com/settings/keys",
+    setup_guide: "Anthropic Console → API Keys → Create Key",
+  },
+];
+
 export default function APIKeysSettings() {
-  const [platforms, setPlatforms] = useState<PlatformDefinition[]>([]);
+  const [platforms, setPlatforms] = useState<PlatformDefinition[]>(FALLBACK_PLATFORMS);
   const [keyStatuses, setKeyStatuses] = useState<KeyStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingKey, setEditingKey] = useState<{ platform: string; key_name: string } | null>(null);
@@ -34,17 +118,26 @@ export default function APIKeysSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
+  const [backendAvailable, setBackendAvailable] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
       const [platformsData, keysData] = await Promise.all([
-        fetchApi<{ platforms: PlatformDefinition[] }>("/settings/api-keys/platforms"),
-        fetchApi<{ keys: KeyStatus[] }>("/settings/api-keys").catch(() => ({ keys: [] })),
+        fetchApi<{ platforms: PlatformDefinition[] }>("/settings/api-keys/platforms").catch(() => null),
+        fetchApi<{ keys: KeyStatus[] }>("/settings/api-keys").catch(() => null),
       ]);
-      setPlatforms(platformsData?.platforms || []);
+      if (platformsData?.platforms && platformsData.platforms.length > 0) {
+        setPlatforms(platformsData.platforms);
+        setBackendAvailable(true);
+      } else {
+        setPlatforms(FALLBACK_PLATFORMS);
+        setBackendAvailable(false);
+      }
       setKeyStatuses(keysData?.keys || []);
     } catch (err) {
       console.error("Failed to load settings:", err);
+      setPlatforms(FALLBACK_PLATFORMS);
+      setBackendAvailable(false);
     } finally {
       setLoading(false);
     }
@@ -140,6 +233,16 @@ export default function APIKeysSettings() {
           {message.text}
           <button className="ml-2 underline" onClick={() => setMessage(null)}>
             閉じる
+          </button>
+        </div>
+      )}
+
+      {/* Backend unavailable warning */}
+      {!loading && !backendAvailable && (
+        <div className="mx-5 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+          バックエンドサーバーに接続できません。APIキーの保存はサーバー起動後に行えます。
+          <button className="ml-2 underline font-medium" onClick={() => { setLoading(true); loadData(); }}>
+            再接続
           </button>
         </div>
       )}
