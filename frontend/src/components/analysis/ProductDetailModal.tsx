@@ -233,7 +233,7 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
       try {
         const response = await predictionsApi.predict({ ad_id: adId });
         if (response.data) {
-          setAnalysis((prev) => ({ ...prev, ...response.data }));
+          setAnalysis((prev) => prev ? { ...prev, ...response.data } : response.data);
         }
       } catch (error) {
         console.error("Failed to fetch predictions:", error);

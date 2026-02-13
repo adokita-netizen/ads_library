@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
-from app.models.ad import Ad, AdPlatformEnum, AdCategoryEnum
+from app.models.ad import Ad, AdPlatformEnum, AdCategoryEnum, AdStatusEnum
 from app.models.analysis import AdAnalysis
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -24,7 +24,7 @@ async def get_dashboard_stats(
 
     # Analyzed ads
     analyzed_result = await db.execute(
-        select(func.count(Ad.id)).where(Ad.status == "analyzed")
+        select(func.count(Ad.id)).where(Ad.status == AdStatusEnum.ANALYZED)
     )
     analyzed_ads = analyzed_result.scalar() or 0
 

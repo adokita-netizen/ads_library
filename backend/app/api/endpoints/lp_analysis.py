@@ -12,6 +12,7 @@ from app.models.landing_page import (
     LandingPage,
     LPAnalysis,
     LPSection,
+    LPStatusEnum,
     USPPattern,
 )
 from app.schemas.lp_analysis import (
@@ -208,7 +209,7 @@ async def get_competitor_insight(
         # Get all analyzed LPs in this genre
         lps = session.query(LandingPage).filter(
             LandingPage.genre == request.genre,
-            LandingPage.status == "completed",
+            LandingPage.status == LPStatusEnum.COMPLETED,
         ).limit(request.limit).all()
 
         if not lps:
@@ -228,18 +229,12 @@ async def get_competitor_insight(
             analyses_by_lp = {a.landing_page_id: a for a in all_analyses}
 
         usps_by_lp: dict[int, list] = {lid: [] for lid in lp_ids}
-        all_usps = session.query(USPPattern).filter(
-            USPPattern.landing_page_id.in_(lp_ids)
-        ).all()
-        for u in all_usps:
-            usps_by_lp[u.landing_page_id].append(u)
-
         appeals_by_lp: dict[int, list] = {lid: [] for lid in lp_ids}
-        all_appeals = session.query(AppealAxisAnalysis).filter(
-            AppealAxisAnalysis.landing_page_id.in_(lp_ids)
-        ).all()
-        for a in all_appeals:
-            appeals_by_lp[a.landing_page_id].append(a)
+        if lp_ids:
+            for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(lp_ids)).all():
+                usps_by_lp.setdefault(u.landing_page_id, []).append(u)
+            for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(lp_ids)).all():
+                appeals_by_lp.setdefault(a.landing_page_id, []).append(a)
 
         lp_analyses = []
         for lp in lps:
@@ -310,13 +305,13 @@ async def generate_usp_flow(
         if request.competitor_lp_ids:
             lps = session.query(LandingPage).filter(
                 LandingPage.id.in_(request.competitor_lp_ids),
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
             ).all()
         else:
             # Auto-select by genre
             lps = session.query(LandingPage).filter(
                 LandingPage.genre == request.genre,
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
             ).limit(20).all()
 
         # Bulk fetch analysis data to avoid N+1 queries
@@ -330,12 +325,12 @@ async def generate_usp_flow(
             analyses_map = {a.landing_page_id: a for a in all_analyses}
 
         usps_map: dict[int, list] = {lid: [] for lid in lp_ids}
-        for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(lp_ids)).all():
-            usps_map[u.landing_page_id].append(u)
-
         appeals_map: dict[int, list] = {lid: [] for lid in lp_ids}
-        for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(lp_ids)).all():
-            appeals_map[a.landing_page_id].append(a)
+        if lp_ids:
+            for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(lp_ids)).all():
+                usps_map.setdefault(u.landing_page_id, []).append(u)
+            for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(lp_ids)).all():
+                appeals_map.setdefault(a.landing_page_id, []).append(a)
 
         competitor_analyses = []
         for lp in lps:
@@ -508,7 +503,7 @@ async def list_own_lps(
             ).filter(
                 LandingPage.genre.in_(genres),
                 LandingPage.is_own == False,  # noqa: E712
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
             ).group_by(LandingPage.genre).all()
             for g, c in count_results:
                 genre_comp_counts[g] = c
@@ -520,7 +515,7 @@ async def list_own_lps(
             ).join(LPAnalysis, LPAnalysis.landing_page_id == LandingPage.id).filter(
                 LandingPage.genre.in_(genres),
                 LandingPage.is_own == False,  # noqa: E712
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
                 LPAnalysis.overall_quality_score.isnot(None),
             ).group_by(LandingPage.genre).all()
             for g, avg_q in quality_results:
@@ -663,13 +658,13 @@ async def compare_own_lp(
         if request.competitor_lp_ids:
             comp_lps = session.query(LandingPage).filter(
                 LandingPage.id.in_(request.competitor_lp_ids),
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
             ).all()
         else:
             comp_lps = session.query(LandingPage).filter(
                 LandingPage.genre == genre,
                 LandingPage.is_own == False,  # noqa: E712
-                LandingPage.status == "completed",
+                LandingPage.status == LPStatusEnum.COMPLETED,
             ).limit(30).all()
 
         # Build competitor analysis dicts (bulk fetch to avoid N+1)
@@ -681,12 +676,12 @@ async def compare_own_lp(
             comp_analyses_map = {ca.landing_page_id: ca for ca in all_ca}
 
         comp_usps_map: dict[int, list] = {lid: [] for lid in comp_lp_ids}
-        for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(comp_lp_ids)).all():
-            comp_usps_map[u.landing_page_id].append(u)
-
         comp_appeals_map: dict[int, list] = {lid: [] for lid in comp_lp_ids}
-        for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(comp_lp_ids)).all():
-            comp_appeals_map[a.landing_page_id].append(a)
+        if comp_lp_ids:
+            for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(comp_lp_ids)).all():
+                comp_usps_map.setdefault(u.landing_page_id, []).append(u)
+            for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(comp_lp_ids)).all():
+                comp_appeals_map.setdefault(a.landing_page_id, []).append(a)
 
         competitor_analyses = []
         for clp in comp_lps:

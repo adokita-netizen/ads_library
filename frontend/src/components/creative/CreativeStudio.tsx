@@ -68,8 +68,9 @@ export default function CreativeStudio() {
       }
 
       if (response) setResult(response.data);
-    } catch {
-      alert("Generation failed. Check API connection and API keys.");
+    } catch (err) {
+      console.error("Creative generation failed:", err);
+      alert("生成に失敗しました。API接続とAPIキーを確認してください。");
     } finally {
       setLoading(false);
     }

@@ -232,7 +232,7 @@ async def save_item(
             label=item.label,
             notes=item.notes,
             folder=item.folder,
-            created_at=item.created_at.isoformat(),
+            created_at=item.created_at.isoformat() if item.created_at else "",
         )
     finally:
         session.close()
@@ -265,7 +265,7 @@ async def list_saved_items(
                     label=i.label,
                     notes=i.notes,
                     folder=i.folder,
-                    created_at=i.created_at.isoformat(),
+                    created_at=i.created_at.isoformat() if i.created_at else "",
                 )
                 for i in items
             ],
