@@ -16,12 +16,13 @@ import APIKeysSettings from "@/components/settings/APIKeysSettings";
 
 type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store" | "settings";
 
-/** Connectivity banner — auto-hides after successful check, shows data test */
+/** Connectivity banner — auto-hides after successful check, dismissible on error */
 function ConnectivityBanner() {
   const [status, setStatus] = useState<"checking" | "ok" | "error">("checking");
   const [detail, setDetail] = useState("");
   const [dataTest, setDataTest] = useState<"pending" | "ok" | "error">("pending");
   const [dataDetail, setDataDetail] = useState("");
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -67,7 +68,8 @@ function ConnectivityBanner() {
     checkHealth();
   }, []);
 
-  // Everything works - hide banner
+  // Dismissed by user or everything works — hide banner
+  if (dismissed) return null;
   if (status === "ok" && dataTest === "ok") return null;
 
   if (status === "checking") {
@@ -79,13 +81,19 @@ function ConnectivityBanner() {
   }
 
   if (status === "error") {
-    const friendlyDetail = detail.includes("TypeError: fetch failed")
-      ? "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
-      : detail;
     return (
-      <div className="bg-red-50 border-b border-red-200 px-4 py-1.5 text-xs text-red-700">
-        API接続エラー: {friendlyDetail}
-        <button className="ml-2 underline" onClick={() => window.location.reload()}>再読み込み</button>
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700 flex items-center justify-between">
+        <span>
+          バックエンドサーバーに接続できません。オフラインモードで動作中です（APIキーはローカルに保存されます）。
+        </span>
+        <span className="flex items-center gap-2 ml-3 shrink-0">
+          <button className="underline font-medium" onClick={() => { setStatus("checking"); setDismissed(false); window.location.reload(); }}>
+            再接続
+          </button>
+          <button className="underline" onClick={() => setDismissed(true)}>
+            閉じる
+          </button>
+        </span>
       </div>
     );
   }
@@ -93,9 +101,12 @@ function ConnectivityBanner() {
   // Health OK but data failed
   if (dataTest === "error") {
     return (
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700">
-        API接続OK / データ取得エラー: {dataDetail}
-        <button className="ml-2 underline" onClick={() => window.location.reload()}>再読み込み</button>
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700 flex items-center justify-between">
+        <span>API接続OK / データ取得エラー: {dataDetail}</span>
+        <span className="flex items-center gap-2 ml-3 shrink-0">
+          <button className="underline font-medium" onClick={() => window.location.reload()}>再読み込み</button>
+          <button className="underline" onClick={() => setDismissed(true)}>閉じる</button>
+        </span>
       </div>
     );
   }
