@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 
 interface KeyDefinition {
@@ -15,6 +15,9 @@ interface PlatformDefinition {
   keys: KeyDefinition[];
   docs_url: string;
   setup_guide: string;
+  cost_info: string;
+  difficulty: "easy" | "medium" | "hard";
+  fallback_note: string;
 }
 
 interface KeyStatus {
@@ -25,6 +28,58 @@ interface KeyStatus {
   updated_at: string | null;
 }
 
+// ── localStorage helpers for offline API key storage ────────────
+const LOCAL_KEYS_STORAGE_KEY = "vaap_api_keys_local";
+
+interface LocalKeyEntry {
+  platform: string;
+  key_name: string;
+  key_value: string;
+  saved_at: string;
+}
+
+function getLocalKeys(): LocalKeyEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_KEYS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalKey(platform: string, key_name: string, key_value: string): void {
+  const keys = getLocalKeys();
+  const idx = keys.findIndex((k) => k.platform === platform && k.key_name === key_name);
+  const entry: LocalKeyEntry = { platform, key_name, key_value, saved_at: new Date().toISOString() };
+  if (idx >= 0) {
+    keys[idx] = entry;
+  } else {
+    keys.push(entry);
+  }
+  localStorage.setItem(LOCAL_KEYS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function deleteLocalKey(platform: string, key_name: string): void {
+  const keys = getLocalKeys().filter((k) => !(k.platform === platform && k.key_name === key_name));
+  localStorage.setItem(LOCAL_KEYS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function maskValue(value: string): string {
+  if (value.length <= 8) return "*".repeat(value.length);
+  return value.slice(0, 4) + "*".repeat(value.length - 8) + value.slice(-4);
+}
+
+function localKeysToStatuses(localKeys: LocalKeyEntry[]): KeyStatus[] {
+  return localKeys.map((k) => ({
+    platform: k.platform,
+    key_name: k.key_name,
+    is_set: true,
+    masked_value: maskValue(k.key_value),
+    updated_at: k.saved_at,
+  }));
+}
+
 // Fallback platform definitions — always show key input sections even when backend is unreachable
 const FALLBACK_PLATFORMS: PlatformDefinition[] = [
   {
@@ -32,30 +87,45 @@ const FALLBACK_PLATFORMS: PlatformDefinition[] = [
     keys: [{ key_name: "api_key", label: "YouTube Data API Key", placeholder: "AIzaSy..." }],
     docs_url: "https://console.cloud.google.com/apis/credentials",
     setup_guide: "Google Cloud Console → APIとサービス → 認証情報 → APIキーを作成 → YouTube Data API v3を有効化",
+    cost_info: "無料（APIキー不要でも動作。Ads Transparency Centerは公開データ）",
+    difficulty: "easy",
+    fallback_note: "APIキーなしでもGoogle Ads Transparency Centerから自動取得します",
   },
   {
     platform: "meta", label: "Meta (Facebook / Instagram)",
     keys: [{ key_name: "access_token", label: "Meta Graph API アクセストークン", placeholder: "EAAGm0PX..." }],
     docs_url: "https://developers.facebook.com/tools/explorer/",
-    setup_guide: "Meta for Developers → Graph APIエクスプローラー → アクセストークンを生成 → ads_read権限を付与",
+    setup_guide: "1. developers.facebook.com でアカウント作成（無料）\n2. 「マイアプリ」→ 新規アプリ作成（種類:ビジネス）\n3. Graph APIエクスプローラーを開く\n4. 右上の「トークンを取得」→ ユーザーアクセストークン\n5. ads_read権限を追加して「Generate Access Token」\n※ トークンは約1時間で期限切れ。長期トークン（60日）は「アクセストークンデバッガー」で延長可能",
+    cost_info: "無料（Meta Ad Library APIは誰でも利用可能。開発者アカウント登録のみ必要）",
+    difficulty: "medium",
+    fallback_note: "APIキーなしでもFacebook Ad Library公開ページからスクレイピングで取得を試みます",
   },
   {
     platform: "tiktok", label: "TikTok",
     keys: [{ key_name: "access_token", label: "TikTok Marketing API トークン", placeholder: "" }],
     docs_url: "https://business-api.tiktok.com/portal/docs",
-    setup_guide: "TikTok for Business → Marketing API → アプリ作成 → アクセストークン取得",
+    setup_guide: "1. business-api.tiktok.com でビジネスアカウント作成\n2. Marketing API → アプリ作成\n3. 審査申請（承認まで数日〜数週間）\n4. 承認後、アクセストークンを発行",
+    cost_info: "無料（ただしビジネスアカウント審査が必要、承認まで時間がかかる場合あり）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもTikTok Ad Library公開ページからスクレイピングで取得を試みます",
   },
   {
     platform: "x_twitter", label: "X (Twitter)",
     keys: [{ key_name: "bearer_token", label: "Bearer Token", placeholder: "AAAAAAAAAA..." }],
     docs_url: "https://developer.x.com/en/portal/dashboard",
-    setup_guide: "X Developer Portal → Projects & Apps → キーとトークン → Bearer Tokenを生成",
+    setup_guide: "1. developer.x.com で開発者アカウント申請\n2. Free/Basic/Proプランを選択\n3. Projects & Apps → App作成\n4. Keys and Tokens → Bearer Token生成",
+    cost_info: "Freeプラン: 月100ポスト読取のみ。Basic: $100/月。Pro: $5,000/月。広告透明性APIのアクセスにはBasic以上が必要な場合あり",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもX Ads Transparency公開ページからスクレイピングで取得を試みます",
   },
   {
     platform: "line", label: "LINE",
     keys: [{ key_name: "access_token", label: "LINE Ads API アクセストークン", placeholder: "" }],
     docs_url: "https://developers.line.biz/",
-    setup_guide: "LINE Developers → LINE公式アカウント → Messaging APIチャネル → チャネルアクセストークン発行",
+    setup_guide: "LINE Ads Platform APIはパートナー企業向けです。LINE広告のアカウントをお持ちの場合、担当者にAPI利用を相談してください",
+    cost_info: "パートナー契約が必要（一般公開APIではありません）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもLINE広告公開ページからスクレイピングで取得を試みます",
   },
   {
     platform: "yahoo", label: "Yahoo!広告",
@@ -64,19 +134,28 @@ const FALLBACK_PLATFORMS: PlatformDefinition[] = [
       { key_name: "api_secret", label: "Yahoo! Ads API シークレット", placeholder: "" },
     ],
     docs_url: "https://ads-developers.yahoo.co.jp/",
-    setup_guide: "Yahoo!デベロッパーネットワーク → アプリケーション登録 → Client IDとSecretを取得",
+    setup_guide: "1. Yahoo!デベロッパーネットワークでアプリ登録\n2. Yahoo!広告アカウントとの連携が必要\n※ 自社のYahoo!広告アカウントのデータのみ取得可能",
+    cost_info: "無料（ただし自社Yahoo!広告アカウント必須。他社の広告データは取得不可）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもYahoo!広告透明性センターから公開データの取得を試みます",
   },
   {
     platform: "pinterest", label: "Pinterest",
     keys: [{ key_name: "access_token", label: "Pinterest API アクセストークン", placeholder: "pina_..." }],
     docs_url: "https://developers.pinterest.com/",
-    setup_guide: "Pinterest for Business → アプリ作成 → OAuth認証フロー → アクセストークン取得",
+    setup_guide: "1. developers.pinterest.com でビジネスアカウント作成（無料）\n2. アプリ作成 → OAuth認証\n3. アクセストークン取得",
+    cost_info: "無料（ビジネスアカウント登録が必要）",
+    difficulty: "medium",
+    fallback_note: "APIキーなしでもPinterest広告透明性ページからスクレイピングで取得を試みます",
   },
   {
     platform: "smartnews", label: "SmartNews",
     keys: [{ key_name: "api_key", label: "SmartNews Ads API キー", placeholder: "" }],
     docs_url: "https://developers.smartnews.com/",
-    setup_guide: "SmartNews Ads → パートナーAPI申請 → APIキー発行",
+    setup_guide: "SmartNews Ads APIはパートナー企業向けです。SmartNews広告出稿中の場合、担当者にAPI利用を相談してください",
+    cost_info: "パートナー契約が必要（一般公開APIではありません）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもSmartNewsフィードから広告コンテンツの検出を試みます",
   },
   {
     platform: "google_ads", label: "Google Ads",
@@ -87,25 +166,37 @@ const FALLBACK_PLATFORMS: PlatformDefinition[] = [
       { key_name: "refresh_token", label: "OAuth Refresh Token", placeholder: "1//0..." },
     ],
     docs_url: "https://developers.google.com/google-ads/api/docs/get-started/introduction",
-    setup_guide: "Google Ads API Center → 開発者トークン申請 → Google Cloud Console → OAuth 2.0クライアント作成 → Refresh Token取得",
+    setup_guide: "1. Google Ads管理アカウントを作成\n2. API Center → 開発者トークン申請（審査あり）\n3. Google Cloud Console → OAuth 2.0クライアント作成\n4. OAuthフローでRefresh Token取得\n※ 開発者トークンの審査は数日〜数週間",
+    cost_info: "無料（ただし管理アカウント・開発者トークン審査が必要。自社アカウントのデータのみ）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもGoogle Ads Transparency Centerから公開データの取得を試みます",
   },
   {
     platform: "gunosy", label: "Gunosy",
     keys: [{ key_name: "api_key", label: "Gunosy Ads API キー", placeholder: "" }],
     docs_url: "https://gunosy.co.jp/ad/",
-    setup_guide: "Gunosy Ads → 広告APIアクセス申請 → APIキー発行",
+    setup_guide: "Gunosy Ads APIはパートナー企業向けです。Gunosy広告出稿中の場合、担当者にAPI利用を相談してください",
+    cost_info: "パートナー契約が必要（一般公開APIではありません）",
+    difficulty: "hard",
+    fallback_note: "APIキーなしでもGunosyフィードから広告コンテンツの検出を試みます",
   },
   {
     platform: "openai", label: "OpenAI (AI分析用)",
     keys: [{ key_name: "api_key", label: "OpenAI API Key", placeholder: "sk-..." }],
     docs_url: "https://platform.openai.com/api-keys",
-    setup_guide: "OpenAI Platform → API Keys → Create new secret key",
+    setup_guide: "1. platform.openai.com でアカウント作成\n2. API Keys → Create new secret key\n3. 支払い方法を登録（従量課金）",
+    cost_info: "従量課金（GPT-4o: 約$2.5/100万入力トークン。月$5〜20程度の利用が目安）",
+    difficulty: "easy",
+    fallback_note: "AI分析機能（スクリプト生成、コピー分析等）に必要。未設定の場合、AI分析機能は利用不可",
   },
   {
     platform: "anthropic", label: "Anthropic (AI分析用)",
     keys: [{ key_name: "api_key", label: "Anthropic API Key", placeholder: "sk-ant-..." }],
     docs_url: "https://console.anthropic.com/settings/keys",
-    setup_guide: "Anthropic Console → API Keys → Create Key",
+    setup_guide: "1. console.anthropic.com でアカウント作成\n2. API Keys → Create Key\n3. 支払い方法を登録（従量課金）",
+    cost_info: "従量課金（Claude Sonnet: 約$3/100万入力トークン。OpenAIの代替として利用可能）",
+    difficulty: "easy",
+    fallback_note: "OpenAIの代替として利用可能。両方未設定の場合、AI分析機能は利用不可",
   },
 ];
 
@@ -116,9 +207,37 @@ export default function APIKeysSettings() {
   const [editingKey, setEditingKey] = useState<{ platform: string; key_name: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
   const [backendAvailable, setBackendAvailable] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const hasSyncedRef = useRef(false);
+  const backendAvailableRef = useRef(true);
+
+  // Sync locally stored keys to the backend when it becomes available
+  const syncLocalKeysToBackend = useCallback(async () => {
+    const localKeys = getLocalKeys();
+    if (localKeys.length === 0) return;
+
+    setSyncing(true);
+    let syncedCount = 0;
+    for (const key of localKeys) {
+      try {
+        await fetchApi("/settings/api-keys", {
+          method: "POST",
+          body: { platform: key.platform, key_name: key.key_name, key_value: key.key_value },
+        });
+        deleteLocalKey(key.platform, key.key_name);
+        syncedCount++;
+      } catch {
+        // If sync fails for a key, keep it in localStorage for next attempt
+      }
+    }
+    setSyncing(false);
+    if (syncedCount > 0) {
+      setMessage({ type: "success", text: `${syncedCount}件のAPIキーをサーバーに同期しました` });
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -128,20 +247,43 @@ export default function APIKeysSettings() {
       ]);
       if (platformsData?.platforms && platformsData.platforms.length > 0) {
         setPlatforms(platformsData.platforms);
+        const wasUnavailable = !backendAvailableRef.current;
         setBackendAvailable(true);
+        backendAvailableRef.current = true;
+
+        // Merge server keys with any remaining local keys
+        const serverKeys = keysData?.keys || [];
+        const localKeys = getLocalKeys();
+        const localStatuses = localKeysToStatuses(
+          localKeys.filter(
+            (lk) => !serverKeys.some((sk) => sk.platform === lk.platform && sk.key_name === lk.key_name)
+          )
+        );
+        setKeyStatuses([...serverKeys, ...localStatuses]);
+
+        // Auto-sync local keys if backend just became available
+        if (wasUnavailable && localKeys.length > 0 && !hasSyncedRef.current) {
+          hasSyncedRef.current = true;
+          syncLocalKeysToBackend();
+        }
       } else {
         setPlatforms(FALLBACK_PLATFORMS);
         setBackendAvailable(false);
+        backendAvailableRef.current = false;
+        // Load from localStorage when backend is unavailable
+        setKeyStatuses(localKeysToStatuses(getLocalKeys()));
       }
-      setKeyStatuses(keysData?.keys || []);
     } catch (err) {
       console.error("Failed to load settings:", err);
       setPlatforms(FALLBACK_PLATFORMS);
       setBackendAvailable(false);
+      backendAvailableRef.current = false;
+      // Load from localStorage when backend is unavailable
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncLocalKeysToBackend]);
 
   useEffect(() => {
     loadData();
@@ -164,12 +306,22 @@ export default function APIKeysSettings() {
         method: "POST",
         body: { platform, key_name: keyName, key_value: editValue.trim() },
       });
+      // Also save to localStorage as a backup
+      saveLocalKey(platform, keyName, editValue.trim());
       setMessage({ type: "success", text: "保存しました" });
       setEditingKey(null);
       setEditValue("");
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "保存に失敗しました" });
+      // Backend unavailable — save to localStorage as fallback
+      saveLocalKey(platform, keyName, editValue.trim());
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
+      setMessage({
+        type: "info",
+        text: "ローカルに保存しました。サーバー接続時に自動で同期されます。",
+      });
+      setEditingKey(null);
+      setEditValue("");
       console.error(err);
     } finally {
       setSaving(false);
@@ -183,10 +335,14 @@ export default function APIKeysSettings() {
         method: "DELETE",
         body: { platform, key_name: keyName },
       });
+      deleteLocalKey(platform, keyName);
       setMessage({ type: "success", text: "削除しました" });
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "削除に失敗しました" });
+      // Also remove from localStorage
+      deleteLocalKey(platform, keyName);
+      setKeyStatuses(localKeysToStatuses(getLocalKeys()));
+      setMessage({ type: "success", text: "ローカルから削除しました" });
       console.error(err);
     }
   };
@@ -221,12 +377,22 @@ export default function APIKeysSettings() {
         </div>
       </div>
 
+      {/* Syncing indicator */}
+      {syncing && (
+        <div className="mx-5 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-2">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          ローカルに保存したAPIキーをサーバーに同期中...
+        </div>
+      )}
+
       {/* Message */}
       {message && (
         <div
           className={`mx-5 mt-3 px-3 py-2 rounded text-xs ${
             message.type === "success"
               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : message.type === "info"
+              ? "bg-blue-50 text-blue-700 border border-blue-200"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}
         >
@@ -240,8 +406,8 @@ export default function APIKeysSettings() {
       {/* Backend unavailable warning */}
       {!loading && !backendAvailable && (
         <div className="mx-5 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-          バックエンドサーバーに接続できません。APIキーの保存はサーバー起動後に行えます。
-          <button className="ml-2 underline font-medium" onClick={() => { setLoading(true); loadData(); }}>
+          バックエンドサーバーに接続できません。APIキーはローカルに保存され、サーバー復帰時に自動同期されます。
+          <button className="ml-2 underline font-medium" onClick={() => { setLoading(true); hasSyncedRef.current = false; loadData(); }}>
             再接続
           </button>
         </div>
@@ -263,11 +429,22 @@ export default function APIKeysSettings() {
                 <li>下記の各媒体セクションを展開し、APIキーを入力してください</li>
                 <li>キーは保存ボタンを押した時点で即座にデータベースに保存されます</li>
                 <li>保存後、「検索」画面からクロールを実行すると、リアルデータが取得されます</li>
-                <li>APIキーが未設定の媒体は、デモデータで動作します</li>
+                <li><strong>APIキー未設定でもクロール可能</strong> — 各媒体の公開ページからスクレイピングで取得を試みます</li>
               </ol>
               <p className="text-[11px] text-blue-600 mt-2">
-                ※ 各媒体のAPIキー取得方法は、各セクション内の「取得手順」をご確認ください
+                ※ 各媒体のAPIキー取得方法・費用・難易度は、各セクション内をご確認ください
               </p>
+            </div>
+
+            {/* Quick Start Recommendation */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <h3 className="text-[13px] font-bold text-emerald-900 mb-2">おすすめの始め方</h3>
+              <div className="text-[12px] text-emerald-800 space-y-1.5">
+                <p>1. まずは<strong>APIキーなし</strong>でクロールを試してください（スクレイピングで動作します）</p>
+                <p>2. より多くのデータが必要なら <strong>Meta (無料)</strong> のAPIキーを設定</p>
+                <p>3. AI分析を使うなら <strong>OpenAI</strong> または <strong>Anthropic</strong> のキーを設定</p>
+                <p>4. YouTube はAPIキー不要で公開データから自動取得します</p>
+              </div>
             </div>
 
             {/* Ad Platforms */}
@@ -417,14 +594,21 @@ function PlatformCard({
             }`}
           />
           <span className="text-[13px] font-medium text-gray-900">{platform.label}</span>
-          {allKeysConfigured && (
+          {allKeysConfigured ? (
             <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium">
               設定済み
             </span>
-          )}
-          {isConfigured && !allKeysConfigured && (
+          ) : isConfigured ? (
             <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium">
               一部設定済み
+            </span>
+          ) : (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              platform.difficulty === "easy" ? "bg-emerald-50 text-emerald-600" :
+              platform.difficulty === "medium" ? "bg-amber-50 text-amber-600" :
+              "bg-gray-100 text-gray-500"
+            }`}>
+              {platform.difficulty === "easy" ? "簡単・無料" : platform.difficulty === "medium" ? "無料" : "要契約"}
             </span>
           )}
         </div>
@@ -442,10 +626,29 @@ function PlatformCard({
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-gray-100 px-4 py-3">
+          {/* Cost & Difficulty Info */}
+          <div className="flex items-center gap-3 mb-3">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+              platform.difficulty === "easy" ? "bg-emerald-100 text-emerald-700" :
+              platform.difficulty === "medium" ? "bg-amber-100 text-amber-700" :
+              "bg-red-100 text-red-700"
+            }`}>
+              {platform.difficulty === "easy" ? "簡単" : platform.difficulty === "medium" ? "普通" : "難しい"}
+            </span>
+            <span className="text-[11px] text-gray-600">{platform.cost_info}</span>
+          </div>
+
+          {/* Fallback Note */}
+          <div className="bg-amber-50 border border-amber-200 rounded p-2.5 mb-3">
+            <p className="text-[11px] text-amber-700">
+              <span className="font-semibold">APIキーなしの場合:</span> {platform.fallback_note}
+            </p>
+          </div>
+
           {/* Setup Guide */}
           <div className="bg-gray-50 rounded p-3 mb-3">
             <p className="text-[11px] font-semibold text-gray-600 mb-1">取得手順:</p>
-            <p className="text-[11px] text-gray-500">{platform.setup_guide}</p>
+            <p className="text-[11px] text-gray-500 whitespace-pre-line">{platform.setup_guide}</p>
             <a
               href={platform.docs_url}
               target="_blank"
