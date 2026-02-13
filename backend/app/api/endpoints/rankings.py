@@ -20,6 +20,16 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
 
+def _sanitize_csv(value: str | None) -> str:
+    """Sanitize value for CSV to prevent formula injection."""
+    if not value:
+        return ""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 # ==================== Rankings ====================
 
 
@@ -437,10 +447,10 @@ def export_rankings_csv(
                     r.rank_position,
                     r.previous_rank or "-",
                     r.rank_change if r.rank_change is not None else "-",
-                    r.product_name or "",
-                    r.advertiser_name or "",
-                    r.genre or "",
-                    r.platform or "",
+                    _sanitize_csv(r.product_name),
+                    _sanitize_csv(r.advertiser_name),
+                    _sanitize_csv(r.genre),
+                    _sanitize_csv(r.platform),
                     r.total_view_increase,
                     round(r.total_spend_increase),
                     r.cumulative_views,
@@ -463,15 +473,15 @@ def export_rankings_csv(
             for rank, ad in enumerate(ads, start=1):
                 writer.writerow([
                     rank,
-                    ad.title or "",
-                    ad.advertiser_name or "",
+                    _sanitize_csv(ad.title),
+                    _sanitize_csv(ad.advertiser_name),
                     str(ad.platform.value) if ad.platform and hasattr(ad.platform, 'value') else str(ad.platform or ""),
                     str(ad.category.value) if ad.category and hasattr(ad.category, 'value') else str(ad.category or ""),
                     ad.view_count or 0,
                     ad.like_count or 0,
                     ad.duration_seconds or "",
                     ad.first_seen_at.isoformat() if ad.first_seen_at else "",
-                    ad.video_url or "",
+                    _sanitize_csv(ad.video_url),
                 ])
 
         output.seek(0)
@@ -517,11 +527,11 @@ def export_ads_csv(
         for ad in ads:
             writer.writerow([
                 ad.id,
-                ad.title or "",
+                _sanitize_csv(ad.title),
                 str(ad.platform.value) if ad.platform and hasattr(ad.platform, 'value') else str(ad.platform or ""),
                 str(ad.category.value) if ad.category and hasattr(ad.category, 'value') else str(ad.category or ""),
-                ad.advertiser_name or "",
-                ad.brand_name or "",
+                _sanitize_csv(ad.advertiser_name),
+                _sanitize_csv(ad.brand_name),
                 ad.view_count or 0,
                 ad.like_count or 0,
                 ad.estimated_ctr or "",
@@ -529,7 +539,7 @@ def export_ads_csv(
                 str(ad.status.value) if ad.status and hasattr(ad.status, 'value') else str(ad.status or ""),
                 ad.first_seen_at.isoformat() if ad.first_seen_at else "",
                 ad.last_seen_at.isoformat() if ad.last_seen_at else "",
-                ad.video_url or "",
+                _sanitize_csv(ad.video_url),
             ])
 
         output.seek(0)

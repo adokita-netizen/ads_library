@@ -132,7 +132,10 @@ async def upload_ad_video(
     storage = get_storage_client()
     file_ext = file.filename.split(".")[-1] if file.filename else "mp4"
     s3_key = f"videos/{uuid.uuid4()}.{file_ext}"
-    storage.upload_bytes(s3_key, contents, content_type=file.content_type)
+    try:
+        storage.upload_bytes(s3_key, contents, content_type=file.content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ストレージへのアップロードに失敗しました: {str(e)}")
 
     # Create ad record
     ad = Ad(
@@ -148,10 +151,13 @@ async def upload_ad_video(
 
     # Trigger analysis task
     if auto_analyze:
-        from app.tasks.analysis_tasks import analyze_ad_task
-        analyze_ad_task.delay(ad.id)
-        ad.status = AdStatusEnum.PROCESSING
-        await db.flush()
+        try:
+            from app.tasks.analysis_tasks import analyze_ad_task
+            analyze_ad_task.delay(ad.id)
+            ad.status = AdStatusEnum.PROCESSING
+            await db.flush()
+        except Exception:
+            pass  # Analysis failure is non-critical; ad is still saved
 
     return {
         "id": ad.id,
