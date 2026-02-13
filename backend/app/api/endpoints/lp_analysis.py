@@ -3,8 +3,9 @@
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.deps import get_current_user_sync
 from app.core.database import SyncSessionLocal
 from app.models.landing_page import (
     AppealAxisAnalysis,
@@ -50,7 +51,10 @@ router = APIRouter(prefix="/lp-analysis", tags=["LP Analysis"])
 
 
 @router.post("/crawl", response_model=LPTaskResponse)
-async def crawl_lp(request: LPCrawlRequest):
+async def crawl_lp(
+    request: LPCrawlRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Submit a landing page URL for crawling and analysis."""
     task = crawl_and_analyze_lp_task.delay(
         url=request.url,
@@ -68,7 +72,10 @@ async def crawl_lp(request: LPCrawlRequest):
 
 
 @router.post("/batch-crawl", response_model=LPTaskResponse)
-async def batch_crawl_lps(request: LPBatchCrawlRequest):
+async def batch_crawl_lps(
+    request: LPBatchCrawlRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Submit multiple LP URLs for batch crawling."""
     task = batch_crawl_lps_task.delay(
         urls=request.urls,
@@ -191,7 +198,10 @@ async def get_lp_appeal_axes(lp_id: int):
 
 
 @router.post("/competitor-insight", response_model=GenreInsightResponse)
-async def get_competitor_insight(request: LPCompetitorRequest):
+async def get_competitor_insight(
+    request: LPCompetitorRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Get competitor intelligence for a genre."""
     session = SyncSessionLocal()
     try:
@@ -207,21 +217,35 @@ async def get_competitor_insight(request: LPCompetitorRequest):
                 detail=f"ジャンル '{request.genre}' の分析済みLPが見つかりません",
             )
 
-        # Gather analysis data
+        # Gather analysis data (bulk fetch to avoid N+1)
+        lp_ids = [lp.id for lp in lps]
+
+        analyses_by_lp = {}
+        if lp_ids:
+            all_analyses = session.query(LPAnalysis).filter(
+                LPAnalysis.landing_page_id.in_(lp_ids)
+            ).all()
+            analyses_by_lp = {a.landing_page_id: a for a in all_analyses}
+
+        usps_by_lp: dict[int, list] = {lid: [] for lid in lp_ids}
+        all_usps = session.query(USPPattern).filter(
+            USPPattern.landing_page_id.in_(lp_ids)
+        ).all()
+        for u in all_usps:
+            usps_by_lp[u.landing_page_id].append(u)
+
+        appeals_by_lp: dict[int, list] = {lid: [] for lid in lp_ids}
+        all_appeals = session.query(AppealAxisAnalysis).filter(
+            AppealAxisAnalysis.landing_page_id.in_(lp_ids)
+        ).all()
+        for a in all_appeals:
+            appeals_by_lp[a.landing_page_id].append(a)
+
         lp_analyses = []
         for lp in lps:
-            analysis = session.query(LPAnalysis).filter(
-                LPAnalysis.landing_page_id == lp.id
-            ).first()
+            analysis = analyses_by_lp.get(lp.id)
             if not analysis:
                 continue
-
-            usps = session.query(USPPattern).filter(
-                USPPattern.landing_page_id == lp.id
-            ).all()
-            appeals = session.query(AppealAxisAnalysis).filter(
-                AppealAxisAnalysis.landing_page_id == lp.id
-            ).all()
 
             lp_analyses.append({
                 "quality_score": analysis.overall_quality_score,
@@ -236,7 +260,7 @@ async def get_competitor_insight(request: LPCompetitorRequest):
                         "prominence": u.prominence_score,
                         "keywords": u.keywords,
                     }
-                    for u in usps
+                    for u in usps_by_lp.get(lp.id, [])
                 ],
                 "appeal_axes": [
                     {
@@ -244,7 +268,7 @@ async def get_competitor_insight(request: LPCompetitorRequest):
                         "strength": a.strength_score,
                         "evidence_texts": a.evidence_texts,
                     }
-                    for a in appeals
+                    for a in appeals_by_lp.get(lp.id, [])
                 ],
             })
 
@@ -275,7 +299,10 @@ async def get_competitor_insight(request: LPCompetitorRequest):
 
 
 @router.post("/usp-flow", response_model=USPFlowResponse)
-async def generate_usp_flow(request: USPFlowRequest):
+async def generate_usp_flow(
+    request: USPFlowRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Generate USP → Article LP flow recommendation."""
     session = SyncSessionLocal()
     try:
@@ -292,31 +319,40 @@ async def generate_usp_flow(request: USPFlowRequest):
                 LandingPage.status == "completed",
             ).limit(20).all()
 
+        # Bulk fetch analysis data to avoid N+1 queries
+        lp_ids = [lp.id for lp in lps]
+
+        analyses_map = {}
+        if lp_ids:
+            all_analyses = session.query(LPAnalysis).filter(
+                LPAnalysis.landing_page_id.in_(lp_ids)
+            ).all()
+            analyses_map = {a.landing_page_id: a for a in all_analyses}
+
+        usps_map: dict[int, list] = {lid: [] for lid in lp_ids}
+        for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(lp_ids)).all():
+            usps_map[u.landing_page_id].append(u)
+
+        appeals_map: dict[int, list] = {lid: [] for lid in lp_ids}
+        for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(lp_ids)).all():
+            appeals_map[a.landing_page_id].append(a)
+
         competitor_analyses = []
         for lp in lps:
-            analysis = session.query(LPAnalysis).filter(
-                LPAnalysis.landing_page_id == lp.id
-            ).first()
+            analysis = analyses_map.get(lp.id)
             if not analysis:
                 continue
-
-            usps = session.query(USPPattern).filter(
-                USPPattern.landing_page_id == lp.id
-            ).all()
-            appeals = session.query(AppealAxisAnalysis).filter(
-                AppealAxisAnalysis.landing_page_id == lp.id
-            ).all()
 
             competitor_analyses.append({
                 "quality_score": analysis.overall_quality_score,
                 "page_flow": analysis.page_flow_pattern,
                 "usps": [
                     {"category": u.usp_category, "text": u.usp_text, "prominence": u.prominence_score, "keywords": u.keywords}
-                    for u in usps
+                    for u in usps_map.get(lp.id, [])
                 ],
                 "appeal_axes": [
                     {"axis": a.appeal_axis, "strength": a.strength_score, "evidence_texts": a.evidence_texts}
-                    for a in appeals
+                    for a in appeals_map.get(lp.id, [])
                 ],
             })
 
@@ -354,7 +390,10 @@ async def generate_usp_flow(request: USPFlowRequest):
 
 
 @router.post("/own/import", response_model=LPResponse)
-async def import_own_lp(request: OwnLPImportRequest):
+async def import_own_lp(
+    request: OwnLPImportRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Import own LP for analysis and comparison against competitors."""
     if not request.url and not request.html_content and not request.text_content:
         raise HTTPException(
@@ -437,6 +476,7 @@ async def import_own_lp(request: OwnLPImportRequest):
 async def list_own_lps(
     genre: Optional[str] = None,
     search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """List all own (self-managed) LPs."""
     session = SyncSessionLocal()
@@ -499,7 +539,11 @@ async def list_own_lps(
 
 
 @router.put("/own/{lp_id}", response_model=LPResponse)
-async def update_own_lp(lp_id: int, request: OwnLPUpdateRequest):
+async def update_own_lp(
+    lp_id: int,
+    request: OwnLPUpdateRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Update an own LP (e.g., upload new version)."""
     session = SyncSessionLocal()
     try:
@@ -547,7 +591,10 @@ async def update_own_lp(lp_id: int, request: OwnLPUpdateRequest):
 
 
 @router.delete("/own/{lp_id}")
-async def delete_own_lp(lp_id: int):
+async def delete_own_lp(
+    lp_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Delete an own LP."""
     session = SyncSessionLocal()
     try:
@@ -567,7 +614,10 @@ async def delete_own_lp(lp_id: int):
 
 
 @router.post("/own/compare", response_model=LPCompareResponse)
-async def compare_own_lp(request: LPCompareRequest):
+async def compare_own_lp(
+    request: LPCompareRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Compare own LP against competitor LPs in the same genre."""
     session = SyncSessionLocal()
     try:
@@ -622,27 +672,34 @@ async def compare_own_lp(request: LPCompareRequest):
                 LandingPage.status == "completed",
             ).limit(30).all()
 
-        # Build competitor analysis dicts
+        # Build competitor analysis dicts (bulk fetch to avoid N+1)
+        comp_lp_ids = [clp.id for clp in comp_lps]
+
+        comp_analyses_map = {}
+        if comp_lp_ids:
+            all_ca = session.query(LPAnalysis).filter(LPAnalysis.landing_page_id.in_(comp_lp_ids)).all()
+            comp_analyses_map = {ca.landing_page_id: ca for ca in all_ca}
+
+        comp_usps_map: dict[int, list] = {lid: [] for lid in comp_lp_ids}
+        for u in session.query(USPPattern).filter(USPPattern.landing_page_id.in_(comp_lp_ids)).all():
+            comp_usps_map[u.landing_page_id].append(u)
+
+        comp_appeals_map: dict[int, list] = {lid: [] for lid in comp_lp_ids}
+        for a in session.query(AppealAxisAnalysis).filter(AppealAxisAnalysis.landing_page_id.in_(comp_lp_ids)).all():
+            comp_appeals_map[a.landing_page_id].append(a)
+
         competitor_analyses = []
         for clp in comp_lps:
-            ca = session.query(LPAnalysis).filter(
-                LPAnalysis.landing_page_id == clp.id
-            ).first()
+            ca = comp_analyses_map.get(clp.id)
             if not ca:
                 continue
-            c_usps = session.query(USPPattern).filter(
-                USPPattern.landing_page_id == clp.id
-            ).all()
-            c_appeals = session.query(AppealAxisAnalysis).filter(
-                AppealAxisAnalysis.landing_page_id == clp.id
-            ).all()
             competitor_analyses.append({
                 "quality_score": ca.overall_quality_score or 0,
                 "conversion_potential": ca.conversion_potential_score or 0,
                 "trust_score": ca.trust_score or 0,
                 "page_flow": ca.page_flow_pattern or "",
-                "usps": [{"category": u.usp_category, "text": u.usp_text} for u in c_usps],
-                "appeal_axes": [{"axis": a.appeal_axis, "strength": a.strength_score} for a in c_appeals],
+                "usps": [{"category": u.usp_category, "text": u.usp_text} for u in comp_usps_map.get(clp.id, [])],
+                "appeal_axes": [{"axis": a.appeal_axis, "strength": a.strength_score} for a in comp_appeals_map.get(clp.id, [])],
             })
 
         # Run comparison

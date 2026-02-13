@@ -991,10 +991,10 @@ export default function LPAnalysisView() {
                       <h3 className="text-[13px] font-bold text-gray-900">推奨USP</h3>
                     </div>
                     <p className="text-[14px] font-bold text-[#4A7DFF] mb-1">{(uspFlow as Record<string, unknown>).primaryUSP as string}</p>
-                    {(uspFlow as Record<string, unknown>).appealAxis && (
+                    {Boolean((uspFlow as Record<string, unknown>).appealAxis) && (
                       <p className="text-[11px] text-gray-600">
-                        推奨訴求軸: <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium text-white ${appealAxisColors[(uspFlow as Record<string, unknown>).appealAxis as string] || "bg-gray-500"}`}>
-                          {appealAxisLabels[(uspFlow as Record<string, unknown>).appealAxis as string] || (uspFlow as Record<string, unknown>).appealAxis as string}
+                        推奨訴求軸: <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium text-white ${appealAxisColors[String((uspFlow as Record<string, unknown>).appealAxis)] || "bg-gray-500"}`}>
+                          {appealAxisLabels[String((uspFlow as Record<string, unknown>).appealAxis)] || String((uspFlow as Record<string, unknown>).appealAxis)}
                         </span>
                       </p>
                     )}

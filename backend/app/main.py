@@ -112,11 +112,11 @@ async def timing_middleware(request: Request, call_next):
     return response
 
 
-# CORS middleware
+# CORS middleware — configure via CORS_ORIGINS env var (default "*" for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=("*" not in settings.cors_origins_list),
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -68,6 +68,86 @@ const expressionTypeLabels: Record<string, string> = {
   tutorial: "チュートリアル",
 };
 
+// Default data for visualization examples
+const mockSpendEstimate = {
+  confidence_ranges: { p10: 150000, p25: 280000, p50: 450000, p75: 650000, p90: 900000 },
+  estimation_method: "model",
+  confidence_level: 0.72,
+  cpm_info: { seasonal_factor: 1.15 },
+};
+
+const mockLPReuse: Array<{ url_hash: string; genre: string; advertiser_count: number; ad_count: number; title: string; domain: string; advertisers: string[] }> = [
+  { url_hash: "lp1", genre: "EC・D2C", advertiser_count: 5, ad_count: 12, title: "初回限定キャンペーンLP", domain: "example.com", advertisers: ["広告主A", "広告主B", "広告主C", "広告主D", "広告主E"] },
+  { url_hash: "lp2", genre: "美容", advertiser_count: 3, ad_count: 8, title: "美容サプリLP", domain: "beauty-shop.jp", advertisers: ["ブランドX", "ブランドY", "ブランドZ"] },
+];
+
+const mockProvisionalTags: Array<{ id: number; ad_id: number; field_name: string; value: string; confidence: number }> = [
+  { id: 1, ad_id: 101, field_name: "genre", value: "EC・D2C", confidence: 0.65 },
+  { id: 2, ad_id: 102, field_name: "product_name", value: "スキンケアセット", confidence: 0.42 },
+  { id: 3, ad_id: 103, field_name: "genre", value: "健康食品", confidence: 0.78 },
+];
+
+interface TrendPrediction {
+  ad_id: number;
+  momentum_score: number;
+  hit_probability: number;
+  predicted_hit: boolean;
+  growth_phase: string;
+  days_active: number;
+  velocity: {
+    view_1d: number;
+    view_3d: number;
+    view_7d: number;
+    view_acceleration: number;
+    spend_1d: number;
+    spend_3d: number;
+    spend_7d: number;
+    spend_acceleration: number;
+  };
+  genre: string;
+  genre_percentile: number;
+  predicted_peak_spend: number;
+  // Enriched from early-hits endpoint
+  title?: string;
+  platform?: string;
+  advertiser_name?: string;
+}
+
+interface AlertItem {
+  id: number;
+  alert_type: string;
+  severity: string;
+  entity_type: string;
+  entity_name: string;
+  title: string;
+  description: string;
+  change_percent: number;
+  is_dismissed: boolean;
+  detected_at: string;
+}
+
+interface CalibrationItem {
+  id: number;
+  platform: string;
+  genre: string;
+  actual_cpm: number;
+  actual_cpv: number | null;
+  notes: string;
+  created_at: string;
+}
+
+interface SimilarAdItem {
+  ad_id: number;
+  similarity: number;
+  title: string;
+  platform: string;
+  advertiser_name: string;
+  category: string | null;
+  auto_appeal_axes?: string[];
+  auto_expression_type?: string;
+  auto_structure_type?: string;
+}
+
 export default function CompetitiveIntelView() {
   const [activeTab, setActiveTab] = useState<CITab>("trends");
   const [calibPlatform, setCalibPlatform] = useState("youtube");
@@ -76,19 +156,19 @@ export default function CompetitiveIntelView() {
   const [similarQuery, setSimilarQuery] = useState("");
 
   // API state for alerts
-  const [alerts, setAlerts] = useState<Array<Record<string, unknown>>>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
 
   // API state for trends
-  const [trendPredictions, setTrendPredictions] = useState<Array<Record<string, unknown>>>([]);
+  const [trendPredictions, setTrendPredictions] = useState<TrendPrediction[]>([]);
   const [trendsLoading, setTrendsLoading] = useState(true);
 
   // API state for calibrations
-  const [calibrations, setCalibrations] = useState<Array<Record<string, unknown>>>([]);
+  const [calibrations, setCalibrations] = useState<CalibrationItem[]>([]);
   const [calibSaving, setCalibSaving] = useState(false);
 
   // API state for similarity
-  const [similarAds, setSimilarAds] = useState<Array<Record<string, unknown>>>([]);
+  const [similarAds, setSimilarAds] = useState<SimilarAdItem[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
 
   // Fetch alerts

@@ -216,6 +216,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       }
     };
     fetchData();
+    setCurrentPage(1);
   }, [filters.media, filters.genre, filters.interval, fetchTrigger]);
 
   const filteredAds = useMemo(() => {
@@ -590,40 +591,45 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white text-xs text-gray-500">
-        <span>
-          {filteredAds.length}件中 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredAds.length)}件を表示
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            className="btn-ghost text-[11px] disabled:opacity-30"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(currentPage - 1)}
-          >
-            ← 前へ
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+      {filteredAds.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white text-xs text-gray-500">
+          <span>
+            {filteredAds.length}件中 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredAds.length)}件を表示
+          </span>
+          <div className="flex items-center gap-1">
             <button
-              key={page}
-              className={`w-7 h-7 rounded text-[11px] font-medium ${
-                page === currentPage
-                  ? "bg-[#4A7DFF] text-white"
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
-              onClick={() => setCurrentPage(page)}
+              className="btn-ghost text-[11px] disabled:opacity-30"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
             >
-              {page}
+              ← 前へ
             </button>
-          ))}
-          <button
-            className="btn-ghost text-[11px] disabled:opacity-30"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(currentPage + 1)}
-          >
-            次へ →
-          </button>
+            {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`w-7 h-7 rounded text-[11px] font-medium ${
+                  page === currentPage
+                    ? "bg-[#4A7DFF] text-white"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            {totalPages > 10 && (
+              <span className="text-gray-400 px-1">...</span>
+            )}
+            <button
+              className="btn-ghost text-[11px] disabled:opacity-30"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+            >
+              次へ →
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       {/* Crawl Modal */}
       {showCrawlModal && (
         <CrawlModal
