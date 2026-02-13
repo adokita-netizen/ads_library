@@ -67,6 +67,9 @@ async def generate_script(
         language=request.language,
     )
 
+    if not script:
+        raise HTTPException(status_code=500, detail="スクリプトの生成に失敗しました")
+
     return ScriptGenerationResponse(**script.to_dict())
 
 
@@ -134,6 +137,9 @@ async def generate_storyboard(
         platform=request.platform,
         style=request.style,
     )
+
+    if not storyboard:
+        raise HTTPException(status_code=500, detail="ストーリーボードの生成に失敗しました")
 
     return storyboard.to_dict()
 

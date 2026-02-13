@@ -166,7 +166,7 @@ async def list_calibrations(
                     "actual_cpm": c.actual_cpm,
                     "actual_cpv": c.actual_cpv,
                     "notes": c.notes,
-                    "created_at": c.created_at.isoformat(),
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
                 }
                 for c in calibs
             ]
@@ -179,7 +179,10 @@ async def list_calibrations(
 
 
 @router.post("/similarity/search")
-async def similarity_search(request: SimilaritySearchRequest):
+async def similarity_search(
+    request: SimilaritySearchRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Find similar ads using multimodal embeddings.
 
     Search by ad_id (find similar to this ad) or query_text (semantic search).
@@ -199,14 +202,19 @@ async def similarity_search(request: SimilaritySearchRequest):
                 min_similarity=request.min_similarity,
             )
 
-            # Enrich with ad info
+            # Enrich with ad info (bulk fetch to avoid N+1)
+            ad_ids = [r["ad_id"] for r in results]
+            ads_by_id = {}
+            if ad_ids:
+                ads = session.query(Ad).filter(Ad.id.in_(ad_ids)).all()
+                ads_by_id = {ad.id: ad for ad in ads}
             for r in results:
-                ad = session.query(Ad).filter(Ad.id == r["ad_id"]).first()
+                ad = ads_by_id.get(r["ad_id"])
                 if ad:
                     r["title"] = ad.title
-                    r["platform"] = str(ad.platform)
+                    r["platform"] = ad.platform.value if hasattr(ad.platform, 'value') else str(ad.platform)
                     r["advertiser_name"] = ad.advertiser_name
-                    r["category"] = str(ad.category) if ad.category else None
+                    r["category"] = ad.category.value if ad.category and hasattr(ad.category, 'value') else str(ad.category) if ad.category else None
 
             return {
                 "source_ad_id": request.ad_id,
@@ -223,11 +231,17 @@ async def similarity_search(request: SimilaritySearchRequest):
                 min_similarity=request.min_similarity,
             )
 
+            # Enrich with ad info (bulk fetch to avoid N+1)
+            ad_ids = [r["ad_id"] for r in results]
+            ads_by_id = {}
+            if ad_ids:
+                ads = session.query(Ad).filter(Ad.id.in_(ad_ids)).all()
+                ads_by_id = {ad.id: ad for ad in ads}
             for r in results:
-                ad = session.query(Ad).filter(Ad.id == r["ad_id"]).first()
+                ad = ads_by_id.get(r["ad_id"])
                 if ad:
                     r["title"] = ad.title
-                    r["platform"] = str(ad.platform)
+                    r["platform"] = ad.platform.value if hasattr(ad.platform, 'value') else str(ad.platform)
                     r["advertiser_name"] = ad.advertiser_name
 
             return {
@@ -278,6 +292,7 @@ async def get_lp_reuse(
     genre: Optional[str] = None,
     min_advertisers: int = Query(2, ge=1),
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Find LPs used by multiple advertisers (遷移先アナリティクス)."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
@@ -292,7 +307,10 @@ async def get_lp_reuse(
 
 
 @router.get("/destination/creative-variation/{lp_id}")
-async def get_creative_variation(lp_id: int):
+async def get_creative_variation(
+    lp_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Analyze creative variations pointing to the same LP."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
@@ -305,7 +323,10 @@ async def get_creative_variation(lp_id: int):
 
 
 @router.get("/destination/advertiser-portfolio/{advertiser_name}")
-async def get_advertiser_destinations(advertiser_name: str):
+async def get_advertiser_destinations(
+    advertiser_name: str,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Get all destinations used by an advertiser."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
@@ -321,6 +342,7 @@ async def get_advertiser_destinations(advertiser_name: str):
 async def get_genre_destination_overview(
     genre: str,
     period_days: int = Query(30, ge=1, le=90),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Genre-level destination analytics overview."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
@@ -339,6 +361,7 @@ async def get_genre_destination_overview(
 @router.post("/alerts/detect")
 async def run_alert_detection(
     watched_advertisers: Optional[list[str]] = None,
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Run all alert detection algorithms and return new alerts."""
     from app.services.competitive.alert_detector import AlertDetector
@@ -346,7 +369,11 @@ async def run_alert_detection(
     session = SyncSessionLocal()
     try:
         detector = AlertDetector()
-        alerts = detector.run_all_detections(session, watched_advertisers=watched_advertisers)
+        try:
+            alerts = detector.run_all_detections(session, watched_advertisers=watched_advertisers)
+        except Exception as e:
+            logger.error("alert_detection_failed", error=str(e))
+            return {"total_alerts": 0, "items": [], "error": "アラート検出中にエラーが発生しました"}
 
         return {
             "total_alerts": len(alerts),
@@ -363,7 +390,7 @@ async def run_alert_detection(
                     "metric_after": a.metric_after,
                     "change_percent": a.change_percent,
                     "context_data": a.context_data,
-                    "detected_at": a.detected_at.isoformat(),
+                    "detected_at": a.detected_at.isoformat() if a.detected_at else None,
                 }
                 for a in alerts
             ],
@@ -378,6 +405,7 @@ async def get_alert_history(
     severity: Optional[str] = None,
     days: int = Query(7, ge=1, le=90),
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Get recent alert history."""
     session = SyncSessionLocal()
@@ -405,7 +433,7 @@ async def get_alert_history(
                     "description": a.description,
                     "change_percent": a.change_percent,
                     "is_dismissed": a.is_dismissed,
-                    "detected_at": a.detected_at.isoformat(),
+                    "detected_at": a.detected_at.isoformat() if a.detected_at else None,
                 }
                 for a in alerts
             ],
@@ -436,7 +464,10 @@ async def dismiss_alert(
 
 
 @router.get("/classification/tags/{ad_id}")
-async def get_classification_tags(ad_id: int):
+async def get_classification_tags(
+    ad_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Get all classification tags for an ad (provisional + confirmed)."""
     session = SyncSessionLocal()
     try:
@@ -554,6 +585,7 @@ async def confirm_classification(
 @router.get("/classification/provisional")
 async def list_provisional_tags(
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """List all provisional tags awaiting confirmation."""
     session = SyncSessionLocal()
@@ -576,7 +608,7 @@ async def list_provisional_tags(
                     "value": t.value,
                     "confidence": t.confidence,
                     "classified_by": t.classified_by,
-                    "created_at": t.created_at.isoformat(),
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
                 }
                 for t in tags
             ],
@@ -591,6 +623,7 @@ async def list_provisional_tags(
 @router.get("/trends/predictions")
 async def get_trend_predictions(
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Get trend predictions with velocity analysis and hit probability."""
     from app.services.competitive.trend_predictor import TrendPredictor
@@ -635,6 +668,7 @@ async def get_trend_predictions(
 async def get_early_hit_candidates(
     max_days_active: int = Query(7, ge=1, le=30),
     min_momentum: float = Query(40, ge=0, le=100),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Get early hit candidates - ads in first week showing hit potential."""
     from app.services.competitive.trend_predictor import TrendPredictor
@@ -646,12 +680,17 @@ async def get_early_hit_candidates(
             session, max_days_active=max_days_active, min_momentum=min_momentum
         )
 
-        # Enrich with ad info
+        # Enrich with ad info (bulk fetch to avoid N+1)
+        ad_ids = [c["ad_id"] for c in candidates if "ad_id" in c]
+        ads_by_id = {}
+        if ad_ids:
+            ads = session.query(Ad).filter(Ad.id.in_(ad_ids)).all()
+            ads_by_id = {ad.id: ad for ad in ads}
         for c in candidates:
-            ad = session.query(Ad).filter(Ad.id == c["ad_id"]).first()
+            ad = ads_by_id.get(c.get("ad_id"))
             if ad:
                 c["title"] = ad.title
-                c["platform"] = str(ad.platform)
+                c["platform"] = ad.platform.value if hasattr(ad.platform, 'value') else str(ad.platform)
                 c["advertiser_name"] = ad.advertiser_name
 
         return {"total": len(candidates), "items": candidates}
@@ -667,6 +706,7 @@ async def list_funnels(
     genre: Optional[str] = None,
     advertiser: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """List detected LP funnels."""
     session = SyncSessionLocal()
@@ -679,12 +719,18 @@ async def list_funnels(
 
         funnels = query.order_by(LPFunnel.created_at.desc()).limit(limit).all()
 
+        # Bulk fetch steps to avoid N+1
+        funnel_ids = [f.id for f in funnels]
+        steps_by_funnel: dict[int, list] = {fid: [] for fid in funnel_ids}
+        if funnel_ids:
+            all_steps = session.query(FunnelStep).filter(
+                FunnelStep.funnel_id.in_(funnel_ids)
+            ).order_by(FunnelStep.step_order).all()
+            for s in all_steps:
+                steps_by_funnel[s.funnel_id].append(s)
+
         result = []
         for f in funnels:
-            steps = session.query(FunnelStep).filter(
-                FunnelStep.funnel_id == f.id
-            ).order_by(FunnelStep.step_order).all()
-
             result.append({
                 "id": f.id,
                 "funnel_name": f.funnel_name,
@@ -704,7 +750,7 @@ async def list_funnels(
                         "page_title": s.page_title,
                         "estimated_dropoff_rate": s.estimated_dropoff_rate,
                     }
-                    for s in steps
+                    for s in steps_by_funnel.get(f.id, [])
                 ],
             })
 
@@ -717,7 +763,10 @@ async def list_funnels(
 
 
 @router.get("/fingerprint/lp/{lp_id}")
-async def get_lp_fingerprint(lp_id: int):
+async def get_lp_fingerprint(
+    lp_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Get fingerprint and change history for an LP."""
     session = SyncSessionLocal()
     try:
@@ -733,7 +782,7 @@ async def get_lp_fingerprint(lp_id: int):
             "snapshots": [
                 {
                     "id": fp.id,
-                    "snapshot_date": fp.snapshot_date.isoformat(),
+                    "snapshot_date": fp.snapshot_date.isoformat() if fp.snapshot_date else None,
                     "content_hash": fp.content_hash,
                     "structure_hash": fp.structure_hash,
                     "offer_fingerprint": fp.offer_fingerprint,
@@ -755,6 +804,7 @@ async def get_lp_fingerprint(lp_id: int):
 async def get_offer_clusters(
     genre: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user_sync),
 ):
     """Get offer clusters - groups of LPs with similar offers."""
     from sqlalchemy import func, desc

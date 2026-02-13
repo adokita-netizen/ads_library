@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.endpoints import ads, auth, analytics, creative, predictions, lp_analysis, rankings, notifications, competitive_intel
+from app.api.endpoints import settings as settings_endpoints
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
         import app.models.analysis  # noqa: F401
         import app.models.user  # noqa: F401
         import app.models.landing_page  # noqa: F401
+        import app.models.api_key  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
         logger.info("database_tables_ensured")
     except Exception as e:
@@ -97,11 +99,24 @@ async def general_exception_handler(request: Request, exc: Exception):
 # ==================== Middleware ====================
 
 
-# CORS middleware
+# Request timing middleware
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    import time
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed = (time.monotonic() - start) * 1000
+    response.headers["X-Response-Time"] = f"{elapsed:.0f}ms"
+    if elapsed > 1000:
+        logger.warning("slow_request", path=request.url.path, method=request.method, elapsed_ms=round(elapsed))
+    return response
+
+
+# CORS middleware — configure via CORS_ORIGINS env var (default "*" for development)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_credentials=("*" not in settings.cors_origins_list),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -125,6 +140,7 @@ app.include_router(lp_analysis.router, prefix=API_PREFIX)
 app.include_router(rankings.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(competitive_intel.router, prefix=API_PREFIX)
+app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 
 
 @app.get("/")
@@ -137,5 +153,28 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+def health_check():
+    """Enhanced health check — verifies database connectivity."""
+    result: dict = {"status": "healthy"}
+    try:
+        from app.core.database import SyncSessionLocal
+        session = SyncSessionLocal()
+        try:
+            session.execute(__import__("sqlalchemy").text("SELECT 1"))
+            result["database"] = "ok"
+        finally:
+            session.close()
+    except Exception as e:
+        result["database"] = "error"
+        result["database_error"] = str(e)
+        result["status"] = "degraded"
+
+    try:
+        import redis
+        r = redis.Redis(host="localhost", port=6379, socket_timeout=2)
+        r.ping()
+        result["redis"] = "ok"
+    except Exception:
+        result["redis"] = "unavailable"
+
+    return result

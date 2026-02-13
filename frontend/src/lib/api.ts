@@ -7,22 +7,85 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
+// ─── Native fetch wrapper (more reliable than axios in some environments) ───
+
+class FetchError extends Error {
+  status: number;
+  data: unknown;
+  constructor(status: number, data: unknown) {
+    super(`HTTP ${status}`);
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/**
+ * Native fetch-based API helper. Uses the same transport as the health check,
+ * bypassing any potential XMLHttpRequest issues in cloud/proxy environments.
+ */
+export async function fetchApi<T = unknown>(
+  path: string,
+  options?: { method?: string; body?: unknown; params?: Record<string, string | number | undefined> },
+): Promise<T> {
+  let url = `/api/v1${path}`;
+  if (options?.params) {
+    const qs = Object.entries(options.params)
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join("&");
+    if (qs) url += `?${qs}`;
+  }
+
+  const method = options?.method || "GET";
+  const headers: Record<string, string> = { Accept: "application/json" };
+
+  // Only set Content-Type for requests with a body
+  if (options?.body) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const init: RequestInit = { method, headers };
+  if (options?.body) {
+    init.body = JSON.stringify(options.body);
+  }
+
+  const res = await fetch(url, init);
+
+  // Handle empty responses (204 No Content, etc.)
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = null; }
+  }
+
+  if (!res.ok) {
+    throw new FetchError(res.status, data);
+  }
+  return data as T;
+}
+
+// Request interceptor for auth token (guarded for SSR)
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
-// Response interceptor for error handling
+// Response interceptor for error handling (guarded for SSR)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (typeof window !== "undefined" && error.response?.status === 401) {
       localStorage.removeItem("access_token");
-      // Don't redirect — no login page in current app
       console.warn("401 Unauthorized: auth token missing or expired");
     }
     return Promise.reject(error);
@@ -223,6 +286,18 @@ export const competitiveApi = {
     api.get(`/competitive/fingerprint/lp/${lpId}`),
   getOfferClusters: (params?: { genre?: string; limit?: number }) =>
     api.get("/competitive/fingerprint/clusters", { params }),
+};
+
+// Settings API
+export const settingsApi = {
+  getPlatforms: () => api.get("/settings/api-keys/platforms"),
+  listKeys: () => api.get("/settings/api-keys"),
+  setKey: (data: { platform: string; key_name: string; key_value: string }) =>
+    api.post("/settings/api-keys", data),
+  deleteKey: (data: { platform: string; key_name: string }) =>
+    api.delete("/settings/api-keys", { data }),
+  testKey: (data: { platform: string; key_name: string; key_value: string }) =>
+    api.post("/settings/api-keys/test", data),
 };
 
 export default api;

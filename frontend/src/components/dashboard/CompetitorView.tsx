@@ -26,17 +26,21 @@ export default function CompetitorView() {
   const [competitorName, setCompetitorName] = useState("");
   const [data, setData] = useState<CompetitorData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!competitorName.trim()) return;
 
     setLoading(true);
+    setError("");
     try {
       const response = await analyticsApi.getCompetitor(competitorName);
       setData(response.data);
-    } catch {
+    } catch (err) {
       setData(null);
+      setError("競合分析データの取得に失敗しました");
+      console.error("Failed to fetch competitor data:", err);
     } finally {
       setLoading(false);
     }
@@ -73,6 +77,10 @@ export default function CompetitorView() {
           </button>
         </form>
       </div>
+
+      {error && (
+        <p className="text-xs text-red-500 px-1">{error}</p>
+      )}
 
       {data && (
         <>
@@ -125,7 +133,7 @@ export default function CompetitorView() {
                         <div
                           className="h-2 rounded-full bg-primary-500"
                           style={{
-                            width: `${Math.min((kw.count / data.top_keywords[0].count) * 120, 120)}px`,
+                            width: `${Math.min((kw.count / (data.top_keywords[0]?.count || 1)) * 120, 120)}px`,
                           }}
                         />
                         <span className="text-xs text-gray-500">{kw.count}</span>

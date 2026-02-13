@@ -136,12 +136,17 @@ async def list_notification_configs(current_user: dict = Depends(get_current_use
 
 
 @router.delete("/config/{config_id}")
-async def delete_notification_config(config_id: int):
+async def delete_notification_config(
+    config_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Delete a notification configuration."""
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
         config = session.query(NotificationConfig).filter(
             NotificationConfig.id == config_id,
+            NotificationConfig.user_id == user_id,
         ).first()
         if not config:
             raise HTTPException(status_code=404, detail="通知設定が見つかりません")
@@ -154,12 +159,17 @@ async def delete_notification_config(config_id: int):
 
 
 @router.post("/test")
-async def test_notification(config_id: int):
+async def test_notification(
+    config_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Send a test notification."""
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
         config = session.query(NotificationConfig).filter(
             NotificationConfig.id == config_id,
+            NotificationConfig.user_id == user_id,
         ).first()
         if not config:
             raise HTTPException(status_code=404, detail="通知設定が見つかりません")
@@ -222,7 +232,7 @@ async def save_item(
             label=item.label,
             notes=item.notes,
             folder=item.folder,
-            created_at=item.created_at.isoformat(),
+            created_at=item.created_at.isoformat() if item.created_at else "",
         )
     finally:
         session.close()
@@ -255,7 +265,7 @@ async def list_saved_items(
                     label=i.label,
                     notes=i.notes,
                     folder=i.folder,
-                    created_at=i.created_at.isoformat(),
+                    created_at=i.created_at.isoformat() if i.created_at else "",
                 )
                 for i in items
             ],
@@ -266,11 +276,18 @@ async def list_saved_items(
 
 
 @router.delete("/saved/{item_id}")
-async def remove_saved_item(item_id: int):
+async def remove_saved_item(
+    item_id: int,
+    current_user: dict = Depends(get_current_user_sync),
+):
     """Remove an item from My List."""
+    user_id = current_user["user_id"]
     session = SyncSessionLocal()
     try:
-        item = session.query(SavedItem).filter(SavedItem.id == item_id).first()
+        item = session.query(SavedItem).filter(
+            SavedItem.id == item_id,
+            SavedItem.user_id == user_id,
+        ).first()
         if not item:
             raise HTTPException(status_code=404, detail="保存アイテムが見つかりません")
 

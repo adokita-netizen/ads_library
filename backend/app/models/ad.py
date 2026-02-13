@@ -64,6 +64,8 @@ class Ad(Base):
         Index("idx_ads_advertiser", "advertiser_name"),
         Index("idx_ads_category", "category"),
         Index("idx_ads_status", "status"),
+        Index("idx_ads_view_count", "view_count"),
+        Index("idx_ads_brand", "brand_name"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

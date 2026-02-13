@@ -1,17 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${apiUrl}/api/:path*`,
-      },
-    ];
-  },
-  // Vercel-compatible settings
+  // API proxy is handled by /src/app/api/[...path]/route.ts
+  // No rewrites needed — route handlers are more reliable in dev mode
   typescript: {
-    // Allow build even if there are type errors (demo mode)
     ignoreBuildErrors: true,
   },
   eslint: {

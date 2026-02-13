@@ -20,11 +20,21 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
 
+def _sanitize_csv(value: str | None) -> str:
+    """Sanitize value for CSV to prevent formula injection."""
+    if not value:
+        return ""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 # ==================== Rankings ====================
 
 
 @router.get("/products")
-async def get_product_rankings(
+def get_product_rankings(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
     genre: Optional[str] = None,
     platform: Optional[str] = None,
@@ -110,7 +120,7 @@ async def get_product_rankings(
 
 
 def _fallback_ad_list(session, genre, platform, page, page_size, period):
-    """When no pre-computed rankings exist, list ads directly from the Ad table."""
+    """When no pre-computed rankings exist, rank ads by view_count from the Ad table."""
     query = session.query(Ad)
 
     if platform:
@@ -120,7 +130,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
 
     total = query.count()
     ads = (
-        query.order_by(desc(Ad.created_at))
+        query.order_by(desc(Ad.view_count).nullslast(), desc(Ad.created_at))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -168,7 +178,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
 
 
 @router.get("/hit-ads")
-async def get_hit_ads(
+def get_hit_ads(
     genre: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -202,7 +212,7 @@ async def get_hit_ads(
 
 
 @router.get("/advertiser/{advertiser_name}")
-async def get_advertiser_analytics(
+def get_advertiser_analytics(
     advertiser_name: str,
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
@@ -216,7 +226,7 @@ async def get_advertiser_analytics(
 
 
 @router.get("/genre-summary")
-async def get_genre_summary(
+def get_genre_summary(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
     """Get summary statistics per genre (market overview)."""
@@ -264,7 +274,7 @@ async def get_genre_summary(
 
 
 @router.get("/search")
-async def pro_search(
+def pro_search(
     q: str = Query(..., min_length=1, description="検索キーワード"),
     search_scope: str = Query("all", description="検索範囲: all, ads, lp, transcript, text"),
     genre: Optional[str] = None,
@@ -278,6 +288,7 @@ async def pro_search(
     session = SyncSessionLocal()
     try:
         results = []
+        total_count = 0
         offset = (page - 1) * page_size
 
         # Search in ads (title, description, advertiser, brand)
@@ -297,6 +308,7 @@ async def pro_search(
             if advertiser:
                 ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
 
+            total_count += ad_query.count()
             ads = ad_query.order_by(Ad.created_at.desc()).offset(offset).limit(page_size).all()
             for ad in ads:
                 results.append({
@@ -304,10 +316,10 @@ async def pro_search(
                     "id": ad.id,
                     "title": ad.title,
                     "description": ad.description,
-                    "platform": str(ad.platform),
+                    "platform": str(ad.platform.value) if hasattr(ad.platform, 'value') else str(ad.platform),
                     "advertiser_name": ad.advertiser_name,
                     "brand_name": ad.brand_name,
-                    "category": str(ad.category) if ad.category else None,
+                    "category": str(ad.category.value) if ad.category and hasattr(ad.category, 'value') else str(ad.category) if ad.category else None,
                     "match_field": "title/description",
                     "created_at": ad.created_at.isoformat() if ad.created_at else None,
                 })
@@ -323,7 +335,8 @@ async def pro_search(
             if platform:
                 transcript_query = transcript_query.filter(Ad.platform == platform)
 
-            transcripts = transcript_query.limit(page_size).all()
+            total_count += transcript_query.count()
+            transcripts = transcript_query.offset(offset).limit(page_size).all()
             for t, ad in transcripts:
                 results.append({
                     "type": "transcript",
@@ -331,7 +344,7 @@ async def pro_search(
                     "title": ad.title,
                     "matched_text": t.text,
                     "timestamp_ms": t.start_time_ms,
-                    "platform": str(ad.platform),
+                    "platform": str(ad.platform.value) if hasattr(ad.platform, 'value') else str(ad.platform),
                     "advertiser_name": ad.advertiser_name,
                     "match_field": "transcript",
                     "created_at": ad.created_at.isoformat() if ad.created_at else None,
@@ -348,7 +361,8 @@ async def pro_search(
             if platform:
                 text_query = text_query.filter(Ad.platform == platform)
 
-            texts = text_query.limit(page_size).all()
+            total_count += text_query.count()
+            texts = text_query.offset(offset).limit(page_size).all()
             for td, ad in texts:
                 results.append({
                     "type": "text_detection",
@@ -356,7 +370,7 @@ async def pro_search(
                     "title": ad.title,
                     "matched_text": td.text,
                     "timestamp_seconds": td.timestamp_seconds,
-                    "platform": str(ad.platform),
+                    "platform": str(ad.platform.value) if hasattr(ad.platform, 'value') else str(ad.platform),
                     "advertiser_name": ad.advertiser_name,
                     "match_field": "video_text",
                     "created_at": ad.created_at.isoformat() if ad.created_at else None,
@@ -377,7 +391,8 @@ async def pro_search(
             if genre:
                 lp_query = lp_query.filter(LandingPage.genre == genre)
 
-            lps = lp_query.limit(page_size).all()
+            total_count += lp_query.count()
+            lps = lp_query.offset(offset).limit(page_size).all()
             for lp in lps:
                 results.append({
                     "type": "landing_page",
@@ -395,8 +410,9 @@ async def pro_search(
         return {
             "query": q,
             "search_scope": search_scope,
-            "total_results": len(results),
+            "total_results": total_count,
             "page": page,
+            "page_size": page_size,
             "results": results,
         }
     finally:
@@ -407,7 +423,7 @@ async def pro_search(
 
 
 @router.get("/export/rankings")
-async def export_rankings_csv(
+def export_rankings_csv(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
     genre: Optional[str] = None,
 ):
@@ -415,33 +431,58 @@ async def export_rankings_csv(
     session = SyncSessionLocal()
     try:
         svc = RankingService()
-        rankings, _ = svc.get_rankings(session, period=period, genre=genre, limit=500)
+        rankings, total = svc.get_rankings(session, period=period, genre=genre, limit=500)
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "順位", "前回順位", "変動", "商材名", "広告主", "ジャンル", "媒体",
-            "再生増加数", "予想消化増加額", "累計再生回数", "累計予想消化額",
-            "HIT", "ヒットスコア", "トレンドスコア",
-        ])
 
-        for r in rankings:
+        if total > 0:
             writer.writerow([
-                r.rank_position,
-                r.previous_rank or "-",
-                r.rank_change if r.rank_change is not None else "-",
-                r.product_name or "",
-                r.advertiser_name or "",
-                r.genre or "",
-                r.platform or "",
-                r.total_view_increase,
-                round(r.total_spend_increase),
-                r.cumulative_views,
-                round(r.cumulative_spend),
-                "HIT" if r.is_hit else "",
-                r.hit_score or 0,
-                r.trend_score or 0,
+                "順位", "前回順位", "変動", "商材名", "広告主", "ジャンル", "媒体",
+                "再生増加数", "予想消化増加額", "累計再生回数", "累計予想消化額",
+                "HIT", "ヒットスコア", "トレンドスコア",
             ])
+            for r in rankings:
+                writer.writerow([
+                    r.rank_position,
+                    r.previous_rank or "-",
+                    r.rank_change if r.rank_change is not None else "-",
+                    _sanitize_csv(r.product_name),
+                    _sanitize_csv(r.advertiser_name),
+                    _sanitize_csv(r.genre),
+                    _sanitize_csv(r.platform),
+                    r.total_view_increase,
+                    round(r.total_spend_increase),
+                    r.cumulative_views,
+                    round(r.cumulative_spend),
+                    "HIT" if r.is_hit else "",
+                    r.hit_score or 0,
+                    r.trend_score or 0,
+                ])
+        else:
+            # Fallback: export ads ranked by view_count
+            ad_query = session.query(Ad)
+            if genre:
+                ad_query = ad_query.filter(Ad.category == genre)
+            ads = ad_query.order_by(desc(Ad.view_count).nullslast()).limit(500).all()
+
+            writer.writerow([
+                "順位", "商材名", "広告主", "媒体", "カテゴリ",
+                "再生数", "いいね数", "秒数", "初出日", "動画URL",
+            ])
+            for rank, ad in enumerate(ads, start=1):
+                writer.writerow([
+                    rank,
+                    _sanitize_csv(ad.title),
+                    _sanitize_csv(ad.advertiser_name),
+                    str(ad.platform.value) if ad.platform and hasattr(ad.platform, 'value') else str(ad.platform or ""),
+                    str(ad.category.value) if ad.category and hasattr(ad.category, 'value') else str(ad.category or ""),
+                    ad.view_count or 0,
+                    ad.like_count or 0,
+                    ad.duration_seconds or "",
+                    ad.first_seen_at.isoformat() if ad.first_seen_at else "",
+                    _sanitize_csv(ad.video_url),
+                ])
 
         output.seek(0)
         return StreamingResponse(
@@ -456,7 +497,7 @@ async def export_rankings_csv(
 
 
 @router.get("/export/ads")
-async def export_ads_csv(
+def export_ads_csv(
     genre: Optional[str] = None,
     platform: Optional[str] = None,
     advertiser: Optional[str] = None,
@@ -486,19 +527,19 @@ async def export_ads_csv(
         for ad in ads:
             writer.writerow([
                 ad.id,
-                ad.title or "",
-                str(ad.platform),
-                str(ad.category) if ad.category else "",
-                ad.advertiser_name or "",
-                ad.brand_name or "",
+                _sanitize_csv(ad.title),
+                str(ad.platform.value) if ad.platform and hasattr(ad.platform, 'value') else str(ad.platform or ""),
+                str(ad.category.value) if ad.category and hasattr(ad.category, 'value') else str(ad.category or ""),
+                _sanitize_csv(ad.advertiser_name),
+                _sanitize_csv(ad.brand_name),
                 ad.view_count or 0,
                 ad.like_count or 0,
                 ad.estimated_ctr or "",
                 ad.duration_seconds or "",
-                str(ad.status),
+                str(ad.status.value) if ad.status and hasattr(ad.status, 'value') else str(ad.status or ""),
                 ad.first_seen_at.isoformat() if ad.first_seen_at else "",
                 ad.last_seen_at.isoformat() if ad.last_seen_at else "",
-                ad.video_url or "",
+                _sanitize_csv(ad.video_url),
             ])
 
         output.seek(0)

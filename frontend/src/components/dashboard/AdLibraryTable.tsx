@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { rankingsApi, lpAnalysisApi, adsApi } from "@/lib/api";
+import { fetchApi } from "@/lib/api";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -159,62 +159,68 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [showCrawlModal, setShowCrawlModal] = useState(false);
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
+  const [fetchError, setFetchError] = useState("");
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setFetchError("");
       try {
         const params: Record<string, string | number | undefined> = {};
         if (filters.media !== "all") params.platform = filters.media;
         if (filters.genre !== "all") params.genre = filters.genre;
-        // Backend accepts: daily, weekly, monthly only
         if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
         else if (filters.interval === "30days") params.period = "monthly";
         else params.period = "daily";
 
-        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.rankings || response.data?.results;
+        // Use native fetch (same transport as health check) instead of axios
+        const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number }>("/rankings/products", { params });
+        const items = data?.items || data?.rankings || data?.results;
         if (Array.isArray(items) && items.length > 0) {
-          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => ({
-            id: (item.ad_id as number) || idx + 1,
-            rank: (item.rank as number) || idx + 1,
-            thumbnail: (item.thumbnail as string) || "",
-            duration: (item.duration_seconds as number) || 0,
-            platform: (item.platform as string) || "youtube",
-            managementId: (item.management_id as string) || `AD-${item.ad_id || idx + 1}`,
-            productName: (item.product_name as string) || "不明",
-            genre: (item.genre as string) || "",
-            destinationType: (item.destination_type as string) || "",
-            playIncrease: (item.view_increase as number) || 0,
-            spendIncrease: (item.spend_increase as number) || 0,
-            spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
-            isHit: (item.is_hit as boolean) || false,
-            totalPlays: (item.cumulative_views as number) || 0,
-            totalSpend: (item.cumulative_spend as number) || 0,
-            publishedDate: (item.published_date as string) || (item.created_at as string) || "",
-            adUrl: (item.ad_url as string) || "",
-            destination: (item.destination_url as string) || "",
-          }));
+          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => {
+            const adId = (item.ad_id as number) || (item.id as number) || idx + 1;
+            const platformRaw = ((item.platform as string) || "").toLowerCase();
+            return {
+              id: adId,
+              rank: (item.rank as number) || idx + 1,
+              thumbnail: (item.thumbnail as string) || "",
+              duration: (item.duration_seconds as number) || 0,
+              platform: platformRaw || "youtube",
+              managementId: (item.management_id as string) || `AD-${adId}`,
+              productName: (item.product_name as string) || "不明",
+              genre: (item.genre as string) || "",
+              destinationType: (item.destination_type as string) || "",
+              playIncrease: (item.view_increase as number) || 0,
+              spendIncrease: (item.spend_increase as number) || 0,
+              spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
+              isHit: (item.is_hit as boolean) || false,
+              totalPlays: (item.cumulative_views as number) || 0,
+              totalSpend: (item.cumulative_spend as number) || 0,
+              publishedDate: (item.published_date as string) || (item.created_at as string) || "",
+              adUrl: (item.ad_url as string) || "",
+              destination: (item.destination_url as string) || "",
+            };
+          });
           setAds(mapped);
         } else {
           setAds([]);
         }
-      } catch (error) {
-        console.error("Failed to fetch ad data:", error);
+      } catch (error: unknown) {
+        const err = error as { status?: number; message?: string; data?: unknown };
+        const msg = `データ取得エラー: ${err?.message || "不明"}`;
+        console.error("Failed to fetch ad data:", err);
+        setFetchError(msg);
         setAds([]);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
+    setCurrentPage(1);
   }, [filters.media, filters.genre, filters.interval, fetchTrigger]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
-
-    // Apply media filter (client-side for additional filtering beyond API)
-    if (filters.media !== "all") {
-      result = result.filter((a) => a.platform === filters.media);
-    }
 
     // Apply search filter
     if (filters.search) {
@@ -376,14 +382,28 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
             <svg className="w-10 h-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
             </svg>
-            <p className="text-xs">データがありません</p>
-            <p className="text-[10px] mt-1 mb-3">広告をクロールするか、フィルター条件を変更してください</p>
-            <button
-              className="px-4 py-2 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors"
-              onClick={() => setShowCrawlModal(true)}
-            >
-              広告クロールを開始
-            </button>
+            {fetchError ? (
+              <>
+                <p className="text-xs text-red-500">{fetchError}</p>
+                <button
+                  className="mt-3 px-4 py-2 rounded-md text-xs font-medium text-white bg-red-500 hover:bg-red-600 transition-colors"
+                  onClick={() => setFetchTrigger((n) => n + 1)}
+                >
+                  再試行
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs">データがありません</p>
+                <p className="text-[10px] mt-1 mb-3">広告をクロールするか、フィルター条件を変更してください</p>
+                <button
+                  className="px-4 py-2 rounded-md text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] transition-colors"
+                  onClick={() => setShowCrawlModal(true)}
+                >
+                  広告クロールを開始
+                </button>
+              </>
+            )}
           </div>
         )}
         <table className="data-table">
@@ -548,7 +568,10 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                         className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
-                          lpAnalysisApi.crawl({ url: ad.destination, ad_id: ad.id, auto_analyze: true })
+                          fetchApi("/lp-analysis/crawl", {
+                            method: "POST",
+                            body: { url: ad.destination, ad_id: ad.id, auto_analyze: true },
+                          })
                             .then(() => { alert("LP分析を開始しました"); })
                             .catch(() => { alert("LP分析の開始に失敗しました"); });
                         }}
@@ -568,40 +591,45 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white text-xs text-gray-500">
-        <span>
-          {filteredAds.length}件中 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredAds.length)}件を表示
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            className="btn-ghost text-[11px] disabled:opacity-30"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(currentPage - 1)}
-          >
-            ← 前へ
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+      {filteredAds.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white text-xs text-gray-500">
+          <span>
+            {filteredAds.length}件中 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredAds.length)}件を表示
+          </span>
+          <div className="flex items-center gap-1">
             <button
-              key={page}
-              className={`w-7 h-7 rounded text-[11px] font-medium ${
-                page === currentPage
-                  ? "bg-[#4A7DFF] text-white"
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
-              onClick={() => setCurrentPage(page)}
+              className="btn-ghost text-[11px] disabled:opacity-30"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
             >
-              {page}
+              ← 前へ
             </button>
-          ))}
-          <button
-            className="btn-ghost text-[11px] disabled:opacity-30"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(currentPage + 1)}
-          >
-            次へ →
-          </button>
+            {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`w-7 h-7 rounded text-[11px] font-medium ${
+                  page === currentPage
+                    ? "bg-[#4A7DFF] text-white"
+                    : "hover:bg-gray-100 text-gray-600"
+                }`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            {totalPages > 10 && (
+              <span className="text-gray-400 px-1">...</span>
+            )}
+            <button
+              className="btn-ghost text-[11px] disabled:opacity-30"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+            >
+              次へ →
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       {/* Crawl Modal */}
       {showCrawlModal && (
         <CrawlModal
@@ -663,24 +691,31 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
     setCrawling(true);
     setMessage("");
     try {
-      const res = await adsApi.crawl({
-        query: query.trim(),
-        platforms: selectedPlatforms,
-        category: category || undefined,
-        limit_per_platform: limit,
-        auto_analyze: true,
+      // Use native fetch (same transport as health check)
+      const data = await fetchApi<{ task_id: string; status: string; message: string }>("/ads/crawl", {
+        method: "POST",
+        body: {
+          query: query.trim(),
+          platforms: selectedPlatforms,
+          category: category || undefined,
+          limit_per_platform: limit,
+          auto_analyze: true,
+        },
       });
-      const data = res.data;
       if (data?.status === "error") {
         setMessage(data.message || "クロール中にエラーが発生しました");
         setCrawling(false);
       } else {
         setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
-        setTimeout(() => onSuccess(), 2000);
+        setTimeout(() => onSuccess(), 3000);
       }
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMessage(detail || "クロールの開始に失敗しました。バックエンドの接続を確認してください。");
+      const fetchErr = err as { status?: number; data?: { detail?: string; error?: { message?: string } }; message?: string };
+      const detail = (fetchErr?.data as Record<string, unknown>)?.detail as string
+        || (fetchErr?.data as { error?: { message?: string } })?.error?.message
+        || fetchErr?.message
+        || "クロールの開始に失敗しました。";
+      setMessage(detail);
       setCrawling(false);
     }
   };
@@ -764,7 +799,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 
         {/* Message */}
         {message && (
-          <p className={`mt-3 text-xs ${message.includes("失敗") ? "text-red-500" : "text-green-600"}`}>
+          <p className={`mt-3 text-xs ${message.includes("失敗") || message.includes("エラー") || message.includes("HTTP") ? "text-red-500" : message.includes("保留") ? "text-amber-600" : "text-green-600"}`}>
             {message}
           </p>
         )}

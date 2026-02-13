@@ -108,25 +108,37 @@ async def _crawl_platforms(
     category: str | None,
     limit_per_platform: int,
 ) -> dict:
-    """Run async crawling with all platform tokens from config."""
+    """Run async crawling with API keys from DB (fallback to env vars)."""
     from app.core.config import get_settings
     settings = get_settings()
 
+    # Load UI-configured keys from DB, fall back to env vars
+    db_keys: dict[str, dict[str, str]] = {}
+    try:
+        from app.api.endpoints.settings import load_api_keys_from_db
+        db_keys = load_api_keys_from_db()
+    except Exception:
+        pass  # DB not available — use env vars only
+
+    def _get(platform: str, key_name: str, env_fallback: str | None) -> str | None:
+        """Get key from DB first, then from env."""
+        return (db_keys.get(platform, {}).get(key_name) or env_fallback) or None
+
     manager = CrawlerManager.create_default(
-        meta_token=settings.meta_access_token,
-        tiktok_token=settings.tiktok_access_token,
-        youtube_api_key=settings.youtube_api_key,
-        x_twitter_bearer=settings.x_twitter_bearer_token,
-        line_token=settings.line_api_access_token,
-        yahoo_api_key=settings.yahoo_ads_api_key,
-        yahoo_api_secret=settings.yahoo_ads_api_secret,
-        pinterest_token=settings.pinterest_access_token,
-        smartnews_api_key=settings.smartnews_ads_api_key,
-        google_ads_developer_token=settings.google_ads_developer_token,
-        google_ads_client_id=settings.google_ads_client_id,
-        google_ads_client_secret=settings.google_ads_client_secret,
-        google_ads_refresh_token=settings.google_ads_refresh_token,
-        gunosy_api_key=settings.gunosy_ads_api_key,
+        meta_token=_get("meta", "access_token", settings.meta_access_token),
+        tiktok_token=_get("tiktok", "access_token", settings.tiktok_access_token),
+        youtube_api_key=_get("youtube", "api_key", settings.youtube_api_key),
+        x_twitter_bearer=_get("x_twitter", "bearer_token", settings.x_twitter_bearer_token),
+        line_token=_get("line", "access_token", settings.line_api_access_token),
+        yahoo_api_key=_get("yahoo", "api_key", settings.yahoo_ads_api_key),
+        yahoo_api_secret=_get("yahoo", "api_secret", settings.yahoo_ads_api_secret),
+        pinterest_token=_get("pinterest", "access_token", settings.pinterest_access_token),
+        smartnews_api_key=_get("smartnews", "api_key", settings.smartnews_ads_api_key),
+        google_ads_developer_token=_get("google_ads", "developer_token", settings.google_ads_developer_token),
+        google_ads_client_id=_get("google_ads", "client_id", settings.google_ads_client_id),
+        google_ads_client_secret=_get("google_ads", "client_secret", settings.google_ads_client_secret),
+        google_ads_refresh_token=_get("google_ads", "refresh_token", settings.google_ads_refresh_token),
+        gunosy_api_key=_get("gunosy", "api_key", settings.gunosy_ads_api_key),
     )
     try:
         results = await manager.search_all_platforms(

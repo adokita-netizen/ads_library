@@ -13,6 +13,7 @@ export default function AnalysisView({ adId }: AnalysisViewProps) {
   const [analysis, setAnalysis] = useState<AdAnalysis | null>(null);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function AnalysisView({ adId }: AnalysisViewProps) {
 
   const loadData = async (id: number) => {
     setLoading(true);
+    setError("");
     try {
       const [adRes, analysisRes] = await Promise.all([
         adsApi.get(id),
@@ -28,8 +30,9 @@ export default function AnalysisView({ adId }: AnalysisViewProps) {
       ]);
       setAd(adRes.data);
       if (analysisRes) setAnalysis(analysisRes.data);
-    } catch {
-      // Handle error
+    } catch (err) {
+      console.error("Failed to load ad data:", err);
+      setError("広告データの取得に失敗しました");
     } finally {
       setLoading(false);
     }
@@ -40,8 +43,8 @@ export default function AnalysisView({ adId }: AnalysisViewProps) {
     try {
       const res = await predictionsApi.predict({ ad_id: adId });
       setPrediction(res.data);
-    } catch {
-      // Handle error
+    } catch (err) {
+      console.error("Failed to load prediction:", err);
     }
   };
 
@@ -57,6 +60,15 @@ export default function AnalysisView({ adId }: AnalysisViewProps) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-2">
+        <p className="text-sm text-red-500">{error}</p>
+        <button className="text-xs text-blue-500 hover:underline" onClick={() => adId && loadData(adId)}>再試行</button>
       </div>
     );
   }

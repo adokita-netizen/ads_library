@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { rankingsApi } from "@/lib/api";
+import { fetchApi } from "@/lib/api";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
 type TrendCategory = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
@@ -92,17 +92,17 @@ export default function TrendView() {
         if (period) params.period = period;
         if (category !== "all") params.genre = category;
 
-        const response = await rankingsApi.getProducts(params as Parameters<typeof rankingsApi.getProducts>[0]);
-        const items = response.data?.items || response.data?.rankings || response.data?.results;
+        const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params });
+        const items = data?.items || data?.rankings || data?.results;
         if (Array.isArray(items) && items.length > 0) {
           const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
             rank: (item.rank as number) || idx + 1,
             productName: (item.product_name as string) || "不明",
-            platform: (item.platform as string) || "youtube",
+            platform: ((item.platform as string) || "").toLowerCase() || "youtube",
             genre: (item.genre as string) || "",
-            change: (item.rank_change as number) || (item.change as number) || 0,
-            spendEstimate: (item.spend_estimate as number) || (item.spend_increase as number) || 0,
-            playCount: (item.play_count as number) || (item.view_increase as number) || 0,
+            change: (item.rank_change as number) || 0,
+            spendEstimate: (item.spend_increase as number) || 0,
+            playCount: (item.view_increase as number) || 0,
             trendScore: (item.trend_score as number) || 0,
           }));
           setTrends(mapped);
