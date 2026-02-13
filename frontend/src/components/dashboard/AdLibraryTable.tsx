@@ -9,7 +9,7 @@ interface AdLibraryTableProps {
 
 // Filter bar types
 type AdType = "all" | "video" | "banner" | "carousel" | "search";
-type MediaType = "all" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x_twitter" | "pinterest" | "smartnews" | "google_ads" | "gunosy";
+type MediaType = "all" | "meta" | "youtube" | "shorts" | "facebook" | "instagram" | "tiktok" | "line" | "yahoo" | "x_twitter" | "pinterest" | "smartnews" | "google_ads" | "gunosy";
 type GenreType = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
 type FormatType = "all" | "video" | "banner" | "carousel";
 type VersionType = "latest" | "all_versions";
@@ -52,6 +52,7 @@ const platformLabels: Record<string, string> = {
   youtube: "YT",
   shorts: "S",
   tiktok: "TT",
+  meta: "Meta",
   facebook: "FB",
   instagram: "IG",
   line: "L",
@@ -68,6 +69,7 @@ const platformColors: Record<string, string> = {
   youtube: "platform-youtube",
   shorts: "bg-red-400",
   tiktok: "platform-tiktok",
+  meta: "platform-meta",
   facebook: "platform-facebook",
   instagram: "platform-instagram",
   line: "platform-line",
@@ -82,6 +84,7 @@ const platformColors: Record<string, string> = {
 
 const mediaFilterOptions: { value: MediaType; label: string }[] = [
   { value: "all", label: "全媒体" },
+  { value: "meta", label: "Meta (FB/IG)" },
   { value: "youtube", label: "YouTube" },
   { value: "shorts", label: "YouTube Shorts" },
   { value: "facebook", label: "Facebook" },

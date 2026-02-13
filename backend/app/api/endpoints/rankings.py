@@ -19,6 +19,18 @@ from app.services.ranking.ranking_service import RankingService
 logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
+# Meta platform groups "facebook" and "instagram" under a single umbrella.
+META_PLATFORMS = ["facebook", "instagram"]
+
+
+def _resolve_platform_filter(query, column, platform: str | None):
+    """Apply platform filter, resolving 'meta' to both Facebook and Instagram."""
+    if not platform:
+        return query
+    if platform.lower() == "meta":
+        return query.filter(column.in_(META_PLATFORMS))
+    return query.filter(column == platform)
+
 
 def _sanitize_csv(value: str | None) -> str:
     """Sanitize value for CSV to prevent formula injection."""
@@ -127,8 +139,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
     """
     query = session.query(Ad)
 
-    if platform:
-        query = query.filter(Ad.platform == platform)
+    query = _resolve_platform_filter(query, Ad.platform, platform)
     if genre:
         query = query.filter(Ad.category == genre)
 
@@ -322,8 +333,7 @@ def pro_search(
             )
             if genre:
                 ad_query = ad_query.filter(Ad.category == genre)
-            if platform:
-                ad_query = ad_query.filter(Ad.platform == platform)
+            ad_query = _resolve_platform_filter(ad_query, Ad.platform, platform)
             if advertiser:
                 ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
 
@@ -351,8 +361,7 @@ def pro_search(
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
                 .filter(Transcription.text.ilike(f"%{q}%"))
             )
-            if platform:
-                transcript_query = transcript_query.filter(Ad.platform == platform)
+            transcript_query = _resolve_platform_filter(transcript_query, Ad.platform, platform)
 
             total_count += transcript_query.count()
             transcripts = transcript_query.offset(offset).limit(page_size).all()
@@ -377,8 +386,7 @@ def pro_search(
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
                 .filter(TextDetection.text.ilike(f"%{q}%"))
             )
-            if platform:
-                text_query = text_query.filter(Ad.platform == platform)
+            text_query = _resolve_platform_filter(text_query, Ad.platform, platform)
 
             total_count += text_query.count()
             texts = text_query.offset(offset).limit(page_size).all()
@@ -528,8 +536,7 @@ def export_ads_csv(
         query = session.query(Ad)
         if genre:
             query = query.filter(Ad.category == genre)
-        if platform:
-            query = query.filter(Ad.platform == platform)
+        query = _resolve_platform_filter(query, Ad.platform, platform)
         if advertiser:
             query = query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
 

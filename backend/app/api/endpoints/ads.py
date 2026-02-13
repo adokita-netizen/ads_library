@@ -44,7 +44,10 @@ async def list_ads(
     query = select(Ad)
 
     if platform:
-        query = query.where(Ad.platform == platform)
+        if platform.lower() == "meta":
+            query = query.where(Ad.platform.in_(["facebook", "instagram"]))
+        else:
+            query = query.where(Ad.platform == platform)
     if category:
         query = query.where(Ad.category == category)
     if status:

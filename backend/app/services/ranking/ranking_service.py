@@ -140,7 +140,10 @@ class RankingService:
         if genre:
             query = query.filter(ProductRanking.genre == genre)
         if platform:
-            query = query.filter(ProductRanking.platform == platform)
+            if platform.lower() == "meta":
+                query = query.filter(ProductRanking.platform.in_(["facebook", "instagram"]))
+            else:
+                query = query.filter(ProductRanking.platform == platform)
 
         total = query.count()
         rankings = (

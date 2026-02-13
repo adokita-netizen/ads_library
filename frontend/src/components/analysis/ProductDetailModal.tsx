@@ -55,14 +55,16 @@ interface LPAnalysisData {
 }
 
 const platformLabels: Record<string, string> = {
-  youtube: "YT", shorts: "S", tiktok: "TT", facebook: "FB",
-  instagram: "IG", line: "L", yahoo: "Y!", x: "X",
+  youtube: "YT", shorts: "S", tiktok: "TT", meta: "Meta", facebook: "FB",
+  instagram: "IG", line: "L", yahoo: "Y!", x: "X", x_twitter: "X",
+  pinterest: "Pin", smartnews: "SN", google_ads: "G", gunosy: "Gn",
 };
 
 const platformColors: Record<string, string> = {
   youtube: "platform-youtube", tiktok: "platform-tiktok",
-  facebook: "platform-facebook", instagram: "platform-instagram",
-  line: "platform-line", yahoo: "platform-yahoo", x: "platform-x",
+  meta: "platform-meta", facebook: "platform-facebook", instagram: "platform-instagram",
+  line: "platform-line", yahoo: "platform-yahoo", x: "platform-x", x_twitter: "platform-x",
+  pinterest: "bg-red-600", smartnews: "bg-sky-600", google_ads: "bg-blue-500", gunosy: "bg-orange-500",
 };
 
 function formatYen(n: number): string {

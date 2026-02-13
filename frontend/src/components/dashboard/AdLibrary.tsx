@@ -11,6 +11,7 @@ interface AdLibraryProps {
 const platformColors: Record<string, string> = {
   youtube: "bg-red-100 text-red-800",
   tiktok: "bg-gray-900 text-white",
+  meta: "bg-blue-100 text-blue-800",
   instagram: "bg-purple-100 text-purple-800",
   facebook: "bg-blue-100 text-blue-800",
   x_twitter: "bg-gray-100 text-gray-800",
@@ -120,10 +121,18 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
             className="input w-48"
           >
             <option value="">All Platforms</option>
+            <option value="meta">Meta (FB/IG)</option>
             <option value="youtube">YouTube</option>
             <option value="tiktok">TikTok</option>
             <option value="instagram">Instagram</option>
             <option value="facebook">Facebook</option>
+            <option value="x_twitter">X (Twitter)</option>
+            <option value="line">LINE</option>
+            <option value="yahoo">Yahoo!</option>
+            <option value="pinterest">Pinterest</option>
+            <option value="smartnews">SmartNews</option>
+            <option value="google_ads">Google Ads</option>
+            <option value="gunosy">Gunosy</option>
           </select>
           <button type="submit" className="btn-primary">
             Search
@@ -240,7 +249,7 @@ function CrawlModal({
   onSuccess: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [platforms, setPlatforms] = useState(["facebook", "youtube", "tiktok"]);
+  const [platforms, setPlatforms] = useState(["facebook", "instagram", "youtube", "tiktok", "x_twitter", "line", "yahoo", "pinterest", "smartnews", "google_ads", "gunosy"]);
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(false);
 
@@ -286,7 +295,7 @@ function CrawlModal({
               Platforms
             </label>
             <div className="mt-2 flex gap-3">
-              {["facebook", "youtube", "tiktok", "instagram"].map((p) => (
+              {["facebook", "instagram", "youtube", "tiktok", "x_twitter", "line", "yahoo", "pinterest", "smartnews", "google_ads", "gunosy"].map((p) => (
                 <label key={p} className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
