@@ -4,7 +4,7 @@
  * This is the primary API proxy — more reliable than next.config.js rewrites.
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production" ? "https://ads-library.onrender.com" : "http://localhost:8000");
 const PROXY_TIMEOUT_MS = 30_000; // 30 second timeout
 
 async function proxyRequest(request: Request): Promise<Response> {
@@ -113,3 +113,4 @@ export async function OPTIONS() {
     },
   });
 }
+
