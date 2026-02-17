@@ -8,12 +8,12 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# Async engine for FastAPI
+# Async engine for FastAPI (pool sizes from config — smaller for free-tier)
 async_engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    pool_size=20,
-    max_overflow=10,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
 )
 
@@ -21,8 +21,8 @@ async_engine = create_async_engine(
 sync_engine = create_engine(
     settings.database_url_sync,
     echo=settings.debug,
-    pool_size=10,
-    max_overflow=5,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
 )
 

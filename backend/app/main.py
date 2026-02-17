@@ -171,7 +171,7 @@ def health_check():
 
     try:
         import redis
-        r = redis.Redis(host="localhost", port=6379, socket_timeout=2)
+        r = redis.from_url(settings.redis_url, socket_timeout=2)
         r.ping()
         result["redis"] = "ok"
     except Exception:
