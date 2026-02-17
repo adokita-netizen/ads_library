@@ -13,6 +13,7 @@ import MyListView from "@/components/workspace/MyListView";
 import StoreView from "@/components/workspace/StoreView";
 import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
 import APIKeysSettings from "@/components/settings/APIKeysSettings";
+import DatabaseSettings from "@/components/settings/DatabaseSettings";
 
 type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store" | "settings";
 
@@ -30,11 +31,16 @@ function ConnectivityBanner() {
       try {
         const res = await fetch("/api/health");
         const data = await res.json();
-        if (data.backend === "ok") {
+        if (data.status === "healthy" || data.database === "ok") {
+          setStatus("ok");
+        } else if (data.in_memory_mode) {
+          // Backend is running but in memory mode — still usable
+          setStatus("ok");
+        } else if (data.backend === "ok") {
           setStatus("ok");
         } else {
           setStatus("error");
-          setDetail(`Backend: ${data.backend_error || "unreachable"}`);
+          setDetail(`Backend: ${data.backend_error || data.database_error || "unreachable"}`);
           return;
         }
       } catch (err) {
@@ -156,7 +162,18 @@ export default function Home() {
       case "store":
         return <StoreView />;
       case "settings":
-        return <APIKeysSettings />;
+        return (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center px-5 py-3 border-b border-gray-200 bg-white">
+              <h2 className="text-[15px] font-bold text-gray-900">システム設定</h2>
+              <p className="text-[11px] text-gray-400 ml-3">データベース接続とシステム全体の設定を管理します</p>
+            </div>
+            <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4 space-y-6">
+              <DatabaseSettings />
+              <APIKeysSettings />
+            </div>
+          </div>
+        );
       default:
         return <AdLibraryTable onAdSelect={handleAdSelect} />;
     }

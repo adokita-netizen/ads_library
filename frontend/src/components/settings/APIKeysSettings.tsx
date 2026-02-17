@@ -355,11 +355,11 @@ export default function APIKeysSettings() {
   const aiPlatforms = platforms.filter((p) => ["openai", "anthropic"].includes(p.platform));
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="bg-white border border-gray-200 rounded-lg">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-white">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
         <div>
-          <h2 className="text-[15px] font-bold text-gray-900">API キー設定</h2>
+          <h3 className="text-[14px] font-bold text-gray-900">API キー設定</h3>
           <p className="text-[11px] text-gray-400 mt-0.5">
             各広告媒体のAPIキーを設定すると、リアルデータの取得が可能になります
           </p>
@@ -414,7 +414,7 @@ export default function APIKeysSettings() {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4">
+      <div className="px-5 py-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
