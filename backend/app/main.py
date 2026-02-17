@@ -155,19 +155,28 @@ async def root():
 @app.get("/health")
 def health_check():
     """Enhanced health check — verifies database connectivity."""
-    result: dict = {"status": "healthy"}
-    try:
-        from app.core.database import SyncSessionLocal
-        session = SyncSessionLocal()
-        try:
-            session.execute(__import__("sqlalchemy").text("SELECT 1"))
-            result["database"] = "ok"
-        finally:
-            session.close()
-    except Exception as e:
-        result["database"] = "error"
-        result["database_error"] = str(e)
+    from app.core.database import SyncSessionLocal, is_in_memory_mode, get_connection_error
+
+    result: dict = {"status": "healthy", "in_memory_mode": is_in_memory_mode()}
+
+    if is_in_memory_mode():
+        result["database"] = "in_memory"
+        conn_err = get_connection_error()
+        if conn_err:
+            result["database_error"] = conn_err
         result["status"] = "degraded"
+    else:
+        try:
+            session = SyncSessionLocal()
+            try:
+                session.execute(__import__("sqlalchemy").text("SELECT 1"))
+                result["database"] = "ok"
+            finally:
+                session.close()
+        except Exception as e:
+            result["database"] = "error"
+            result["database_error"] = str(e)
+            result["status"] = "degraded"
 
     try:
         import redis

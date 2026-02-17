@@ -12,7 +12,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON as JSONB  # Use generic JSON (renders as JSONB on PG, JSON on SQLite)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base

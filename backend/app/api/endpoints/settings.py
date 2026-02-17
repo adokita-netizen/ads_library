@@ -1,4 +1,4 @@
-"""Settings API endpoints — API key management."""
+"""Settings API endpoints — API key management & database connection."""
 
 from typing import Optional
 
@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.database import get_async_session
+from app.core.database import get_async_session, is_in_memory_mode, get_connection_error, reconnect
 from app.models.api_key import PlatformAPIKey
 from app.models.user import User
 
@@ -309,3 +309,33 @@ def load_api_keys_from_db() -> dict[str, dict[str, str]]:
         return result
     finally:
         session.close()
+
+
+# ── Database connection management ───────────────────────────────
+
+class DatabaseConnectRequest(BaseModel):
+    database_url: str
+
+
+@router.get("/database/status")
+async def get_database_status():
+    """Get current database connection status."""
+    return {
+        "in_memory_mode": is_in_memory_mode(),
+        "connection_error": get_connection_error(),
+    }
+
+
+@router.post("/database/connect")
+async def connect_database(request: DatabaseConnectRequest):
+    """Test and connect to a new DATABASE_URL at runtime."""
+    url = request.database_url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="DATABASE_URL must not be empty")
+
+    result = reconnect(url)
+    if result["ok"]:
+        logger.info("database_reconnected_via_api")
+        return {"status": "ok", "message": "データベースに接続しました。テーブルを作成しました。"}
+    else:
+        return {"status": "error", "message": result["error"]}
