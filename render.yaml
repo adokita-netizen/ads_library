@@ -27,8 +27,8 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       - key: DB_POOL_SIZE
-        value: "3"
+        value: "5"
       - key: DB_MAX_OVERFLOW
-        value: "2"
+        value: "3"
       - key: PYTHON_VERSION
         value: "3.11.7"
