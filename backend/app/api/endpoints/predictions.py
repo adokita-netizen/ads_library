@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, get_current_user_sync
 from app.core.database import get_async_session
 from app.models.ad import Ad
 from app.models.analysis import AdAnalysis
+from app.models.user import User
 from app.schemas.prediction import (
     FatigueRequest,
     FatigueResponse,
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/predictions", tags=["predictions"])
 @router.post("/performance", response_model=PredictionResponse)
 async def predict_performance(
     request: PredictionRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Predict CTR, CVR, and winning probability for an ad."""
@@ -54,7 +57,10 @@ async def predict_performance(
 
 
 @router.post("/fatigue", response_model=FatigueResponse)
-async def assess_fatigue(request: FatigueRequest):
+async def assess_fatigue(
+    request: FatigueRequest,
+    _user: dict = Depends(get_current_user_sync),
+):
     """Assess ad fatigue based on daily metrics."""
     detector = FatigueDetector()
     assessment = detector.assess_fatigue(
@@ -75,7 +81,10 @@ async def assess_fatigue(request: FatigueRequest):
 
 
 @router.post("/fatigue/batch")
-async def batch_assess_fatigue(request: BatchFatigueRequest):
+async def batch_assess_fatigue(
+    request: BatchFatigueRequest,
+    _user: dict = Depends(get_current_user_sync),
+):
     """Assess fatigue for multiple ads."""
     detector = FatigueDetector()
     results = detector.batch_assess(

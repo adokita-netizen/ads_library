@@ -233,7 +233,9 @@ async def rewrite_winning_pattern(
 
 
 @router.get("/structures")
-async def list_script_structures():
+async def list_script_structures(
+    current_user: User = Depends(get_current_user),
+):
     """List available script structures."""
     generator = ScriptGenerator()
     return {"structures": generator.get_available_structures()}
