@@ -67,6 +67,7 @@ class ProductRanking(Base):
     __table_args__ = (
         Index("idx_pr_period_genre_rank", "period", "genre", "rank_position"),
         Index("idx_pr_period_rank", "period", "rank_position"),
+        Index("idx_pr_period_start", "period", "period_start"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

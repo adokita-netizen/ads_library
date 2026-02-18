@@ -54,6 +54,8 @@ def get_product_rankings(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """Get product rankings by spend/views for a period."""
+    from fastapi.responses import JSONResponse
+
     session = SyncSessionLocal()
     try:
         svc = RankingService()
@@ -70,7 +72,7 @@ def get_product_rankings(
         if total == 0:
             return _fallback_ad_list(session, genre, platform, page, page_size, period)
 
-        # Join with Ad table to get ad-level details
+        # Single batch query for Ad details (avoid N+1)
         ad_ids = [r.ad_id for r in rankings]
         ads_map = {}
         if ad_ids:
@@ -119,7 +121,7 @@ def get_product_rankings(
                 "published_date": ad_info.get("published_date", ""),
             })
 
-        return {
+        data = {
             "period": period,
             "genre": genre,
             "total": total,
@@ -127,6 +129,12 @@ def get_product_rankings(
             "page_size": page_size,
             "items": items,
         }
+
+        # Cache rankings for 5 minutes (pre-computed data, updates infrequently)
+        return JSONResponse(
+            content=data,
+            headers={"Cache-Control": "public, max-age=300, s-maxage=300"},
+        )
     finally:
         session.close()
 
