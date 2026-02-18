@@ -1,6 +1,9 @@
 """Authentication API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import time
+from collections import defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +14,7 @@ from app.core.security import (
     get_password_hash,
     verify_password,
     verify_token,
+    add_to_blacklist,
 )
 from app.models.user import User
 from app.schemas.auth import TokenResponse, UserCreate, UserLogin, UserResponse
@@ -18,12 +22,35 @@ from app.schemas.auth import TokenResponse, UserCreate, UserLogin, UserResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+# ==================== In-memory Rate Limiter ====================
+
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(key: str, max_requests: int, window_seconds: int = 60):
+    """Simple in-memory rate limiter. Raises 429 if limit exceeded."""
+    now = time.monotonic()
+    timestamps = _rate_limit_store[key]
+    # Remove expired entries
+    _rate_limit_store[key] = [t for t in timestamps if now - t < window_seconds]
+    if len(_rate_limit_store[key]) >= max_requests:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="リクエストが多すぎます。しばらくしてから再試行してください。",
+        )
+    _rate_limit_store[key].append(now)
+
+
 @router.post("/register", response_model=UserResponse)
 async def register(
+    request: Request,
     user_data: UserCreate,
     db: AsyncSession = Depends(get_async_session),
 ):
     """Register a new user."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"register:{client_ip}", max_requests=3, window_seconds=60)
+
     # Check if user exists
     result = await db.execute(select(User).where(User.email == user_data.email))
     existing = result.scalar_one_or_none()
@@ -48,10 +75,14 @@ async def register(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: AsyncSession = Depends(get_async_session),
 ):
     """Login and get access token."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"login:{client_ip}", max_requests=5, window_seconds=60)
+
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalar_one_or_none()
 
@@ -100,3 +131,17 @@ async def refresh_token(
     new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
     return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+):
+    """Logout and blacklist the current token."""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = verify_token(token, token_type="access")
+        if payload and "exp" in payload:
+            add_to_blacklist(token, payload["exp"])
+    return {"message": "ログアウトしました"}

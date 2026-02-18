@@ -29,6 +29,14 @@ def _normalize_database_url(url: str, driver: str = "asyncpg") -> str:
     return url
 
 
+_INSECURE_SECRET_KEYS = frozenset({
+    "change-this-to-a-secure-random-string",
+    "secret",
+    "secret_key",
+    "",
+})
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -38,6 +46,14 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = "change-this-to-a-secure-random-string"
     api_v1_prefix: str = "/api/v1"
+
+    # Rate limiting
+    rate_limit_login: str = "5/minute"
+    rate_limit_register: str = "3/minute"
+
+    @property
+    def is_secret_key_secure(self) -> bool:
+        return self.secret_key not in _INSECURE_SECRET_KEYS and len(self.secret_key) >= 32
 
     # Database — accepts DATABASE_URL in any format (postgres://, postgresql://)
     # Supabase, Render, Railway all provide DATABASE_URL automatically

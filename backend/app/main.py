@@ -22,6 +22,29 @@ async def lifespan(app: FastAPI):
     """Application lifecycle management."""
     logger.info("application_starting", env=settings.app_env)
 
+    # Security checks
+    if not settings.is_secret_key_secure:
+        if settings.app_env == "production":
+            logger.critical(
+                "insecure_secret_key",
+                message="SECRET_KEY is insecure! Set a strong random string (>=32 chars) via SECRET_KEY env var.",
+            )
+            raise RuntimeError(
+                "本番環境でデフォルトのSECRET_KEYは使用できません。"
+                "SECRET_KEY環境変数に32文字以上のランダム文字列を設定してください。"
+            )
+        else:
+            logger.warning(
+                "insecure_secret_key",
+                message="SECRET_KEY is using the default value. Set SECRET_KEY env var for production.",
+            )
+
+    if "*" in settings.cors_origins_list and settings.app_env == "production":
+        logger.warning(
+            "cors_wildcard_in_production",
+            message="CORS_ORIGINS='*' in production. Set specific origins for security.",
+        )
+
     # Auto-create tables if they don't exist (development convenience)
     try:
         from app.core.database import sync_engine, Base

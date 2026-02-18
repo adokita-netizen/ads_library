@@ -37,7 +37,8 @@ async def list_ads(
     platform: Optional[str] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
-    advertiser: Optional[str] = None,
+    advertiser: Optional[str] = Query(None, max_length=200),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """List ads with filtering and pagination."""
@@ -78,6 +79,7 @@ async def list_ads(
 @router.get("/{ad_id}", response_model=AdResponse)
 async def get_ad(
     ad_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get a specific ad by ID."""
@@ -125,13 +127,22 @@ async def upload_ad_video(
     if not file.content_type or not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
 
-    # Check file size
-    contents = await file.read()
-    if len(contents) > settings.max_upload_size_mb * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Max size: {settings.max_upload_size_mb}MB",
-        )
+    # Read file in chunks to avoid loading entire file into memory
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    chunks: list[bytes] = []
+    total_size = 0
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1MB chunks
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > max_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Max size: {settings.max_upload_size_mb}MB",
+            )
+        chunks.append(chunk)
+    contents = b"".join(chunks)
 
     # Upload to storage
     storage = get_storage_client()
@@ -140,7 +151,8 @@ async def upload_ad_video(
     try:
         storage.upload_bytes(s3_key, contents, content_type=file.content_type)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ストレージへのアップロードに失敗しました: {str(e)}")
+        logger.error("storage_upload_failed", s3_key=s3_key, error=str(e))
+        raise HTTPException(status_code=500, detail="ストレージへのアップロードに失敗しました")
 
     # Create ad record
     ad = Ad(
@@ -199,6 +211,7 @@ async def trigger_analysis(
 @router.get("/{ad_id}/analysis", response_model=AdAnalysisResponse)
 async def get_analysis(
     ad_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get analysis results for an ad."""

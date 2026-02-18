@@ -6,15 +6,18 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_async_session
 from app.models.ad import Ad, AdPlatformEnum, AdCategoryEnum, AdStatusEnum
 from app.models.analysis import AdAnalysis
+from app.models.user import User
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get dashboard overview statistics."""
@@ -78,6 +81,7 @@ async def get_dashboard_stats(
 @router.get("/competitor/{advertiser_name}")
 async def get_competitor_analysis(
     advertiser_name: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get competitor analysis for a specific advertiser."""
@@ -149,6 +153,7 @@ async def get_trends(
     category: Optional[str] = None,
     platform: Optional[str] = None,
     days: int = Query(30, ge=7, le=90),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get industry trends and patterns."""
