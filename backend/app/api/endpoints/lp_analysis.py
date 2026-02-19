@@ -3,10 +3,15 @@
 from typing import Optional
 
 import structlog
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import get_current_user_sync
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.landing_page import (
     AppealAxisAnalysis,
     LandingPage,
@@ -101,8 +106,7 @@ async def list_landing_pages(
     search: Optional[str] = None,
 ):
     """List analyzed landing pages with filters."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(LandingPage)
 
         if genre:
@@ -112,12 +116,12 @@ async def list_landing_pages(
         if status:
             query = query.filter(LandingPage.status == status)
         if domain:
-            query = query.filter(LandingPage.domain.ilike(f"%{domain}%"))
+            query = query.filter(LandingPage.domain.ilike(f"%{_escape_like(domain)}%"))
         if search:
             query = query.filter(
-                (LandingPage.title.ilike(f"%{search}%"))
-                | (LandingPage.product_name.ilike(f"%{search}%"))
-                | (LandingPage.advertiser_name.ilike(f"%{search}%"))
+                (LandingPage.title.ilike(f"%{_escape_like(search)}%"))
+                | (LandingPage.product_name.ilike(f"%{_escape_like(search)}%"))
+                | (LandingPage.advertiser_name.ilike(f"%{_escape_like(search)}%"))
             )
 
         total = query.count()
@@ -131,15 +135,12 @@ async def list_landing_pages(
             page=page,
             page_size=page_size,
         )
-    finally:
-        session.close()
 
 
 @router.get("/{lp_id}", response_model=LPDetailResponse)
 async def get_lp_detail(lp_id: int):
     """Get full LP detail with sections, USPs, appeal axes, and analysis."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         lp = session.query(LandingPage).filter(LandingPage.id == lp_id).first()
         if not lp:
             raise HTTPException(status_code=404, detail="Landing page not found")
@@ -168,34 +169,26 @@ async def get_lp_detail(lp_id: int):
             response.analysis = LPAnalysisDetailResponse.model_validate(analysis)
 
         return response
-    finally:
-        session.close()
 
 
 @router.get("/{lp_id}/usps", response_model=list[USPPatternResponse])
 async def get_lp_usps(lp_id: int):
     """Get USP patterns for a specific LP."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         usps = session.query(USPPattern).filter(
             USPPattern.landing_page_id == lp_id
         ).order_by(USPPattern.prominence_score.desc()).all()
         return [USPPatternResponse.model_validate(u) for u in usps]
-    finally:
-        session.close()
 
 
 @router.get("/{lp_id}/appeal-axes", response_model=list[AppealAxisResponse])
 async def get_lp_appeal_axes(lp_id: int):
     """Get appeal axis analysis for a specific LP."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         appeals = session.query(AppealAxisAnalysis).filter(
             AppealAxisAnalysis.landing_page_id == lp_id
         ).order_by(AppealAxisAnalysis.strength_score.desc()).all()
         return [AppealAxisResponse.model_validate(a) for a in appeals]
-    finally:
-        session.close()
 
 
 @router.post("/competitor-insight", response_model=GenreInsightResponse)
@@ -204,8 +197,7 @@ async def get_competitor_insight(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Get competitor intelligence for a genre."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         # Get all analyzed LPs in this genre
         lps = session.query(LandingPage).filter(
             LandingPage.genre == request.genre,
@@ -289,8 +281,6 @@ async def get_competitor_insight(
             target_personas=insight.target_personas,
             recommendations=insight.recommendations,
         )
-    finally:
-        session.close()
 
 
 @router.post("/usp-flow", response_model=USPFlowResponse)
@@ -299,8 +289,7 @@ async def generate_usp_flow(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Generate USP → Article LP flow recommendation."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         # Gather competitor analysis data
         if request.competitor_lp_ids:
             lps = session.query(LandingPage).filter(
@@ -377,8 +366,6 @@ async def generate_usp_flow(
             estimated_effectiveness=recommendation.estimated_effectiveness,
             reasoning=recommendation.reasoning,
         )
-    finally:
-        session.close()
 
 
 # ==================== Own LP Management ====================
@@ -396,8 +383,7 @@ async def import_own_lp(
             detail="url, html_content, text_content のいずれかを指定してください",
         )
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         import hashlib
         from datetime import datetime, timezone
 
@@ -463,8 +449,6 @@ async def import_own_lp(
 
         logger.info("own_lp_imported", lp_id=lp.id, label=request.label)
         return LPResponse.model_validate(lp)
-    finally:
-        session.close()
 
 
 @router.get("/own/list", response_model=OwnLPListResponse)
@@ -474,8 +458,7 @@ async def list_own_lps(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """List all own (self-managed) LPs."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(LandingPage).filter(
             LandingPage.is_own == True,  # noqa: E712
         )
@@ -484,8 +467,8 @@ async def list_own_lps(
             query = query.filter(LandingPage.genre == genre)
         if search:
             query = query.filter(
-                (LandingPage.own_lp_label.ilike(f"%{search}%"))
-                | (LandingPage.product_name.ilike(f"%{search}%"))
+                (LandingPage.own_lp_label.ilike(f"%{_escape_like(search)}%"))
+                | (LandingPage.product_name.ilike(f"%{_escape_like(search)}%"))
             )
 
         lps = query.order_by(LandingPage.created_at.desc()).all()
@@ -529,8 +512,6 @@ async def list_own_lps(
             own_responses.append(resp)
 
         return OwnLPListResponse(own_lps=own_responses, total=len(own_responses))
-    finally:
-        session.close()
 
 
 @router.put("/own/{lp_id}", response_model=LPResponse)
@@ -540,8 +521,7 @@ async def update_own_lp(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Update an own LP (e.g., upload new version)."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         lp = session.query(LandingPage).filter(
             LandingPage.id == lp_id,
             LandingPage.is_own == True,  # noqa: E712
@@ -581,8 +561,6 @@ async def update_own_lp(
         session.refresh(lp)
         logger.info("own_lp_updated", lp_id=lp.id, version=lp.own_lp_version)
         return LPResponse.model_validate(lp)
-    finally:
-        session.close()
 
 
 @router.delete("/own/{lp_id}")
@@ -591,8 +569,7 @@ async def delete_own_lp(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Delete an own LP."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         lp = session.query(LandingPage).filter(
             LandingPage.id == lp_id,
             LandingPage.is_own == True,  # noqa: E712
@@ -604,8 +581,6 @@ async def delete_own_lp(
         session.commit()
         logger.info("own_lp_deleted", lp_id=lp_id)
         return {"message": f"自社LP (ID: {lp_id}) を削除しました"}
-    finally:
-        session.close()
 
 
 @router.post("/own/compare", response_model=LPCompareResponse)
@@ -614,8 +589,7 @@ async def compare_own_lp(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Compare own LP against competitor LPs in the same genre."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         # Get own LP
         own_lp = session.query(LandingPage).filter(
             LandingPage.id == request.own_lp_id,
@@ -735,5 +709,3 @@ async def compare_own_lp(
             improvement_opportunities=result.improvement_opportunities,
             quick_wins=result.quick_wins,
         )
-    finally:
-        session.close()

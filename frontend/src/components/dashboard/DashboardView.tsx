@@ -21,17 +21,22 @@ const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"
 export default function DashboardView() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
   const loadDashboard = async () => {
+    setError(null);
     try {
       const response = await analyticsApi.getDashboard();
       setStats(response.data);
-    } catch {
-      // Use mock data if API not available
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "不明なエラー";
+      console.warn("Dashboard API failed:", msg);
+      setError("ダッシュボードデータの取得に失敗しました。再試行してください。");
+      // Fallback to empty data so UI still renders
       setStats({
         total_ads: 0,
         analyzed_ads: 0,
@@ -70,6 +75,13 @@ export default function DashboardView() {
           Overview of your ad analysis platform
         </p>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {error}
+          <button onClick={loadDashboard} className="ml-2 font-medium underline">再試行</button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">

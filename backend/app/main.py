@@ -62,8 +62,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: cleanup resources
+    # Shutdown: cleanup resources gracefully
     logger.info("application_shutting_down")
+    try:
+        from app.core.database import async_engine
+        await async_engine.dispose()
+        logger.info("database_connections_closed")
+    except Exception as e:
+        logger.warning("database_cleanup_error", error=str(e))
 
 
 app = FastAPI(
@@ -208,5 +214,18 @@ def health_check():
         result["redis"] = "ok"
     except Exception:
         result["redis"] = "unavailable"
+
+    # Celery worker check
+    try:
+        from app.tasks.worker import celery_app
+        inspect = celery_app.control.inspect(timeout=1.0)
+        ping_result = inspect.ping()
+        if ping_result:
+            result["celery_workers"] = len(ping_result)
+        else:
+            result["celery_workers"] = 0
+            result["status"] = "degraded"
+    except Exception:
+        result["celery_workers"] = "unavailable"
 
     return result

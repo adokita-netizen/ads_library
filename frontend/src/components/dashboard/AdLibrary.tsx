@@ -34,11 +34,13 @@ const statusColors: Record<string, string> = {
 export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [platformFilter, setPlatformFilter] = useState("");
   const [showCrawlModal, setShowCrawlModal] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const pageSize = 20;
 
   useEffect(() => {
@@ -47,16 +49,18 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
 
   const loadAds = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params: Record<string, unknown> = { page, page_size: pageSize };
       if (platformFilter) params.platform = platformFilter;
       if (searchQuery) params.advertiser = searchQuery;
 
       const response = await adsApi.list(params);
-      setAds(response.data.ads);
-      setTotal(response.data.total);
+      setAds(response.data?.ads ?? []);
+      setTotal(response.data?.total ?? 0);
     } catch {
-      setAds([]);
+      setError("広告データの取得に失敗しました");
+      // Keep previous data on error instead of clearing
     } finally {
       setLoading(false);
     }
@@ -92,15 +96,35 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
-                if (file) {
+                if (!file) return;
+                setUploadStatus("アップロード中...");
+                try {
                   await adsApi.upload(file, { auto_analyze: true });
+                  setUploadStatus("アップロード完了");
                   loadAds();
+                  setTimeout(() => setUploadStatus(null), 3000);
+                } catch {
+                  setUploadStatus("アップロードに失敗しました");
+                  setTimeout(() => setUploadStatus(null), 5000);
                 }
               }}
             />
           </label>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {error}
+          <button onClick={loadAds} className="ml-2 font-medium underline">再試行</button>
+        </div>
+      )}
+
+      {uploadStatus && (
+        <div className={`rounded-lg p-3 text-sm ${uploadStatus.includes("失敗") ? "border border-red-200 bg-red-50 text-red-800" : "border border-blue-200 bg-blue-50 text-blue-800"}`}>
+          {uploadStatus}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card">

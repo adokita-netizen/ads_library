@@ -39,6 +39,7 @@ def _try_create_engines(async_url: str, sync_url: str):
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_pre_ping=True,
+        pool_recycle=1800,  # Recycle connections after 30 min (prevents stale connections)
     )
     se = create_engine(
         sync_url,
@@ -46,6 +47,7 @@ def _try_create_engines(async_url: str, sync_url: str):
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_pre_ping=True,
+        pool_recycle=1800,
     )
     # Quick connection test (sync)
     with se.connect() as conn:
@@ -136,6 +138,28 @@ def get_sync_session():
     try:
         yield session
         session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def sync_session_scope():
+    """Context manager for sync session with automatic rollback on error.
+
+    Usage:
+        with sync_session_scope() as session:
+            session.query(...)
+            session.commit()  # explicit commit when needed
+    """
+    session = SyncSessionLocal()
+    try:
+        yield session
     except Exception:
         session.rollback()
         raise

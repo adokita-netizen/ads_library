@@ -2,6 +2,11 @@
 
 from typing import Optional
 
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +92,7 @@ async def get_competitor_analysis(
     """Get competitor analysis for a specific advertiser."""
     # Get all ads by this advertiser
     result = await db.execute(
-        select(Ad).where(Ad.advertiser_name.ilike(f"%{advertiser_name}%"))
+        select(Ad).where(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser_name)}%"))
     )
     ads = result.scalars().all()
 

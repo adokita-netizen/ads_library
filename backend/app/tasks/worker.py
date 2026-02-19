@@ -22,6 +22,11 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Retry policy for transient errors (network, rate limits)
+    task_autoretry_for=(ConnectionError, TimeoutError, OSError),
+    task_retry_kwargs={"max_retries": 3},
+    task_retry_backoff=True,
+    task_retry_backoff_max=600,  # Max 10 minutes between retries
     task_routes={
         "app.tasks.analysis_tasks.*": {"queue": "analysis"},
         "app.tasks.crawl_tasks.*": {"queue": "crawl"},

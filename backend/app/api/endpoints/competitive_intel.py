@@ -8,11 +8,16 @@ from datetime import date, timedelta
 from typing import Optional
 
 import structlog
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user_sync
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.ad import Ad
 from app.models.competitive_intel import (
     SpendEstimate,
@@ -81,8 +86,7 @@ async def estimate_spend(
     """Estimate ad spend with P10/P25/P50/P75/P90 confidence ranges."""
     from app.services.competitive.spend_estimator import SpendEstimator
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         estimator = SpendEstimator()
         estimate = estimator.estimate_spend(
             session,
@@ -112,8 +116,6 @@ async def estimate_spend(
             "estimation_method": estimate.estimation_method,
             "confidence_level": estimate.confidence_level,
         }
-    finally:
-        session.close()
 
 
 @router.post("/spend/calibrate")
@@ -124,8 +126,7 @@ async def save_cpm_calibration(
     """Save user CPM calibration data for improving spend estimates."""
     from app.services.competitive.spend_estimator import SpendEstimator
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         estimator = SpendEstimator()
         calib = estimator.save_calibration(
             session,
@@ -143,8 +144,6 @@ async def save_cpm_calibration(
             "actual_cpm": calib.actual_cpm,
             "message": "CPMキャリブレーションデータを保存しました。今後の推定に反映されます。",
         }
-    finally:
-        session.close()
 
 
 @router.get("/spend/calibrations")
@@ -152,8 +151,7 @@ async def list_calibrations(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """List user CPM calibration data."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         calibs = session.query(CPMCalibration).filter(
             CPMCalibration.user_id == current_user["user_id"]
         ).order_by(CPMCalibration.created_at.desc()).all()
@@ -171,8 +169,6 @@ async def list_calibrations(
                 for c in calibs
             ]
         }
-    finally:
-        session.close()
 
 
 # ==================== Similarity Search ====================
@@ -189,8 +185,7 @@ async def similarity_search(
     """
     from app.services.competitive.embedding_service import EmbeddingService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = EmbeddingService()
 
         if request.ad_id:
@@ -252,8 +247,6 @@ async def similarity_search(
             }
 
         raise HTTPException(status_code=400, detail="ad_id or query_text is required")
-    finally:
-        session.close()
 
 
 @router.post("/similarity/generate/{ad_id}")
@@ -264,8 +257,7 @@ async def generate_embedding(
     """Generate/update embedding for a specific ad."""
     from app.services.competitive.embedding_service import EmbeddingService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = EmbeddingService()
         embedding = svc.generate_embedding(session, ad_id)
         if not embedding:
@@ -280,8 +272,6 @@ async def generate_embedding(
             "auto_structure_type": embedding.auto_structure_type,
             "message": "エンベディングを生成しました",
         }
-    finally:
-        session.close()
 
 
 # ==================== Destination Analytics ====================
@@ -297,13 +287,10 @@ async def get_lp_reuse(
     """Find LPs used by multiple advertisers (遷移先アナリティクス)."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = DestinationAnalyticsService()
         results = svc.get_lp_reuse_analytics(session, genre=genre, min_advertisers=min_advertisers, limit=limit)
         return {"total": len(results), "lp_reuse": results}
-    finally:
-        session.close()
 
 
 @router.get("/destination/creative-variation/{lp_id}")
@@ -314,12 +301,9 @@ async def get_creative_variation(
     """Analyze creative variations pointing to the same LP."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = DestinationAnalyticsService()
         return svc.get_lp_creative_variation(session, lp_id)
-    finally:
-        session.close()
 
 
 @router.get("/destination/advertiser-portfolio/{advertiser_name}")
@@ -330,12 +314,9 @@ async def get_advertiser_destinations(
     """Get all destinations used by an advertiser."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = DestinationAnalyticsService()
         return svc.get_advertiser_destination_portfolio(session, advertiser_name)
-    finally:
-        session.close()
 
 
 @router.get("/destination/genre-overview/{genre}")
@@ -347,12 +328,9 @@ async def get_genre_destination_overview(
     """Genre-level destination analytics overview."""
     from app.services.competitive.destination_analytics import DestinationAnalyticsService
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = DestinationAnalyticsService()
         return svc.get_genre_destination_overview(session, genre, period_days)
-    finally:
-        session.close()
 
 
 # ==================== Alert Detection ====================
@@ -366,8 +344,7 @@ async def run_alert_detection(
     """Run all alert detection algorithms and return new alerts."""
     from app.services.competitive.alert_detector import AlertDetector
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         detector = AlertDetector()
         try:
             alerts = detector.run_all_detections(session, watched_advertisers=watched_advertisers)
@@ -395,8 +372,6 @@ async def run_alert_detection(
                 for a in alerts
             ],
         }
-    finally:
-        session.close()
 
 
 @router.get("/alerts/history")
@@ -408,8 +383,7 @@ async def get_alert_history(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Get recent alert history."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(AlertLog).filter(
             AlertLog.detected_at >= date.today() - timedelta(days=days),
         )
@@ -438,8 +412,6 @@ async def get_alert_history(
                 for a in alerts
             ],
         }
-    finally:
-        session.close()
 
 
 @router.post("/alerts/{alert_id}/dismiss")
@@ -448,16 +420,13 @@ async def dismiss_alert(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Dismiss an alert."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         alert = session.query(AlertLog).filter(AlertLog.id == alert_id).first()
         if not alert:
             raise HTTPException(status_code=404, detail="アラートが見つかりません")
         alert.is_dismissed = True
         session.commit()
         return {"message": "アラートを非表示にしました"}
-    finally:
-        session.close()
 
 
 # ==================== Two-Stage Classification ====================
@@ -469,8 +438,7 @@ async def get_classification_tags(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Get all classification tags for an ad (provisional + confirmed)."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         tags = session.query(AdClassificationTag).filter(
             AdClassificationTag.ad_id == ad_id,
         ).order_by(AdClassificationTag.field_name).all()
@@ -492,8 +460,6 @@ async def get_classification_tags(
                 for t in tags
             ],
         }
-    finally:
-        session.close()
 
 
 @router.post("/classification/tag")
@@ -504,8 +470,7 @@ async def create_classification_tag(
     """Create or update a classification tag for an ad."""
     from datetime import datetime, timezone
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         existing = session.query(AdClassificationTag).filter(
             AdClassificationTag.ad_id == request.ad_id,
             AdClassificationTag.field_name == request.field_name,
@@ -547,8 +512,6 @@ async def create_classification_tag(
             "status": tag.classification_status,
             "confidence": tag.confidence,
         }
-    finally:
-        session.close()
 
 
 @router.post("/classification/confirm")
@@ -559,8 +522,7 @@ async def confirm_classification(
     """Confirm a provisional classification tag (provisional → confirmed)."""
     from datetime import datetime, timezone
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         tag = session.query(AdClassificationTag).filter(
             AdClassificationTag.id == request.tag_id,
         ).first()
@@ -578,8 +540,6 @@ async def confirm_classification(
 
         session.commit()
         return {"message": "分類を確定しました", "tag_id": tag.id, "value": tag.value}
-    finally:
-        session.close()
 
 
 @router.get("/classification/provisional")
@@ -588,8 +548,7 @@ async def list_provisional_tags(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """List all provisional tags awaiting confirmation."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         tags = (
             session.query(AdClassificationTag)
             .filter(AdClassificationTag.classification_status == "provisional")
@@ -613,8 +572,6 @@ async def list_provisional_tags(
                 for t in tags
             ],
         }
-    finally:
-        session.close()
 
 
 # ==================== Trend Prediction ====================
@@ -628,8 +585,7 @@ async def get_trend_predictions(
     """Get trend predictions with velocity analysis and hit probability."""
     from app.services.competitive.trend_predictor import TrendPredictor
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         predictor = TrendPredictor()
         predictions = predictor.predict_hits(session, limit=limit)
 
@@ -660,8 +616,6 @@ async def get_trend_predictions(
                 for p in predictions
             ],
         }
-    finally:
-        session.close()
 
 
 @router.get("/trends/early-hits")
@@ -673,8 +627,7 @@ async def get_early_hit_candidates(
     """Get early hit candidates - ads in first week showing hit potential."""
     from app.services.competitive.trend_predictor import TrendPredictor
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         predictor = TrendPredictor()
         candidates = predictor.get_early_hit_candidates(
             session, max_days_active=max_days_active, min_momentum=min_momentum
@@ -694,8 +647,6 @@ async def get_early_hit_candidates(
                 c["advertiser_name"] = ad.advertiser_name
 
         return {"total": len(candidates), "items": candidates}
-    finally:
-        session.close()
 
 
 # ==================== LP Funnels ====================
@@ -709,13 +660,12 @@ async def list_funnels(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """List detected LP funnels."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(LPFunnel)
         if genre:
             query = query.filter(LPFunnel.genre == genre)
         if advertiser:
-            query = query.filter(LPFunnel.advertiser_name.ilike(f"%{advertiser}%"))
+            query = query.filter(LPFunnel.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
         funnels = query.order_by(LPFunnel.created_at.desc()).limit(limit).all()
 
@@ -755,8 +705,6 @@ async def list_funnels(
             })
 
         return {"total": len(result), "items": result}
-    finally:
-        session.close()
 
 
 # ==================== LP Fingerprinting ====================
@@ -768,8 +716,7 @@ async def get_lp_fingerprint(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Get fingerprint and change history for an LP."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         fingerprints = (
             session.query(LPFingerprint)
             .filter(LPFingerprint.landing_page_id == lp_id)
@@ -796,8 +743,6 @@ async def get_lp_fingerprint(
                 for fp in fingerprints
             ],
         }
-    finally:
-        session.close()
 
 
 @router.get("/fingerprint/clusters")
@@ -809,8 +754,7 @@ async def get_offer_clusters(
     """Get offer clusters - groups of LPs with similar offers."""
     from sqlalchemy import func, desc
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = (
             session.query(
                 LPFingerprint.offer_cluster_id,
@@ -837,5 +781,3 @@ async def get_offer_clusters(
                 for c in clusters
             ],
         }
-    finally:
-        session.close()

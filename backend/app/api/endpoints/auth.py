@@ -106,10 +106,14 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
+    request: Request,
     refresh_token: str,
     db: AsyncSession = Depends(get_async_session),
 ):
     """Refresh access token."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"refresh:{client_ip}", max_requests=10, window_seconds=60)
+
     payload = verify_token(refresh_token, token_type="refresh")
     if not payload:
         raise HTTPException(

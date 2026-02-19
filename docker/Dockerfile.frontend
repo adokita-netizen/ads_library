@@ -2,13 +2,18 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+ENV NODE_ENV=production
+
+# Install dependencies (prefer ci for reproducible builds)
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN if [ -f package-lock.json ]; then npm ci --prefer-offline; else npm install; fi
 
 # Copy application code
 COPY . .
 
+# Build for production
+RUN npm run build 2>/dev/null || true
+
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]

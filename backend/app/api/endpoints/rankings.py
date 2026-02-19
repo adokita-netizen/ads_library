@@ -3,6 +3,11 @@
 import csv
 import io
 from datetime import date, timedelta
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from typing import Optional
 
 import structlog
@@ -10,7 +15,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, desc, or_
 
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.ad import Ad
 from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 from app.models.analysis import AdAnalysis, TextDetection, Transcription
@@ -56,8 +61,7 @@ def get_product_rankings(
     """Get product rankings by spend/views for a period."""
     from fastapi.responses import JSONResponse
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = RankingService()
         rankings, total = svc.get_rankings(
             session,
@@ -135,8 +139,6 @@ def get_product_rankings(
             content=data,
             headers={"Cache-Control": "public, max-age=300, s-maxage=300"},
         )
-    finally:
-        session.close()
 
 
 def _fallback_ad_list(session, genre, platform, page, page_size, period):
@@ -221,8 +223,7 @@ def get_hit_ads(
     limit: int = Query(20, ge=1, le=100),
 ):
     """Get currently trending/hit ads (high velocity growth)."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = RankingService()
         hits = svc.get_hit_ads(session, genre=genre, limit=limit)
 
@@ -245,8 +246,6 @@ def get_hit_ads(
                 for h in hits
             ],
         }
-    finally:
-        session.close()
 
 
 @router.get("/advertiser/{advertiser_name}")
@@ -255,12 +254,9 @@ def get_advertiser_analytics(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
     """Get detailed analytics for a specific advertiser."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = RankingService()
         return svc.get_advertiser_rankings(session, advertiser_name, period)
-    finally:
-        session.close()
 
 
 @router.get("/genre-summary")
@@ -268,8 +264,7 @@ def get_genre_summary(
     period: str = Query("weekly", regex="^(daily|weekly|monthly)$"),
 ):
     """Get summary statistics per genre (market overview)."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         today = date.today()
         days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 7)
         start = today - timedelta(days=days)
@@ -304,8 +299,6 @@ def get_genre_summary(
                 for r in results
             ],
         }
-    finally:
-        session.close()
 
 
 # ==================== Pro-Search ====================
@@ -323,8 +316,7 @@ def pro_search(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Pro-Search: Full-text search across ads, LP text, transcripts, and OCR text."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         results = []
         total_count = 0
         offset = (page - 1) * page_size
@@ -333,17 +325,17 @@ def pro_search(
         if search_scope in ("all", "ads"):
             ad_query = session.query(Ad).filter(
                 or_(
-                    Ad.title.ilike(f"%{q}%"),
-                    Ad.description.ilike(f"%{q}%"),
-                    Ad.advertiser_name.ilike(f"%{q}%"),
-                    Ad.brand_name.ilike(f"%{q}%"),
+                    Ad.title.ilike(f"%{_escape_like(q)}%"),
+                    Ad.description.ilike(f"%{_escape_like(q)}%"),
+                    Ad.advertiser_name.ilike(f"%{_escape_like(q)}%"),
+                    Ad.brand_name.ilike(f"%{_escape_like(q)}%"),
                 )
             )
             if genre:
                 ad_query = ad_query.filter(Ad.category == genre)
             ad_query = _resolve_platform_filter(ad_query, Ad.platform, platform)
             if advertiser:
-                ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
+                ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
             total_count += ad_query.count()
             ads = ad_query.order_by(Ad.created_at.desc()).offset(offset).limit(page_size).all()
@@ -367,7 +359,7 @@ def pro_search(
                 session.query(Transcription, Ad)
                 .join(AdAnalysis, Transcription.analysis_id == AdAnalysis.id)
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
-                .filter(Transcription.text.ilike(f"%{q}%"))
+                .filter(Transcription.text.ilike(f"%{_escape_like(q)}%"))
             )
             transcript_query = _resolve_platform_filter(transcript_query, Ad.platform, platform)
 
@@ -392,7 +384,7 @@ def pro_search(
                 session.query(TextDetection, Ad)
                 .join(AdAnalysis, TextDetection.analysis_id == AdAnalysis.id)
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
-                .filter(TextDetection.text.ilike(f"%{q}%"))
+                .filter(TextDetection.text.ilike(f"%{_escape_like(q)}%"))
             )
             text_query = _resolve_platform_filter(text_query, Ad.platform, platform)
 
@@ -417,10 +409,10 @@ def pro_search(
 
             lp_query = session.query(LandingPage).filter(
                 or_(
-                    LandingPage.title.ilike(f"%{q}%"),
-                    LandingPage.hero_headline.ilike(f"%{q}%"),
-                    LandingPage.full_text_content.ilike(f"%{q}%"),
-                    LandingPage.product_name.ilike(f"%{q}%"),
+                    LandingPage.title.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.hero_headline.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.full_text_content.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.product_name.ilike(f"%{_escape_like(q)}%"),
                 )
             )
             if genre:
@@ -450,8 +442,6 @@ def pro_search(
             "page_size": page_size,
             "results": results,
         }
-    finally:
-        session.close()
 
 
 # ==================== CSV Export ====================
@@ -463,8 +453,7 @@ def export_rankings_csv(
     genre: Optional[str] = None,
 ):
     """Export rankings as CSV file."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         svc = RankingService()
         rankings, total = svc.get_rankings(session, period=period, genre=genre, limit=500)
 
@@ -527,8 +516,6 @@ def export_rankings_csv(
                 "Content-Disposition": f"attachment; filename=rankings_{period}_{genre or 'all'}.csv"
             },
         )
-    finally:
-        session.close()
 
 
 @router.get("/export/ads")
@@ -539,14 +526,13 @@ def export_ads_csv(
     limit: int = Query(500, ge=1, le=5000),
 ):
     """Export ad list as CSV file."""
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(Ad)
         if genre:
             query = query.filter(Ad.category == genre)
         query = _resolve_platform_filter(query, Ad.platform, platform)
         if advertiser:
-            query = query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
+            query = query.filter(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
         ads = query.order_by(Ad.created_at.desc()).limit(limit).all()
 
@@ -582,5 +568,3 @@ def export_ads_csv(
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=ads_export.csv"},
         )
-    finally:
-        session.close()
