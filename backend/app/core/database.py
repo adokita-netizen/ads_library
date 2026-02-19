@@ -145,6 +145,28 @@ def get_sync_session():
         session.close()
 
 
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def sync_session_scope():
+    """Context manager for sync session with automatic rollback on error.
+
+    Usage:
+        with sync_session_scope() as session:
+            session.query(...)
+            session.commit()  # explicit commit when needed
+    """
+    session = SyncSessionLocal()
+    try:
+        yield session
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 # ── Runtime reconnection ─────────────────────────────────────────
 
 def reconnect(new_database_url: str) -> dict:

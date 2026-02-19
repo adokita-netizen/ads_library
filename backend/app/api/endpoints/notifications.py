@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user_sync
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.ad_metrics import NotificationConfig, SavedItem
 
 logger = structlog.get_logger()
@@ -77,8 +77,7 @@ async def create_notification_config(
     """Create or update notification configuration."""
     user_id = current_user["user_id"]
 
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         # Check existing config for this channel
         existing = session.query(NotificationConfig).filter(
             NotificationConfig.user_id == user_id,
@@ -115,24 +114,19 @@ async def create_notification_config(
         session.commit()
         session.refresh(config)
         return NotificationConfigResponse.model_validate(config)
-    finally:
-        session.close()
 
 
 @router.get("/config")
 async def list_notification_configs(current_user: dict = Depends(get_current_user_sync)):
     """List all notification configurations for current user."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         configs = session.query(NotificationConfig).filter(
             NotificationConfig.user_id == user_id,
         ).all()
         return {
             "configs": [NotificationConfigResponse.model_validate(c) for c in configs]
         }
-    finally:
-        session.close()
 
 
 @router.delete("/config/{config_id}")
@@ -142,8 +136,7 @@ async def delete_notification_config(
 ):
     """Delete a notification configuration."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         config = session.query(NotificationConfig).filter(
             NotificationConfig.id == config_id,
             NotificationConfig.user_id == user_id,
@@ -154,8 +147,6 @@ async def delete_notification_config(
         session.delete(config)
         session.commit()
         return {"message": "通知設定を削除しました"}
-    finally:
-        session.close()
 
 
 @router.post("/test")
@@ -165,8 +156,7 @@ async def test_notification(
 ):
     """Send a test notification."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         config = session.query(NotificationConfig).filter(
             NotificationConfig.id == config_id,
             NotificationConfig.user_id == user_id,
@@ -184,8 +174,6 @@ async def test_notification(
         import asyncio
         success = await svc.notify_hit_ads(config, test_data)
         return {"success": success, "message": "テスト通知を送信しました" if success else "通知の送信に失敗しました"}
-    finally:
-        session.close()
 
 
 # ==================== Saved Items (マイリスト) ====================
@@ -198,8 +186,7 @@ async def save_item(
 ):
     """Save an item to My List (マイリスト)."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         # Check if already saved
         existing = session.query(SavedItem).filter(
             SavedItem.user_id == user_id,
@@ -234,8 +221,6 @@ async def save_item(
             folder=item.folder,
             created_at=item.created_at.isoformat() if item.created_at else "",
         )
-    finally:
-        session.close()
 
 
 @router.get("/saved")
@@ -246,8 +231,7 @@ async def list_saved_items(
 ):
     """List saved items (マイリスト)."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         query = session.query(SavedItem).filter(SavedItem.user_id == user_id)
         if item_type:
             query = query.filter(SavedItem.item_type == item_type)
@@ -271,8 +255,6 @@ async def list_saved_items(
             ],
             "total": len(items),
         }
-    finally:
-        session.close()
 
 
 @router.delete("/saved/{item_id}")
@@ -282,8 +264,7 @@ async def remove_saved_item(
 ):
     """Remove an item from My List."""
     user_id = current_user["user_id"]
-    session = SyncSessionLocal()
-    try:
+    with sync_session_scope() as session:
         item = session.query(SavedItem).filter(
             SavedItem.id == item_id,
             SavedItem.user_id == user_id,
@@ -294,5 +275,3 @@ async def remove_saved_item(
         session.delete(item)
         session.commit()
         return {"message": "マイリストから削除しました"}
-    finally:
-        session.close()

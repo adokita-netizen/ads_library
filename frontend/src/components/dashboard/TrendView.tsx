@@ -85,39 +85,43 @@ export default function TrendView() {
   const [category, setCategory] = useState<TrendCategory>("all");
   const [trends, setTrends] = useState<TrendItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchTrends = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = {};
+      if (period) params.period = period;
+      if (category !== "all") params.genre = category;
+
+      const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params });
+      const items = data?.items || data?.rankings || data?.results;
+      if (Array.isArray(items) && items.length > 0) {
+        const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
+          rank: (item.rank as number) || idx + 1,
+          productName: (item.product_name as string) || "不明",
+          platform: ((item.platform as string) || "").toLowerCase() || "youtube",
+          genre: (item.genre as string) || "",
+          change: (item.rank_change as number) || 0,
+          spendEstimate: (item.spend_increase as number) || 0,
+          playCount: (item.view_increase as number) || 0,
+          trendScore: (item.trend_score as number) || 0,
+        }));
+        setTrends(mapped);
+      } else {
+        setTrends([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch trends:", err);
+      setError("データ取得に失敗しました。バックエンドが起動中の可能性があります。");
+      // Keep previous data on error
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTrends = async () => {
-      setLoading(true);
-      try {
-        const params: Record<string, string> = {};
-        if (period) params.period = period;
-        if (category !== "all") params.genre = category;
-
-        const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params });
-        const items = data?.items || data?.rankings || data?.results;
-        if (Array.isArray(items) && items.length > 0) {
-          const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
-            rank: (item.rank as number) || idx + 1,
-            productName: (item.product_name as string) || "不明",
-            platform: ((item.platform as string) || "").toLowerCase() || "youtube",
-            genre: (item.genre as string) || "",
-            change: (item.rank_change as number) || 0,
-            spendEstimate: (item.spend_increase as number) || 0,
-            playCount: (item.view_increase as number) || 0,
-            trendScore: (item.trend_score as number) || 0,
-          }));
-          setTrends(mapped);
-        } else {
-          setTrends([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch trends:", error);
-        setTrends([]);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchTrends();
   }, [period, category]);
 
@@ -184,6 +188,14 @@ export default function TrendView() {
           </p>
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="mx-5 mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-center justify-between">
+          <span className="text-sm text-amber-800">{error}</span>
+          <button onClick={fetchTrends} className="text-sm font-medium text-amber-900 underline ml-3">再試行</button>
+        </div>
+      )}
 
       {/* Trend Table */}
       <div className="flex-1 overflow-auto custom-scrollbar px-5 py-3">

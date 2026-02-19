@@ -5,7 +5,22 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 55_000, // Match proxy timeout
 });
+
+// ─── Retry helper ───
+
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1_500;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+function isRetryable(status: number): boolean {
+  return RETRYABLE_STATUSES.has(status);
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 // ─── Native fetch wrapper (more reliable than axios in some environments) ───
 
@@ -20,8 +35,7 @@ class FetchError extends Error {
 }
 
 /**
- * Native fetch-based API helper. Uses the same transport as the health check,
- * bypassing any potential XMLHttpRequest issues in cloud/proxy environments.
+ * Native fetch-based API helper with automatic retry for transient errors.
  */
 export async function fetchApi<T = unknown>(
   path: string,
@@ -39,7 +53,6 @@ export async function fetchApi<T = unknown>(
   const method = options?.method || "GET";
   const headers: Record<string, string> = { Accept: "application/json" };
 
-  // Only set Content-Type for requests with a body
   if (options?.body) {
     headers["Content-Type"] = "application/json";
   }
@@ -54,19 +67,43 @@ export async function fetchApi<T = unknown>(
     init.body = JSON.stringify(options.body);
   }
 
-  const res = await fetch(url, init);
+  let lastError: FetchError | Error | null = null;
 
-  // Handle empty responses (204 No Content, etc.)
-  const text = await res.text();
-  let data: unknown = null;
-  if (text) {
-    try { data = JSON.parse(text); } catch { data = null; }
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, init);
+
+      // Retry on transient server errors (502/503/504 from Render cold start etc.)
+      if (isRetryable(res.status) && attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+
+      const text = await res.text();
+      let data: unknown = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch { data = null; }
+      }
+
+      if (!res.ok) {
+        throw new FetchError(res.status, data);
+      }
+      return data as T;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Don't retry client errors (4xx) or if we're on last attempt
+      if (err instanceof FetchError && !isRetryable(err.status)) {
+        throw err;
+      }
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+    }
   }
 
-  if (!res.ok) {
-    throw new FetchError(res.status, data);
-  }
-  return data as T;
+  throw lastError || new Error("API request failed");
 }
 
 // Request interceptor for auth token (guarded for SSR)
@@ -80,11 +117,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for error handling (guarded for SSR)
+// Response interceptor: retry on transient errors + handle 401
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (typeof window !== "undefined" && error.response?.status === 401) {
+    const config = error.config;
+    const status = error.response?.status;
+
+    // Auto-retry on 502/503/504 (Render cold start, etc.)
+    if (config && isRetryable(status) && (config._retryCount || 0) < MAX_RETRIES) {
+      config._retryCount = (config._retryCount || 0) + 1;
+      await sleep(RETRY_DELAY_MS * config._retryCount);
+      return api(config);
+    }
+
+    if (typeof window !== "undefined" && status === 401) {
       localStorage.removeItem("access_token");
       console.warn("401 Unauthorized: auth token missing or expired");
     }
