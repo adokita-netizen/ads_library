@@ -1,12 +1,16 @@
 """Performance prediction models for CTR, CVR, and winning probability."""
 
 import json
-import pickle
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import structlog
+
+try:
+    import joblib
+except ImportError:
+    joblib = None
 
 from app.services.prediction.feature_engineering import AdFeatures, FeatureEngineer
 
@@ -28,12 +32,21 @@ class PerformancePredictor:
         self._winning_model = None
 
     def _load_model(self, model_name: str):
-        """Load a trained model from disk."""
-        model_path = self.model_dir / f"{model_name}.pkl"
-        if model_path.exists():
-            with open(model_path, "rb") as f:
-                return pickle.load(f)
-        return None
+        """Load a trained model from disk using joblib (safe deserialization)."""
+        model_path = self.model_dir / f"{model_name}.joblib"
+        # Also check legacy .pkl path for backward compatibility
+        legacy_path = self.model_dir / f"{model_name}.pkl"
+        path = model_path if model_path.exists() else legacy_path if legacy_path.exists() else None
+        if path is None:
+            return None
+        if joblib is None:
+            logger.warning("joblib_not_installed", model=model_name)
+            return None
+        try:
+            return joblib.load(path)
+        except Exception as e:
+            logger.error("model_load_failed", model=model_name, error=str(e))
+            return None
 
     def predict_performance(
         self,
@@ -339,12 +352,13 @@ class PerformancePredictor:
             self._cvr_model.fit(X_train, y_train)
             cvr_score = self._cvr_model.score(X_test, y_test)
 
-            # Save models
+            # Save models using joblib (safer than pickle)
             self.model_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.model_dir / "ctr_model.pkl", "wb") as f:
-                pickle.dump(self._ctr_model, f)
-            with open(self.model_dir / "cvr_model.pkl", "wb") as f:
-                pickle.dump(self._cvr_model, f)
+            if joblib is not None:
+                joblib.dump(self._ctr_model, self.model_dir / "ctr_model.joblib")
+                joblib.dump(self._cvr_model, self.model_dir / "cvr_model.joblib")
+            else:
+                logger.warning("joblib_not_installed_models_not_saved")
 
             logger.info("models_trained", ctr_r2=ctr_score, cvr_r2=cvr_score)
 

@@ -3,6 +3,20 @@
 import uuid
 from typing import Optional
 
+# Video file magic bytes for upload validation
+_VIDEO_MAGIC_BYTES = {
+    b"\x00\x00\x00": "mp4/mov",       # ftyp box (check further bytes)
+    b"\x1a\x45\xdf": "webm/mkv",      # EBML header
+    b"\x00\x00\x01": "mpeg",           # MPEG start code
+    b"\x46\x4c\x56": "flv",           # FLV
+    b"\x52\x49\x46": "avi/webp",       # RIFF (AVI)
+}
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
@@ -54,7 +68,7 @@ async def list_ads(
     if status:
         query = query.where(Ad.status == status)
     if advertiser:
-        query = query.where(Ad.advertiser_name.ilike(f"%{advertiser}%"))
+        query = query.where(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
@@ -143,6 +157,19 @@ async def upload_ad_video(
             )
         chunks.append(chunk)
     contents = b"".join(chunks)
+
+    # Validate file magic bytes (prevent polyglot/non-video uploads)
+    if len(contents) >= 12:
+        header = contents[:3]
+        is_valid_video = any(contents.startswith(magic) for magic in _VIDEO_MAGIC_BYTES)
+        # Also accept ftyp box (MP4/MOV): bytes 4-7 == "ftyp"
+        if contents[4:8] == b"ftyp":
+            is_valid_video = True
+        if not is_valid_video:
+            raise HTTPException(
+                status_code=400,
+                detail="ファイルのフォーマットが動画ではありません",
+            )
 
     # Upload to storage
     storage = get_storage_client()

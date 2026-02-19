@@ -3,6 +3,11 @@
 import csv
 import io
 from datetime import date, timedelta
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards to prevent LIKE injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from typing import Optional
 
 import structlog
@@ -333,17 +338,17 @@ def pro_search(
         if search_scope in ("all", "ads"):
             ad_query = session.query(Ad).filter(
                 or_(
-                    Ad.title.ilike(f"%{q}%"),
-                    Ad.description.ilike(f"%{q}%"),
-                    Ad.advertiser_name.ilike(f"%{q}%"),
-                    Ad.brand_name.ilike(f"%{q}%"),
+                    Ad.title.ilike(f"%{_escape_like(q)}%"),
+                    Ad.description.ilike(f"%{_escape_like(q)}%"),
+                    Ad.advertiser_name.ilike(f"%{_escape_like(q)}%"),
+                    Ad.brand_name.ilike(f"%{_escape_like(q)}%"),
                 )
             )
             if genre:
                 ad_query = ad_query.filter(Ad.category == genre)
             ad_query = _resolve_platform_filter(ad_query, Ad.platform, platform)
             if advertiser:
-                ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
+                ad_query = ad_query.filter(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
             total_count += ad_query.count()
             ads = ad_query.order_by(Ad.created_at.desc()).offset(offset).limit(page_size).all()
@@ -367,7 +372,7 @@ def pro_search(
                 session.query(Transcription, Ad)
                 .join(AdAnalysis, Transcription.analysis_id == AdAnalysis.id)
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
-                .filter(Transcription.text.ilike(f"%{q}%"))
+                .filter(Transcription.text.ilike(f"%{_escape_like(q)}%"))
             )
             transcript_query = _resolve_platform_filter(transcript_query, Ad.platform, platform)
 
@@ -392,7 +397,7 @@ def pro_search(
                 session.query(TextDetection, Ad)
                 .join(AdAnalysis, TextDetection.analysis_id == AdAnalysis.id)
                 .join(Ad, AdAnalysis.ad_id == Ad.id)
-                .filter(TextDetection.text.ilike(f"%{q}%"))
+                .filter(TextDetection.text.ilike(f"%{_escape_like(q)}%"))
             )
             text_query = _resolve_platform_filter(text_query, Ad.platform, platform)
 
@@ -417,10 +422,10 @@ def pro_search(
 
             lp_query = session.query(LandingPage).filter(
                 or_(
-                    LandingPage.title.ilike(f"%{q}%"),
-                    LandingPage.hero_headline.ilike(f"%{q}%"),
-                    LandingPage.full_text_content.ilike(f"%{q}%"),
-                    LandingPage.product_name.ilike(f"%{q}%"),
+                    LandingPage.title.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.hero_headline.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.full_text_content.ilike(f"%{_escape_like(q)}%"),
+                    LandingPage.product_name.ilike(f"%{_escape_like(q)}%"),
                 )
             )
             if genre:
@@ -546,7 +551,7 @@ def export_ads_csv(
             query = query.filter(Ad.category == genre)
         query = _resolve_platform_filter(query, Ad.platform, platform)
         if advertiser:
-            query = query.filter(Ad.advertiser_name.ilike(f"%{advertiser}%"))
+            query = query.filter(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
         ads = query.order_by(Ad.created_at.desc()).limit(limit).all()
 
