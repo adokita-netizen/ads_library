@@ -76,7 +76,7 @@ selenium==4.18.1
 
 # Video Processing
 ffmpeg-python==0.2.0
-av==11.0.0
+av>=12.0.0
 
 # Monitoring
 prometheus-client==0.20.0
