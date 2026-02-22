@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Install system dependencies (ffmpeg for video, OpenGL for CV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     ffmpeg \
     git \
     pkg-config \
