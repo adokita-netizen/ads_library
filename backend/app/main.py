@@ -183,8 +183,12 @@ async def root():
 
 
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
-    """Enhanced health check — verifies database connectivity."""
+    """Enhanced health check — verifies database connectivity.
+
+    Registered at both /health (direct) and /api/health (via CloudFront /api/* routing).
+    """
     from app.core.database import SyncSessionLocal, is_in_memory_mode, get_connection_error
 
     result: dict = {"status": "healthy", "in_memory_mode": is_in_memory_mode()}

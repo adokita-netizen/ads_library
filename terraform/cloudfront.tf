@@ -59,14 +59,10 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   # SPA fallback: serve index.html for client-side routing
+  # Only 403 is needed — S3 with OAC returns 403 (not 404) for missing objects.
+  # Do NOT add 404 here: it would intercept API Gateway 404 responses.
   custom_error_response {
     error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-
-  custom_error_response {
-    error_code         = 404
     response_code      = 200
     response_page_path = "/index.html"
   }
