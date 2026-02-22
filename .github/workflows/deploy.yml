@@ -10,13 +10,13 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_API_REPO: vaap-api
-  ECR_WORKER_REPO: vaap-worker
-  S3_FRONTEND_BUCKET: vaap-frontend-production
-  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+  ECR_REGISTRY: 271669411511.dkr.ecr.ap-northeast-1.amazonaws.com
+  ECR_API_REPO: vaap-production-api
+  ECR_WORKER_REPO: vaap-production-worker
+  S3_FRONTEND_BUCKET: vaap-production-frontend
+  CLOUDFRONT_DISTRIBUTION_ID: ERPIU1B8ZZ5ZA
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -46,7 +46,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -54,8 +55,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push API Lambda image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker build -f docker/Dockerfile.lambda \
             -t $ECR_REGISTRY/$ECR_API_REPO:${{ github.sha }} \
@@ -63,8 +62,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_API_REPO --all-tags
 
       - name: Build and push Worker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker build -f docker/Dockerfile.worker \
             -t $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
@@ -72,28 +69,49 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_WORKER_REPO --all-tags
 
       - name: Update Lambda functions
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          for FUNC in vaap-api vaap-sqs-ecs-trigger vaap-light-tasks; do
+          IMAGE_URI="$ECR_REGISTRY/$ECR_API_REPO:${{ github.sha }}"
+          for FUNC in vaap-production-api vaap-production-sqs-ecs-trigger vaap-production-light-tasks; do
+            echo "Updating $FUNC..."
             aws lambda update-function-code \
-              --function-name $FUNC \
-              --image-uri $ECR_REGISTRY/$ECR_API_REPO:${{ github.sha }} \
+              --function-name "$FUNC" \
+              --image-uri "$IMAGE_URI" \
               --no-cli-pager
+            echo "Waiting for $FUNC to be updated..."
+            aws lambda wait function-updated --function-name "$FUNC"
           done
 
       - name: Update ECS task definition image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
+          WORKER_IMAGE="$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}"
           TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition vaap-worker \
+            --task-definition vaap-production-worker \
             --query 'taskDefinition' --output json)
           NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
-            --arg IMAGE "$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}" \
+            --arg IMAGE "$WORKER_IMAGE" \
             '.containerDefinitions[0].image = $IMAGE |
              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
           aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager
+
+      - name: Run database migrations via Lambda
+        run: |
+          echo "Triggering DB migration..."
+          aws lambda invoke \
+            --function-name vaap-production-api \
+            --payload '{"action": "migrate"}' \
+            --cli-binary-format raw-in-base64-out \
+            /tmp/migrate-response.json --no-cli-pager
+          echo "Migration response:"
+          cat /tmp/migrate-response.json
+          echo ""
+          echo "Running health check..."
+          aws lambda invoke \
+            --function-name vaap-production-api \
+            --payload '{"version": "2.0", "routeKey": "GET /health", "rawPath": "/health", "requestContext": {"http": {"method": "GET", "path": "/health"}, "accountId": "271669411511", "apiId": "test"}, "headers": {}, "isBase64Encoded": false}' \
+            --cli-binary-format raw-in-base64-out \
+            /tmp/health-response.json --no-cli-pager
+          echo "Health check response:"
+          cat /tmp/health-response.json
 
   deploy-frontend:
     needs: test
@@ -111,19 +129,21 @@ jobs:
         run: |
           cd frontend
           npm ci
+          # Remove API proxy routes (not needed - CloudFront routes /api/* to API Gateway)
+          rm -rf src/app/api
           NEXT_OUTPUT=export npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to S3
         run: aws s3 sync frontend/out/ s3://$S3_FRONTEND_BUCKET/ --delete
 
       - name: Invalidate CloudFront cache
-        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
         run: |
           aws cloudfront create-invalidation \
             --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
