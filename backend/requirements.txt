@@ -39,7 +39,7 @@ scenedetect[opencv]==0.6.2
 easyocr==1.7.1
 
 # Audio Processing
-openai-whisper==20231117
+# openai-whisper installed from git in Dockerfile (PyPI version has pkg_resources issue)
 librosa==0.10.1
 soundfile==0.12.1
 pydub==0.25.1
