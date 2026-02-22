@@ -37,7 +37,7 @@ jobs:
           cd backend
           pytest tests/ -v --tb=short || true
 
-  deploy-backend:
+  deploy-lambda:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -61,13 +61,6 @@ jobs:
             -t $ECR_REGISTRY/$ECR_API_REPO:latest .
           docker push $ECR_REGISTRY/$ECR_API_REPO --all-tags
 
-      - name: Build and push Worker image
-        run: |
-          docker build -f docker/Dockerfile.worker \
-            -t $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
-            -t $ECR_REGISTRY/$ECR_WORKER_REPO:latest .
-          docker push $ECR_REGISTRY/$ECR_WORKER_REPO --all-tags
-
       - name: Update Lambda functions
         run: |
           IMAGE_URI="$ECR_REGISTRY/$ECR_API_REPO:${{ github.sha }}"
@@ -81,19 +74,7 @@ jobs:
             aws lambda wait function-updated --function-name "$FUNC"
           done
 
-      - name: Update ECS task definition image
-        run: |
-          WORKER_IMAGE="$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}"
-          TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition vaap-production-worker \
-            --query 'taskDefinition' --output json)
-          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
-            --arg IMAGE "$WORKER_IMAGE" \
-            '.containerDefinitions[0].image = $IMAGE |
-             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
-          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager
-
-      - name: Run database migrations via Lambda
+      - name: Run database migrations
         run: |
           echo "Triggering DB migration..."
           aws lambda invoke \
@@ -104,14 +85,52 @@ jobs:
           echo "Migration response:"
           cat /tmp/migrate-response.json
           echo ""
-          echo "Running health check..."
+
+      - name: Health check
+        run: |
           aws lambda invoke \
             --function-name vaap-production-api \
-            --payload '{"version": "2.0", "routeKey": "GET /health", "rawPath": "/health", "requestContext": {"http": {"method": "GET", "path": "/health"}, "accountId": "271669411511", "apiId": "test"}, "headers": {}, "isBase64Encoded": false}' \
+            --payload '{"version":"2.0","routeKey":"GET /health","rawPath":"/health","requestContext":{"http":{"method":"GET","path":"/health"},"accountId":"271669411511","apiId":"test"},"headers":{},"isBase64Encoded":false}' \
             --cli-binary-format raw-in-base64-out \
             /tmp/health-response.json --no-cli-pager
           echo "Health check response:"
           cat /tmp/health-response.json
+
+  deploy-worker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Worker image
+        run: |
+          docker build -f docker/Dockerfile.worker \
+            -t $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
+            -t $ECR_REGISTRY/$ECR_WORKER_REPO:latest .
+          docker push $ECR_REGISTRY/$ECR_WORKER_REPO --all-tags
+
+      - name: Update ECS task definition
+        run: |
+          WORKER_IMAGE="$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}"
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition vaap-production-worker \
+            --query 'taskDefinition' --output json)
+          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
+            --arg IMAGE "$WORKER_IMAGE" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager
 
   deploy-frontend:
     needs: test
