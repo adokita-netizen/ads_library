@@ -85,20 +85,34 @@ resource "aws_instance" "nat" {
 
   user_data = <<-EOF
     #!/bin/bash
-    yum install -y iptables-services
-    systemctl enable iptables
-    systemctl start iptables
+    set -ex
 
-    # Enable IP forwarding
-    echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
-    sysctl -p
+    # Enable IP forwarding immediately
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+    echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.d/99-nat.conf
+    sysctl -p /etc/sysctl.d/99-nat.conf
 
-    # NAT masquerade
-    iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
-    iptables -A FORWARD -i ens5 -o ens5 -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A FORWARD -i ens5 -o ens5 -j ACCEPT
-    service iptables save
+    # Detect the primary network interface dynamically
+    IFACE=$(ip -o link show | awk -F': ' '/state UP/{print $2}' | grep -v lo | head -1)
+
+    # NAT masquerade using nftables (Amazon Linux 2023 default)
+    dnf install -y nftables
+    systemctl enable nftables
+    systemctl start nftables
+
+    nft add table nat
+    nft add chain nat postrouting '{ type nat hook postrouting priority 100 ; }'
+    nft add rule nat postrouting oifname "$IFACE" masquerade
+
+    nft add table inet filter
+    nft add chain inet filter forward '{ type filter hook forward priority 0 ; policy accept ; }'
+
+    # Persist nftables rules
+    nft list ruleset > /etc/nftables/nat.nft
+    echo 'include "/etc/nftables/nat.nft"' >> /etc/sysconfig/nftables.conf
   EOF
+
+  user_data_replace_on_change = true
 
   tags = { Name = "${local.name_prefix}-nat-instance" }
 }
