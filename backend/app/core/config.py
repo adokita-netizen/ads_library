@@ -69,12 +69,24 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
+    # Storage backend: "minio" (local dev) or "s3" (AWS)
+    storage_backend: str = "minio"
+
     # MinIO / S3 (optional in cloud deploy)
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket_name: str = "vaap-storage"
     minio_use_ssl: bool = False
+
+    # AWS S3 (when storage_backend="s3")
+    aws_s3_bucket: str = ""
+    aws_region: str = "ap-northeast-1"
+
+    # Task backend: "celery" (local dev) or "sqs" (AWS)
+    task_backend: str = "celery"
+    sqs_heavy_queue_url: str = ""
+    sqs_light_queue_url: str = ""
 
     @model_validator(mode="after")
     def _derive_urls(self) -> "Settings":

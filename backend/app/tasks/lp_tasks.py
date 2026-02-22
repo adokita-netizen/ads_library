@@ -362,10 +362,13 @@ def batch_crawl_lps_task(
     """Crawl multiple LPs in batch."""
     logger.info("batch_lp_task_started", url_count=len(urls), task_id=self.request.id)
 
+    from app.tasks.dispatcher import dispatch_task
+
     results = []
     for url in urls:
         try:
-            result = crawl_and_analyze_lp_task.delay(
+            result = dispatch_task(
+                "crawl_and_analyze_lp",
                 url=url,
                 genre=genre,
                 auto_analyze=auto_analyze,

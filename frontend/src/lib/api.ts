@@ -1,7 +1,12 @@
 import axios from "axios";
 
+const API_BASE =
+  typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+    : "/api/v1";
+
 const api = axios.create({
-  baseURL: "/api/v1",
+  baseURL: API_BASE,
   headers: {
     "Content-Type": "application/json",
   },
@@ -41,7 +46,7 @@ export async function fetchApi<T = unknown>(
   path: string,
   options?: { method?: string; body?: unknown; params?: Record<string, string | number | undefined> },
 ): Promise<T> {
-  let url = `/api/v1${path}`;
+  let url = `${API_BASE}${path}`;
   if (options?.params) {
     const qs = Object.entries(options.params)
       .filter(([, v]) => v !== undefined && v !== null)

@@ -46,11 +46,7 @@ from app.schemas.lp_analysis import (
 )
 from app.services.lp_analysis.competitor_intelligence import CompetitorIntelligence
 from app.services.lp_analysis.lp_comparator import LPComparator
-from app.tasks.lp_tasks import (
-    analyze_own_lp_content_task,
-    batch_crawl_lps_task,
-    crawl_and_analyze_lp_task,
-)
+from app.tasks.dispatcher import dispatch_task
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/lp-analysis", tags=["LP Analysis"])
@@ -62,7 +58,8 @@ async def crawl_lp(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Submit a landing page URL for crawling and analysis."""
-    task = crawl_and_analyze_lp_task.delay(
+    result = dispatch_task(
+        "crawl_and_analyze_lp",
         url=request.url,
         ad_id=request.ad_id,
         genre=request.genre,
@@ -71,7 +68,7 @@ async def crawl_lp(
         auto_analyze=request.auto_analyze,
     )
     return LPTaskResponse(
-        task_id=task.id,
+        task_id=result.id,
         status="queued",
         message=f"LP分析タスクをキューに追加しました: {request.url}",
     )
@@ -83,13 +80,14 @@ async def batch_crawl_lps(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Submit multiple LP URLs for batch crawling."""
-    task = batch_crawl_lps_task.delay(
+    result = dispatch_task(
+        "batch_crawl_lps",
         urls=request.urls,
         genre=request.genre,
         auto_analyze=request.auto_analyze,
     )
     return LPTaskResponse(
-        task_id=task.id,
+        task_id=result.id,
         status="queued",
         message=f"{len(request.urls)}件のLP分析タスクをキューに追加しました",
     )
@@ -431,7 +429,8 @@ async def import_own_lp(
 
         # If URL provided, queue crawl + analysis task
         if request.url:
-            crawl_and_analyze_lp_task.delay(
+            dispatch_task(
+                "crawl_and_analyze_lp",
                 url=request.url,
                 genre=request.genre,
                 product_name=request.product_name,
@@ -442,7 +441,8 @@ async def import_own_lp(
             )
         elif request.auto_analyze and (request.text_content or request.html_content):
             # For non-URL imports, trigger analysis on the provided content
-            analyze_own_lp_content_task.delay(
+            dispatch_task(
+                "analyze_own_lp_content",
                 lp_id=lp.id,
                 genre=request.genre,
             )
@@ -547,7 +547,8 @@ async def update_own_lp(
             lp.url = request.url
             import hashlib
             lp.url_hash = hashlib.sha256(request.url.encode()).hexdigest()
-            crawl_and_analyze_lp_task.delay(
+            dispatch_task(
+                "crawl_and_analyze_lp",
                 url=request.url,
                 genre=lp.genre,
                 product_name=lp.product_name,

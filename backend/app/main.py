@@ -1,5 +1,6 @@
 """FastAPI main application."""
 
+import os
 from contextlib import asynccontextmanager
 
 import structlog
@@ -207,25 +208,30 @@ def health_check():
             result["database_error"] = str(e)
             result["status"] = "degraded"
 
-    try:
-        import redis
-        r = redis.from_url(settings.redis_url, socket_timeout=2)
-        r.ping()
-        result["redis"] = "ok"
-    except Exception:
-        result["redis"] = "unavailable"
+    # Skip Redis/Celery checks in Lambda environment
+    is_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    if is_lambda:
+        result["runtime"] = "lambda"
+    else:
+        try:
+            import redis
+            r = redis.from_url(settings.redis_url, socket_timeout=2)
+            r.ping()
+            result["redis"] = "ok"
+        except Exception:
+            result["redis"] = "unavailable"
 
-    # Celery worker check
-    try:
-        from app.tasks.worker import celery_app
-        inspect = celery_app.control.inspect(timeout=1.0)
-        ping_result = inspect.ping()
-        if ping_result:
-            result["celery_workers"] = len(ping_result)
-        else:
-            result["celery_workers"] = 0
-            result["status"] = "degraded"
-    except Exception:
-        result["celery_workers"] = "unavailable"
+        # Celery worker check
+        try:
+            from app.tasks.worker import celery_app
+            inspect = celery_app.control.inspect(timeout=1.0)
+            ping_result = inspect.ping()
+            if ping_result:
+                result["celery_workers"] = len(ping_result)
+            else:
+                result["celery_workers"] = 0
+                result["status"] = "degraded"
+        except Exception:
+            result["celery_workers"] = "unavailable"
 
     return result

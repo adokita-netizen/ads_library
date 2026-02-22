@@ -196,8 +196,8 @@ async def upload_ad_video(
     # Trigger analysis task
     if auto_analyze:
         try:
-            from app.tasks.analysis_tasks import analyze_ad_task
-            analyze_ad_task.delay(ad.id)
+            from app.tasks.dispatcher import dispatch_task
+            dispatch_task("analyze_ad", ad_id=ad.id)
             ad.status = AdStatusEnum.PROCESSING
             await db.flush()
         except Exception as e:
@@ -226,13 +226,13 @@ async def trigger_analysis(
     if not ad.s3_key and not ad.video_url:
         raise HTTPException(status_code=400, detail="No video available for analysis")
 
-    from app.tasks.analysis_tasks import analyze_ad_task
-    task = analyze_ad_task.delay(ad_id)
+    from app.tasks.dispatcher import dispatch_task
+    result = dispatch_task("analyze_ad", ad_id=ad_id)
 
     ad.status = AdStatusEnum.PROCESSING
     await db.flush()
 
-    return {"task_id": task.id, "status": "processing", "message": "Analysis started"}
+    return {"task_id": result.id, "status": "processing", "message": "Analysis started"}
 
 
 @router.get("/{ad_id}/analysis", response_model=AdAnalysisResponse)
@@ -266,30 +266,49 @@ def crawl_ads(
     import structlog
     _logger = structlog.get_logger()
 
-    # Try dispatching to Celery first (only if a worker is actually available)
+    # Try dispatching to task backend (Celery or SQS)
     try:
-        from app.tasks.crawl_tasks import crawl_ads_task
-        # Check if any Celery worker is alive before dispatching
-        inspect = crawl_ads_task.app.control.inspect(timeout=1.0)
-        active_workers = inspect.ping()
-        if active_workers:
-            task = crawl_ads_task.delay(
+        from app.tasks.dispatcher import dispatch_task, TASK_BACKEND
+        if TASK_BACKEND == "sqs":
+            # SQS mode: always dispatch
+            result = dispatch_task(
+                "crawl_ads",
                 query=request.query,
                 platforms=request.platforms,
                 category=request.category,
                 limit_per_platform=request.limit_per_platform,
                 auto_analyze=request.auto_analyze,
             )
-            _logger.info("crawl_dispatched_to_celery", task_id=task.id, query=request.query)
+            _logger.info("crawl_dispatched_to_sqs", task_id=result.id, query=request.query)
             return CrawlResponse(
-                task_id=task.id,
+                task_id=result.id,
                 status="started",
                 message=f"クロールを開始しました: '{request.query}' ({len(request.platforms)}媒体)",
             )
         else:
-            _logger.info("no_celery_workers_available_using_inline")
+            # Celery mode: check if worker is available
+            from app.tasks.crawl_tasks import crawl_ads_task
+            inspect = crawl_ads_task.app.control.inspect(timeout=1.0)
+            active_workers = inspect.ping()
+            if active_workers:
+                result = dispatch_task(
+                    "crawl_ads",
+                    query=request.query,
+                    platforms=request.platforms,
+                    category=request.category,
+                    limit_per_platform=request.limit_per_platform,
+                    auto_analyze=request.auto_analyze,
+                )
+                _logger.info("crawl_dispatched_to_celery", task_id=result.id, query=request.query)
+                return CrawlResponse(
+                    task_id=result.id,
+                    status="started",
+                    message=f"クロールを開始しました: '{request.query}' ({len(request.platforms)}媒体)",
+                )
+            else:
+                _logger.info("no_celery_workers_available_using_inline")
     except Exception as celery_err:
-        _logger.warning("celery_check_failed_using_inline", error=str(celery_err))
+        _logger.warning("task_dispatch_failed_using_inline", error=str(celery_err))
 
     # Fallback: run real crawlers inline (API + scraping)
     try:

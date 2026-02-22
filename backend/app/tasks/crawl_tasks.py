@@ -84,9 +84,9 @@ def crawl_ads_task(
                     Ad.video_url.isnot(None),
                 ).order_by(Ad.created_at.desc()).limit(limit_per_platform * len(platforms)).all()
 
-                from app.tasks.analysis_tasks import analyze_ad_task
+                from app.tasks.dispatcher import dispatch_task
                 for ad in ads_to_analyze:
-                    analyze_ad_task.delay(ad.id)
+                    dispatch_task("analyze_ad", ad_id=ad.id)
                     ad.status = AdStatusEnum.PROCESSING
 
                 session.commit()
