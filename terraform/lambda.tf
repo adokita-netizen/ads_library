@@ -55,7 +55,6 @@ resource "aws_lambda_function" "sqs_ecs_trigger" {
       ECS_CONTAINER_NAME  = "${local.name_prefix}-worker"
       ECS_SUBNETS         = join(",", [aws_subnet.public_1.id, aws_subnet.public_2.id])
       ECS_SECURITY_GROUPS = aws_security_group.ecs.id
-      AWS_REGION          = var.aws_region
     }
   }
 

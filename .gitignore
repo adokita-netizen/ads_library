@@ -66,6 +66,11 @@ logs/
 htmlcov/
 .pytest_cache/
 
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
 # Temp
 tmp/
 temp/

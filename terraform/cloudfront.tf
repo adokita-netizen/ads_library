@@ -23,7 +23,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   # API Gateway Origin
   origin {
-    domain_name = replace(aws_apigatewayv2_stage.default.invoke_url, "https://", "")
+    domain_name = "${aws_apigatewayv2_api.main.id}.execute-api.${var.aws_region}.amazonaws.com"
     origin_id   = "api-gateway"
 
     custom_origin_config {
