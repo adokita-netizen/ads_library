@@ -12,7 +12,8 @@ from app.services.crawling.base_crawler import BaseCrawler, CrawledAd
 logger = structlog.get_logger()
 
 META_AD_LIBRARY_URL = "https://www.facebook.com/ads/library/"
-META_AD_LIBRARY_API = "https://graph.facebook.com/v19.0/ads_archive"
+META_GRAPH_API_VERSION = "v25.0"
+META_AD_LIBRARY_API = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/ads_archive"
 
 
 class MetaAdLibraryCrawler(BaseCrawler):
@@ -57,7 +58,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
         params = {
             "access_token": self.access_token,
             "search_terms": query,
-            "ad_reached_countries": country,
+            "ad_reached_countries": f"['{country}']",
             "ad_type": ad_type,
             "limit": min(limit, 50),
             "fields": (
@@ -247,7 +248,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
             client = await self._get_client()
             try:
                 response = await client.get(
-                    f"https://graph.facebook.com/v19.0/{external_id}",
+                    f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/{external_id}",
                     params={
                         "access_token": self.access_token,
                         "fields": (
