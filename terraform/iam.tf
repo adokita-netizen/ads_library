@@ -95,6 +95,16 @@ resource "aws_iam_role_policy" "lambda_custom" {
         ]
         Resource = "*"
       },
+      {
+        Sid    = "SecretsManager"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+        ]
+        Resource = [
+          aws_secretsmanager_secret.db_password.arn,
+        ]
+      },
     ]
   })
 }

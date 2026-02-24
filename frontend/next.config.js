@@ -7,12 +7,6 @@ const nextConfig = {
     ? { output: "export", images: { unoptimized: true } }
     : {}),
   // API proxy is handled by /src/app/api/[...path]/route.ts (dev/Vercel only)
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 };
 
 module.exports = nextConfig;

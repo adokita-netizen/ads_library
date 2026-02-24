@@ -3,16 +3,13 @@
 import csv
 import io
 from datetime import date, timedelta
-
-
-def _escape_like(value: str) -> str:
-    """Escape LIKE wildcards to prevent LIKE injection."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
+
+from app.utils.db import escape_like as _escape_like
 from sqlalchemy import func, desc, or_
 
 from app.core.database import SyncSessionLocal, sync_session_scope

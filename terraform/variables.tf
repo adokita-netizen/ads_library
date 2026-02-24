@@ -47,15 +47,27 @@ variable "db_password" {
 }
 
 variable "lambda_memory_size" {
-  description = "Lambda function memory in MB"
+  description = "API Lambda function memory in MB"
   type        = number
   default     = 512
 }
 
 variable "lambda_timeout" {
-  description = "Lambda function timeout in seconds"
+  description = "API Lambda function timeout in seconds"
   type        = number
-  default     = 30
+  default     = 60
+}
+
+variable "lambda_light_memory_size" {
+  description = "Light Tasks Lambda function memory in MB"
+  type        = number
+  default     = 512
+}
+
+variable "lambda_light_timeout" {
+  description = "Light Tasks Lambda function timeout in seconds"
+  type        = number
+  default     = 300
 }
 
 variable "worker_cpu" {
@@ -68,6 +80,12 @@ variable "worker_memory" {
   description = "ECS worker task memory in MB"
   type        = number
   default     = 4096
+}
+
+variable "cors_allowed_origins" {
+  description = "Allowed CORS origins for API Gateway"
+  type        = list(string)
+  default     = ["https://d3qlbagx7gq5sp.cloudfront.net", "http://localhost:3000"]
 }
 
 variable "domain_name" {

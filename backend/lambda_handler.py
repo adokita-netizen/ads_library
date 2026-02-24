@@ -3,6 +3,10 @@
 import os
 import json
 
+import structlog
+
+logger = structlog.get_logger()
+
 # Ensure DB tables are created on first Lambda cold start
 def _init_database():
     """Run database initialization (create tables if they don't exist)."""
@@ -16,7 +20,7 @@ def _init_database():
         import app.models.api_key  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
     except Exception as e:
-        print(f"DB init skipped: {e}")
+        logger.warning("db_init_skipped", error=str(e))
 
 _init_database()
 

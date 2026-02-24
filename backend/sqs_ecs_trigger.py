@@ -8,6 +8,9 @@ import json
 import os
 
 import boto3
+import structlog
+
+logger = structlog.get_logger()
 
 ecs = boto3.client("ecs", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
 
@@ -27,7 +30,7 @@ def handler(event, context):
         task_name = body.get("task", "unknown")
         task_kwargs = body.get("kwargs", {})
 
-        print(f"Dispatching ECS task: {task_name} with kwargs keys: {list(task_kwargs.keys())}")
+        logger.info("dispatching_ecs_task", task=task_name, kwargs_keys=list(task_kwargs.keys()))
 
         try:
             response = ecs.run_task(
@@ -60,7 +63,7 @@ def handler(event, context):
             failures = response.get("failures", [])
 
             if failures:
-                print(f"ECS RunTask failures: {failures}")
+                logger.warning("ecs_run_task_failures", task=task_name, failures=failures)
 
             results.append({
                 "task": task_name,
@@ -70,7 +73,7 @@ def handler(event, context):
             })
 
         except Exception as e:
-            print(f"ECS RunTask error for {task_name}: {e}")
+            logger.error("ecs_run_task_error", task=task_name, error=str(e), exc_info=True)
             results.append({
                 "task": task_name,
                 "status": "error",

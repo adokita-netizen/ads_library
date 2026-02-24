@@ -4,13 +4,10 @@ from typing import Optional
 
 import structlog
 
-
-def _escape_like(value: str) -> str:
-    """Escape LIKE wildcards to prevent LIKE injection."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import get_current_user_sync
+from app.utils.db import escape_like as _escape_like
 from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.landing_page import (
     AppealAxisAnalysis,

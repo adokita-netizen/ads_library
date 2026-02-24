@@ -90,7 +90,7 @@ class TestSettingsDefaults:
         assert "https://app.example.com" in settings.cors_origins_list
 
     def test_cors_origins_wildcard_default(self):
-        settings = Settings()
+        settings = Settings(_env_file=None)
         assert "*" in settings.cors_origins_list
 
     def test_ocr_languages_list(self):

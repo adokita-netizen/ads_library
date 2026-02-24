@@ -26,8 +26,8 @@ class TestConfigPlatformKeys:
         assert "gunosy_ads_api_key" in field_names
 
     def test_platform_keys_default_none(self):
-        """All platform API keys should default to None."""
-        settings = get_settings()
+        """All platform API keys should default to None (ignoring .env)."""
+        settings = Settings(_env_file=None)
 
         assert settings.meta_access_token is None
         assert settings.tiktok_access_token is None

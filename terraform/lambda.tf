@@ -20,14 +20,17 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      APP_ENV             = var.environment
-      DATABASE_URL        = "postgresql+asyncpg://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-      DATABASE_URL_SYNC   = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-      STORAGE_BACKEND     = "s3"
-      AWS_S3_BUCKET       = aws_s3_bucket.storage.id
-      TASK_BACKEND        = "sqs"
-      SQS_HEAVY_QUEUE_URL = aws_sqs_queue.heavy_tasks.url
-      SQS_LIGHT_QUEUE_URL = aws_sqs_queue.light_tasks.url
+      APP_ENV                = var.environment
+      DB_SECRET_ARN          = aws_secretsmanager_secret.db_password.arn
+      DB_USERNAME            = var.db_username
+      DB_ENDPOINT            = aws_db_instance.main.endpoint
+      DB_NAME                = var.db_name
+      CORS_ORIGINS           = join(",", var.cors_allowed_origins)
+      STORAGE_BACKEND        = "s3"
+      AWS_S3_BUCKET          = aws_s3_bucket.storage.id
+      TASK_BACKEND           = "sqs"
+      SQS_HEAVY_QUEUE_URL    = aws_sqs_queue.heavy_tasks.url
+      SQS_LIGHT_QUEUE_URL    = aws_sqs_queue.light_tasks.url
     }
   }
 
@@ -67,8 +70,8 @@ resource "aws_lambda_function" "light_tasks" {
   role          = aws_iam_role.lambda.arn
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.api.repository_url}:latest"
-  memory_size   = var.lambda_memory_size
-  timeout       = 300
+  memory_size   = var.lambda_light_memory_size
+  timeout       = var.lambda_light_timeout
 
   image_config {
     command = ["light_task_handler.handler"]
@@ -81,14 +84,16 @@ resource "aws_lambda_function" "light_tasks" {
 
   environment {
     variables = {
-      APP_ENV             = var.environment
-      DATABASE_URL        = "postgresql+asyncpg://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-      DATABASE_URL_SYNC   = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/${var.db_name}"
-      STORAGE_BACKEND     = "s3"
-      AWS_S3_BUCKET       = aws_s3_bucket.storage.id
-      TASK_BACKEND        = "sqs"
-      SQS_HEAVY_QUEUE_URL = aws_sqs_queue.heavy_tasks.url
-      SQS_LIGHT_QUEUE_URL = aws_sqs_queue.light_tasks.url
+      APP_ENV                = var.environment
+      DB_SECRET_ARN          = aws_secretsmanager_secret.db_password.arn
+      DB_USERNAME            = var.db_username
+      DB_ENDPOINT            = aws_db_instance.main.endpoint
+      DB_NAME                = var.db_name
+      STORAGE_BACKEND        = "s3"
+      AWS_S3_BUCKET          = aws_s3_bucket.storage.id
+      TASK_BACKEND           = "sqs"
+      SQS_HEAVY_QUEUE_URL    = aws_sqs_queue.heavy_tasks.url
+      SQS_LIGHT_QUEUE_URL    = aws_sqs_queue.light_tasks.url
     }
   }
 

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { adsApi, predictionsApi, lpAnalysisApi } from "@/lib/api";
+import { platformLabels, platformColors } from "@/lib/constants";
+import { formatYen, formatNumber } from "@/lib/format";
 
 interface ProductDetailModalProps {
   adId: number;
@@ -52,31 +54,6 @@ interface LPAnalysisData {
   priceText: string;
   heroHeadline: string;
   status: string;
-}
-
-const platformLabels: Record<string, string> = {
-  youtube: "YT", shorts: "S", tiktok: "TT", meta: "Meta", facebook: "FB",
-  instagram: "IG", line: "L", yahoo: "Y!", x: "X", x_twitter: "X",
-  pinterest: "Pin", smartnews: "SN", google_ads: "G", gunosy: "Gn",
-};
-
-const platformColors: Record<string, string> = {
-  youtube: "platform-youtube", tiktok: "platform-tiktok",
-  meta: "platform-meta", facebook: "platform-facebook", instagram: "platform-instagram",
-  line: "platform-line", yahoo: "platform-yahoo", x: "platform-x", x_twitter: "platform-x",
-  pinterest: "bg-red-600", smartnews: "bg-sky-600", google_ads: "bg-blue-500", gunosy: "bg-orange-500",
-};
-
-function formatYen(n: number): string {
-  if (n >= 100000000) return "¥" + (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return "¥" + (n / 10000).toFixed(0) + "万";
-  return "¥" + n.toLocaleString();
-}
-
-function formatNumber(n: number): string {
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return (n / 10000).toFixed(0) + "万";
-  return n.toLocaleString();
 }
 
 type TabType = "overview" | "creatives" | "competitors" | "analysis" | "lp-analysis";

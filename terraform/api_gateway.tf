@@ -6,7 +6,7 @@ resource "aws_apigatewayv2_api" "main" {
   description   = "VAAP API Gateway"
 
   cors_configuration {
-    allow_origins = ["*"]
+    allow_origins = var.cors_allowed_origins
     allow_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     allow_headers = ["content-type", "authorization", "accept"]
     max_age       = 3600
@@ -21,6 +21,7 @@ resource "aws_apigatewayv2_integration" "lambda" {
   integration_uri        = aws_lambda_function.api.invoke_arn
   integration_method     = "POST"
   payload_format_version = "2.0"
+  timeout_milliseconds   = var.lambda_timeout * 1000
 }
 
 resource "aws_apigatewayv2_route" "default" {

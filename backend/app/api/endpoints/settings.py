@@ -13,6 +13,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_async_session, is_in_memory_mode, get_connection_error, reconnect
 from app.models.api_key import PlatformAPIKey
 from app.models.user import User
+from app.utils.crypto import encrypt_value, decrypt_value
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 logger = structlog.get_logger()
@@ -179,7 +180,8 @@ async def list_api_keys(
 
     statuses = []
     for key in keys:
-        masked = _mask_value(key.key_value)
+        raw = _decrypt_key_value(key.key_value)
+        masked = _mask_value(raw)
         statuses.append(APIKeyStatus(
             platform=key.platform,
             key_name=key.key_name,
@@ -210,14 +212,15 @@ async def set_api_key(
     )
     existing = result.scalar_one_or_none()
 
+    encrypted = encrypt_value(request.key_value.strip())
     if existing:
-        existing.key_value = request.key_value.strip()
+        existing.key_value = encrypted
         existing.is_active = True
     else:
         new_key = PlatformAPIKey(
             platform=request.platform,
             key_name=request.key_name,
-            key_value=request.key_value.strip(),
+            key_value=encrypted,
             is_active=True,
         )
         db.add(new_key)
@@ -285,7 +288,7 @@ META_GRAPH_API_BASE = "https://graph.facebook.com/v25.0"
 
 
 async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:
-    """Fetch a single Meta platform key value from DB."""
+    """Fetch a single Meta platform key value from DB (decrypted)."""
     result = await db.execute(
         select(PlatformAPIKey).where(
             PlatformAPIKey.platform == "meta",
@@ -294,7 +297,9 @@ async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:
         )
     )
     row = result.scalar_one_or_none()
-    return row.key_value if row else None
+    if not row:
+        return None
+    return _decrypt_key_value(row.key_value)
 
 
 @router.post("/meta/exchange-token")
@@ -347,7 +352,8 @@ async def exchange_meta_token(
     if not new_token:
         raise HTTPException(status_code=500, detail="レスポンスにアクセストークンが含まれていません")
 
-    # Save the new long-lived token to DB
+    # Save the new long-lived token to DB (encrypted)
+    encrypted_token = encrypt_value(new_token)
     result = await db.execute(
         select(PlatformAPIKey).where(
             PlatformAPIKey.platform == "meta",
@@ -356,12 +362,12 @@ async def exchange_meta_token(
     )
     existing = result.scalar_one_or_none()
     if existing:
-        existing.key_value = new_token
+        existing.key_value = encrypted_token
         existing.is_active = True
     else:
         db.add(PlatformAPIKey(
             platform="meta", key_name="access_token",
-            key_value=new_token, is_active=True,
+            key_value=encrypted_token, is_active=True,
         ))
 
     logger.info("meta_token_exchanged", token_type=data.get("token_type"))
@@ -417,6 +423,15 @@ async def get_meta_token_info(
 
 # ── Helpers ─────────────────────────────────────────────────────
 
+def _decrypt_key_value(stored: str) -> str:
+    """Decrypt a stored key value, falling back to plaintext for pre-encryption data."""
+    try:
+        return decrypt_value(stored)
+    except (ValueError, Exception):
+        # Legacy plaintext value — return as-is (will be re-encrypted on next save)
+        return stored
+
+
 def _mask_value(value: str) -> str:
     """Mask API key value showing only first 4 and last 4 characters."""
     if len(value) <= 8:
@@ -443,7 +458,7 @@ def load_api_keys_from_db() -> dict[str, dict[str, str]]:
         for key in keys:
             if key.platform not in result:
                 result[key.platform] = {}
-            result[key.platform][key.key_name] = key.key_value
+            result[key.platform][key.key_name] = _decrypt_key_value(key.key_value)
 
         return result
     finally:

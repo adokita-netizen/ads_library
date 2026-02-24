@@ -107,7 +107,7 @@ class AudioSentimentAnalyzer:
                             for e in emotion_results[0]
                         }
                 except Exception:
-                    pass
+                    logger.warning("emotion_analysis_failed", exc_info=True)
 
             return SentimentScore(
                 text=text,

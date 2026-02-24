@@ -1,28 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { adsApi } from "@/lib/api";
+import { platformBadgeColors } from "@/lib/constants";
 import type { Ad } from "@/types";
 
 interface AdLibraryProps {
   onAdSelect: (adId: number) => void;
 }
 
-const platformColors: Record<string, string> = {
-  youtube: "bg-red-100 text-red-800",
-  tiktok: "bg-gray-900 text-white",
-  meta: "bg-blue-100 text-blue-800",
-  instagram: "bg-purple-100 text-purple-800",
-  facebook: "bg-blue-100 text-blue-800",
-  x_twitter: "bg-gray-100 text-gray-800",
-  x: "bg-gray-100 text-gray-800",
-  line: "bg-green-100 text-green-800",
-  yahoo: "bg-red-50 text-red-700",
-  pinterest: "bg-red-100 text-red-700",
-  smartnews: "bg-sky-100 text-sky-800",
-  google_ads: "bg-blue-100 text-blue-700",
-  gunosy: "bg-orange-100 text-orange-800",
-};
+const platformColors = platformBadgeColors;
 
 const statusColors: Record<string, string> = {
   pending: "badge-yellow",
@@ -289,7 +277,7 @@ function CrawlModal({
       });
       onSuccess();
     } catch {
-      alert("Crawl failed. Check backend connection.");
+      toast.error("Crawl failed. Check backend connection.");
     } finally {
       setLoading(false);
     }

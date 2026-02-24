@@ -1,11 +1,16 @@
 """Application configuration using pydantic-settings."""
 
+import json
+import logging
+import os
 from functools import lru_cache
 from typing import Optional
 from urllib.parse import urlparse
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+_config_logger = logging.getLogger(__name__)
 
 
 def _normalize_database_url(url: str, driver: str = "asyncpg") -> str:
@@ -56,9 +61,16 @@ class Settings(BaseSettings):
         return self.secret_key not in _INSECURE_SECRET_KEYS and len(self.secret_key) >= 32
 
     # Database — accepts DATABASE_URL in any format (postgres://, postgresql://)
-    # Supabase, Render, Railway all provide DATABASE_URL automatically
+    # Supabase, Render, Railway all provide DATABASE_URL automatically.
+    # In Lambda, DB_SECRET_ARN + DB_USERNAME/ENDPOINT/NAME are used instead.
     database_url: str = "postgresql+asyncpg://vaap:vaap_password@localhost:5432/vaap_db"
     database_url_sync: str = ""
+
+    # Secrets Manager ARN for DB password (Lambda deployments)
+    db_secret_arn: str = ""
+    db_username: str = ""
+    db_endpoint: str = ""
+    db_name: str = ""
 
     # Database pool — smaller defaults for free-tier hosting
     db_pool_size: int = 5
@@ -87,6 +99,21 @@ class Settings(BaseSettings):
     task_backend: str = "celery"
     sqs_heavy_queue_url: str = ""
     sqs_light_queue_url: str = ""
+
+    @model_validator(mode="after")
+    def _resolve_db_secret(self) -> "Settings":
+        """If DB_SECRET_ARN is set, fetch password from Secrets Manager and build DATABASE_URL."""
+        if self.db_secret_arn and self.db_endpoint:
+            try:
+                import boto3
+                client = boto3.client("secretsmanager", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
+                resp = client.get_secret_value(SecretId=self.db_secret_arn)
+                password = resp["SecretString"]
+                self.database_url = f"postgresql+asyncpg://{self.db_username}:{password}@{self.db_endpoint}/{self.db_name}"
+                self.database_url_sync = ""  # will be derived below
+            except Exception as e:
+                _config_logger.warning("Failed to resolve DB secret from Secrets Manager: %s", e)
+        return self
 
     @model_validator(mode="after")
     def _derive_urls(self) -> "Settings":

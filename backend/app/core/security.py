@@ -1,6 +1,7 @@
 """Authentication and security utilities."""
 
 import hashlib
+import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -9,6 +10,8 @@ import bcrypt
 from jose import JWTError, jwt
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -35,6 +38,7 @@ def _get_redis():
         _redis_client.ping()
         return _redis_client
     except Exception:
+        logger.warning("Redis unavailable, falling back to in-memory blacklist", exc_info=True)
         _redis_unavailable = True
         return None
 
@@ -53,7 +57,7 @@ def add_to_blacklist(token: str, exp: float):
             r.setex(f"{_BLACKLIST_PREFIX}{_token_hash(token)}", ttl, "1")
             return
         except Exception:
-            pass
+            logger.warning("Redis blacklist write failed, falling back to in-memory", exc_info=True)
     # Fallback to in-memory
     _token_blacklist[token] = exp
     _cleanup_blacklist()
@@ -66,7 +70,7 @@ def is_blacklisted(token: str) -> bool:
         try:
             return r.exists(f"{_BLACKLIST_PREFIX}{_token_hash(token)}") > 0
         except Exception:
-            pass
+            logger.warning("Redis blacklist read failed, falling back to in-memory", exc_info=True)
     return token in _token_blacklist
 
 

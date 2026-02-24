@@ -133,7 +133,7 @@ async def _crawl_platforms(
         from app.api.endpoints.settings import load_api_keys_from_db
         db_keys = load_api_keys_from_db()
     except Exception:
-        pass  # DB not available — use env vars only
+        logger.warning("db_keys_load_failed_using_env_vars", exc_info=True)
 
     def _get(platform: str, key_name: str, env_fallback: str | None) -> str | None:
         """Get key from DB first, then from env."""

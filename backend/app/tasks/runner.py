@@ -62,7 +62,7 @@ def run_task(task_name: str, kwargs: dict) -> dict:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python -m app.tasks.runner <task_name> [json_kwargs]")
+        logger.error("missing_task_name", usage="python -m app.tasks.runner <task_name> [json_kwargs]")
         sys.exit(1)
 
     task_name = sys.argv[1]

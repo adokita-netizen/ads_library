@@ -103,7 +103,7 @@ class TestSecretKeyValidation:
     """Test secret key security checks."""
 
     def test_default_key_insecure(self):
-        settings = Settings()
+        settings = Settings(_env_file=None)
         assert settings.is_secret_key_secure is False
 
     def test_short_key_insecure(self):

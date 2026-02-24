@@ -13,16 +13,13 @@ _VIDEO_MAGIC_BYTES = {
 }
 
 
-def _escape_like(value: str) -> str:
-    """Escape LIKE wildcards to prevent LIKE injection."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.utils.db import escape_like as _escape_like
 from app.core.config import get_settings
 from app.core.database import get_async_session, SyncSessionLocal
 from app.core.storage import get_storage_client

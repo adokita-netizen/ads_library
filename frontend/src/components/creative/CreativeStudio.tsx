@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { creativeApi } from "@/lib/api";
 
 type CreativeMode = "script" | "copy" | "lp" | "storyboard";
@@ -70,7 +71,7 @@ export default function CreativeStudio() {
       if (response) setResult(response.data);
     } catch (err) {
       console.error("Creative generation failed:", err);
-      alert("生成に失敗しました。API接続とAPIキーを確認してください。");
+      toast.error("生成に失敗しました。API接続とAPIキーを確認してください。");
     } finally {
       setLoading(false);
     }

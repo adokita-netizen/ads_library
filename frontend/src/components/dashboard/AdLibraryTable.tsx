@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { platformLabels, platformColors, genreOptions as sharedGenreOptions } from "@/lib/constants";
+import { formatNumber, formatYen } from "@/lib/format";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -51,40 +55,6 @@ interface MockAd {
 }
 
 
-const platformLabels: Record<string, string> = {
-  youtube: "YT",
-  shorts: "S",
-  tiktok: "TT",
-  meta: "Meta",
-  facebook: "FB",
-  instagram: "IG",
-  line: "L",
-  yahoo: "Y!",
-  x_twitter: "X",
-  x: "X",
-  pinterest: "Pin",
-  smartnews: "SN",
-  google_ads: "G",
-  gunosy: "Gn",
-};
-
-const platformColors: Record<string, string> = {
-  youtube: "platform-youtube",
-  shorts: "bg-red-400",
-  tiktok: "platform-tiktok",
-  meta: "platform-meta",
-  facebook: "platform-facebook",
-  instagram: "platform-instagram",
-  line: "platform-line",
-  yahoo: "platform-yahoo",
-  x_twitter: "platform-x",
-  x: "platform-x",
-  pinterest: "bg-red-600",
-  smartnews: "bg-sky-600",
-  google_ads: "bg-blue-500",
-  gunosy: "bg-orange-500",
-};
-
 const mediaFilterOptions: { value: MediaType; label: string }[] = [
   { value: "all", label: "全媒体" },
   { value: "meta", label: "Meta (FB/IG)" },
@@ -102,21 +72,7 @@ const mediaFilterOptions: { value: MediaType; label: string }[] = [
   { value: "gunosy", label: "Gunosy" },
 ];
 
-const genreFilterOptions: { value: GenreType; label: string }[] = [
-  { value: "all", label: "全ジャンル" },
-  { value: "ec_d2c", label: "EC・D2C" },
-  { value: "app", label: "アプリ" },
-  { value: "finance", label: "金融" },
-  { value: "education", label: "教育" },
-  { value: "beauty", label: "美容・コスメ" },
-  { value: "food", label: "食品" },
-  { value: "gaming", label: "ゲーム" },
-  { value: "health", label: "健康食品" },
-  { value: "technology", label: "テクノロジー" },
-  { value: "real_estate", label: "不動産" },
-  { value: "travel", label: "旅行" },
-  { value: "other", label: "その他" },
-];
+const genreFilterOptions = sharedGenreOptions as { value: GenreType; label: string }[];
 
 const adTypeOptions: { value: AdType; label: string }[] = [
   { value: "all", label: "広告の全種類" },
@@ -133,16 +89,36 @@ const intervalOptions: { value: IntervalType; label: string }[] = [
   { value: "30days", label: "30日間隔の統計" },
 ];
 
-function formatNumber(n: number): string {
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return (n / 10000).toFixed(0) + "万";
-  return n.toLocaleString();
-}
-
-function formatYen(n: number): string {
-  if (n >= 100000000) return "¥" + (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return "¥" + (n / 10000).toFixed(0) + "万";
-  return "¥" + n.toLocaleString();
+function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }): MockAd[] {
+  const items = data?.items || data?.rankings || data?.results;
+  if (!Array.isArray(items) || items.length === 0) return [];
+  return items.map((item: Record<string, unknown>, idx: number) => {
+    const adId = (item.ad_id as number) || (item.id as number) || idx + 1;
+    const platformRaw = ((item.platform as string) || "").toLowerCase();
+    return {
+      id: adId,
+      rank: (item.rank as number) || idx + 1,
+      thumbnail: (item.thumbnail as string) || "",
+      duration: (item.duration_seconds as number) || 0,
+      platform: platformRaw || "youtube",
+      managementId: (item.management_id as string) || `AD-${adId}`,
+      productName: (item.product_name as string) || (item.title as string) || "不明",
+      genre: (item.genre as string) || (item.category as string) || "",
+      destinationType: (item.destination_type as string) || "",
+      playIncrease: (item.view_increase as number) || 0,
+      spendIncrease: (item.spend_increase as number) || 0,
+      spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
+      isHit: (item.is_hit as boolean) || false,
+      totalPlays: (item.cumulative_views as number) || 0,
+      totalSpend: (item.cumulative_spend as number) || 0,
+      publishedDate: (item.published_date as string) || (item.created_at as string) || "",
+      adUrl: (item.ad_url as string) || "",
+      destination: (item.destination_url as string) || "",
+      creativeType: (item.creative_type as string) || "unknown",
+      imageUrl: (item.image_url as string) || "",
+      snapshotUrl: (item.snapshot_url as string) || "",
+    };
+  });
 }
 
 export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
@@ -160,14 +136,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const [ads, setAds] = useState<MockAd[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCrawlModal, setShowCrawlModal] = useState(false);
-  const [fetchTrigger, setFetchTrigger] = useState(0);
-
-  const [fetchError, setFetchError] = useState("");
-
-  const [isFallback, setIsFallback] = useState(false);
 
   // Debounce search input to avoid excessive API calls
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
@@ -177,82 +147,42 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
     return () => clearTimeout(debounceRef.current);
   }, [filters.search]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setFetchError("");
-      try {
-        const searchText = debouncedSearch.trim();
-        let data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number; is_fallback?: boolean };
+  const queryKey = ["adLibrary", filters.media, filters.genre, filters.interval, debouncedSearch] as const;
 
-        if (searchText) {
-          // Use Pro-Search endpoint for text search
-          const params: Record<string, string | number | undefined> = {
-            q: searchText,
-            search_scope: "all",
-          };
-          if (filters.media !== "all") params.platform = filters.media;
-          if (filters.genre !== "all") params.genre = filters.genre;
-          data = await fetchApi("/rankings/search", { params });
-          setIsFallback(false);
-        } else {
-          // Use rankings endpoint for browsing
-          const params: Record<string, string | number | undefined> = {};
-          if (filters.media !== "all") params.platform = filters.media;
-          if (filters.genre !== "all") params.genre = filters.genre;
-          if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
-          else if (filters.interval === "30days") params.period = "monthly";
-          else params.period = "daily";
-          data = await fetchApi("/rankings/products", { params });
-          setIsFallback(Boolean(data?.is_fallback));
-        }
+  const { data: queryResult, isLoading: loading, error: queryError } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const searchText = debouncedSearch.trim();
+      let data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[]; total?: number; is_fallback?: boolean };
 
-        const items = data?.items || data?.rankings || data?.results;
-        if (Array.isArray(items) && items.length > 0) {
-          const mapped: MockAd[] = items.map((item: Record<string, unknown>, idx: number) => {
-            const adId = (item.ad_id as number) || (item.id as number) || idx + 1;
-            const platformRaw = ((item.platform as string) || "").toLowerCase();
-            return {
-              id: adId,
-              rank: (item.rank as number) || idx + 1,
-              thumbnail: (item.thumbnail as string) || "",
-              duration: (item.duration_seconds as number) || 0,
-              platform: platformRaw || "youtube",
-              managementId: (item.management_id as string) || `AD-${adId}`,
-              productName: (item.product_name as string) || (item.title as string) || "不明",
-              genre: (item.genre as string) || (item.category as string) || "",
-              destinationType: (item.destination_type as string) || "",
-              playIncrease: (item.view_increase as number) || 0,
-              spendIncrease: (item.spend_increase as number) || 0,
-              spendBar: Math.min(100, Math.round(((item.spend_increase as number) || 0) / 100000)),
-              isHit: (item.is_hit as boolean) || false,
-              totalPlays: (item.cumulative_views as number) || 0,
-              totalSpend: (item.cumulative_spend as number) || 0,
-              publishedDate: (item.published_date as string) || (item.created_at as string) || "",
-              adUrl: (item.ad_url as string) || "",
-              destination: (item.destination_url as string) || "",
-              creativeType: (item.creative_type as string) || "unknown",
-              imageUrl: (item.image_url as string) || "",
-              snapshotUrl: (item.snapshot_url as string) || "",
-            };
-          });
-          setAds(mapped);
-        } else {
-          setAds([]);
-        }
-      } catch (error: unknown) {
-        const err = error as { status?: number; message?: string; data?: unknown };
-        const msg = `データ取得エラー: ${err?.message || "不明"}`;
-        console.error("Failed to fetch ad data:", err);
-        setFetchError(msg);
-        setAds([]);
-      } finally {
-        setLoading(false);
+      if (searchText) {
+        const params: Record<string, string | number | undefined> = {
+          q: searchText,
+          search_scope: "all",
+        };
+        if (filters.media !== "all") params.platform = filters.media;
+        if (filters.genre !== "all") params.genre = filters.genre;
+        data = await fetchApi("/rankings/search", { params });
+        return { ads: mapItems(data), isFallback: false };
+      } else {
+        const params: Record<string, string | number | undefined> = {};
+        if (filters.media !== "all") params.platform = filters.media;
+        if (filters.genre !== "all") params.genre = filters.genre;
+        if (filters.interval === "7days" || filters.interval === "14days") params.period = "weekly";
+        else if (filters.interval === "30days") params.period = "monthly";
+        else params.period = "daily";
+        data = await fetchApi("/rankings/products", { params });
+        return { ads: mapItems(data), isFallback: Boolean(data?.is_fallback) };
       }
-    };
-    fetchData();
-    setCurrentPage(1);
-  }, [filters.media, filters.genre, filters.interval, debouncedSearch, fetchTrigger]);
+    },
+  });
+
+  const ads = queryResult?.ads ?? [];
+  const isFallback = queryResult?.isFallback ?? false;
+  const fetchError = queryError ? `データ取得エラー: ${(queryError as Error).message || "不明"}` : "";
+
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(1); }, [filters.media, filters.genre, filters.interval, debouncedSearch]);
 
   const filteredAds = useMemo(() => {
     let result = [...ads];
@@ -429,7 +359,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 <p className="text-xs text-red-500">{fetchError}</p>
                 <button
                   className="mt-3 px-4 py-2 rounded-md text-xs font-medium text-white bg-red-500 hover:bg-red-600 transition-colors"
-                  onClick={() => setFetchTrigger((n) => n + 1)}
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["adLibrary"] })}
                 >
                   再試行
                 </button>
@@ -643,8 +573,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                             method: "POST",
                             body: { url: ad.destination, ad_id: ad.id, auto_analyze: true },
                           })
-                            .then(() => { alert("LP分析を開始しました"); })
-                            .catch(() => { alert("LP分析の開始に失敗しました"); });
+                            .then(() => { toast.success("LP分析を開始しました"); })
+                            .catch(() => { toast.error("LP分析の開始に失敗しました"); });
                         }}
                         title="遷移先LPを分析"
                       >
@@ -707,7 +637,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
           onClose={() => setShowCrawlModal(false)}
           onSuccess={() => {
             setShowCrawlModal(false);
-            setFetchTrigger((n) => n + 1);
+            queryClient.invalidateQueries({ queryKey: ["adLibrary"] });
           }}
         />
       )}

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { fetchApi } from "@/lib/api";
+import { platformLabels, platformColors, genreOptions } from "@/lib/constants";
+import { formatYen, formatNumber } from "@/lib/format";
 
 type TrendPeriod = "daily" | "weekly" | "monthly";
 type TrendCategory = "all" | "ec_d2c" | "app" | "finance" | "education" | "beauty" | "food" | "gaming" | "health" | "technology" | "real_estate" | "travel" | "other";
@@ -18,67 +20,7 @@ interface TrendItem {
 }
 
 
-const platformLabels: Record<string, string> = {
-  youtube: "YT",
-  shorts: "S",
-  tiktok: "TT",
-  meta: "Meta",
-  facebook: "FB",
-  instagram: "IG",
-  line: "L",
-  yahoo: "Y!",
-  x_twitter: "X",
-  x: "X",
-  pinterest: "Pin",
-  smartnews: "SN",
-  google_ads: "G",
-  gunosy: "Gn",
-};
-
-const platformColors: Record<string, string> = {
-  youtube: "platform-youtube",
-  shorts: "bg-red-400",
-  tiktok: "platform-tiktok",
-  meta: "platform-meta",
-  facebook: "platform-facebook",
-  instagram: "platform-instagram",
-  line: "platform-line",
-  yahoo: "platform-yahoo",
-  x_twitter: "platform-x",
-  x: "platform-x",
-  pinterest: "bg-red-600",
-  smartnews: "bg-sky-600",
-  google_ads: "bg-blue-500",
-  gunosy: "bg-orange-500",
-};
-
-const categoryOptions: { value: TrendCategory; label: string }[] = [
-  { value: "all", label: "全ジャンル" },
-  { value: "ec_d2c", label: "EC・D2C" },
-  { value: "app", label: "アプリ" },
-  { value: "finance", label: "金融" },
-  { value: "education", label: "教育" },
-  { value: "beauty", label: "美容・コスメ" },
-  { value: "food", label: "食品" },
-  { value: "gaming", label: "ゲーム" },
-  { value: "health", label: "健康食品" },
-  { value: "technology", label: "テクノロジー" },
-  { value: "real_estate", label: "不動産" },
-  { value: "travel", label: "旅行" },
-  { value: "other", label: "その他" },
-];
-
-function formatYen(n: number): string {
-  if (n >= 100000000) return "¥" + (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return "¥" + (n / 10000).toFixed(0) + "万";
-  return "¥" + n.toLocaleString();
-}
-
-function formatNumber(n: number): string {
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + "億";
-  if (n >= 10000) return (n / 10000).toFixed(0) + "万";
-  return n.toLocaleString();
-}
+const categoryOptions = genreOptions as { value: TrendCategory; label: string }[];
 
 export default function TrendView() {
   const [period, setPeriod] = useState<TrendPeriod>("daily");
