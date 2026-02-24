@@ -68,6 +68,7 @@ class Ad(Base):
         Index("idx_ads_brand", "brand_name"),
         Index("idx_ads_created_desc", "created_at"),
         Index("idx_ads_platform_status", "platform", "status"),
+        Index("idx_ads_creative_type", "creative_type"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -80,10 +81,16 @@ class Ad(Base):
     )
     category: Mapped[AdCategoryEnum | None] = mapped_column(Enum(AdCategoryEnum), nullable=True)
 
-    # Video metadata
+    # Creative type & media metadata
+    creative_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # video/image/carousel/unknown
     video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     thumbnail_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_s3_keys: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # carousel multiple images
+    snapshot_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # platform preview URL
+    media_extraction_status: Mapped[str | None] = mapped_column(String(50), nullable=True)  # pending/completed/failed/skipped
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     resolution_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resolution_height: Mapped[int | None] = mapped_column(Integer, nullable=True)

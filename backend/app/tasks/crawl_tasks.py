@@ -59,7 +59,11 @@ def crawl_ads_task(
                         title=crawled_ad.title,
                         description=crawled_ad.description,
                         platform=platform_enum,
+                        creative_type=crawled_ad.creative_type,
                         video_url=crawled_ad.video_url,
+                        snapshot_url=crawled_ad.snapshot_url,
+                        image_url=crawled_ad.image_urls[0] if crawled_ad.image_urls else None,
+                        media_extraction_status="pending" if crawled_ad.snapshot_url else "skipped",
                         advertiser_name=crawled_ad.advertiser_name,
                         advertiser_url=crawled_ad.advertiser_url,
                         brand_name=crawled_ad.brand_name,
@@ -77,6 +81,18 @@ def crawl_ads_task(
 
             session.commit()
 
+            # Dispatch media extraction for ads with snapshot_url
+            from app.tasks.dispatcher import dispatch_task
+            ads_with_snapshot = session.query(Ad).filter(
+                Ad.media_extraction_status == "pending",
+                Ad.snapshot_url.isnot(None),
+            ).order_by(Ad.created_at.desc()).limit(saved_count).all()
+            for ad_to_extract in ads_with_snapshot:
+                try:
+                    dispatch_task("extract_media", ad_id=ad_to_extract.id)
+                except Exception as e:
+                    logger.warning("media_extraction_dispatch_failed", ad_id=ad_to_extract.id, error=str(e))
+
             # Auto-analyze if requested
             if auto_analyze:
                 ads_to_analyze = session.query(Ad).filter(
@@ -84,7 +100,6 @@ def crawl_ads_task(
                     Ad.video_url.isnot(None),
                 ).order_by(Ad.created_at.desc()).limit(limit_per_platform * len(platforms)).all()
 
-                from app.tasks.dispatcher import dispatch_task
                 for ad in ads_to_analyze:
                     dispatch_task("analyze_ad", ad_id=ad.id)
                     ad.status = AdStatusEnum.PROCESSING

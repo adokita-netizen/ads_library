@@ -93,7 +93,11 @@ const FALLBACK_PLATFORMS: PlatformDefinition[] = [
   },
   {
     platform: "meta", label: "Meta (Facebook / Instagram)",
-    keys: [{ key_name: "access_token", label: "Meta Graph API アクセストークン", placeholder: "EAAGm0PX..." }],
+    keys: [
+      { key_name: "access_token", label: "Meta Graph API アクセストークン", placeholder: "EAAGm0PX..." },
+      { key_name: "app_id", label: "Meta App ID", placeholder: "123456789012345" },
+      { key_name: "app_secret", label: "Meta App Secret", placeholder: "abcdef1234567890..." },
+    ],
     docs_url: "https://developers.facebook.com/tools/explorer/",
     setup_guide: "1. developers.facebook.com でアカウント作成（無料）\n2. 「マイアプリ」→ 新規アプリ作成（種類:ビジネス）\n3. Graph APIエクスプローラーを開く\n4. 右上の「トークンを取得」→ ユーザーアクセストークン\n5. ads_read権限を追加して「Generate Access Token」\n※ トークンは約1時間で期限切れ。長期トークン（60日）は「アクセストークンデバッガー」で延長可能",
     cost_info: "無料（Meta Ad Library APIは誰でも利用可能。開発者アカウント登録のみ必要）",
@@ -662,6 +666,11 @@ function PlatformCard({
             </a>
           </div>
 
+          {/* Meta Token Management — shown only for meta platform */}
+          {platform.platform === "meta" && (
+            <MetaTokenSection getKeyStatus={getKeyStatus} />
+          )}
+
           {/* Key Fields */}
           <div className="space-y-3">
             {platform.keys.map((keyDef) => {
@@ -747,6 +756,172 @@ function PlatformCard({
               );
             })}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Meta Token Management Section ─────────────────────────── */
+
+interface MetaTokenInfo {
+  has_token: boolean;
+  is_valid?: boolean;
+  app_id?: string;
+  type?: string;
+  expires_at?: number;
+  scopes?: string[];
+  message?: string;
+}
+
+function MetaTokenSection({
+  getKeyStatus,
+}: {
+  getKeyStatus: (platform: string, keyName: string) => KeyStatus | undefined;
+}) {
+  const [tokenInfo, setTokenInfo] = useState<MetaTokenInfo | null>(null);
+  const [loadingInfo, setLoadingInfo] = useState(false);
+  const [exchanging, setExchanging] = useState(false);
+  const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const hasToken = getKeyStatus("meta", "access_token")?.is_set;
+  const hasAppId = getKeyStatus("meta", "app_id")?.is_set;
+  const hasAppSecret = getKeyStatus("meta", "app_secret")?.is_set;
+  const canExchange = hasToken && hasAppId && hasAppSecret;
+
+  const loadTokenInfo = useCallback(async () => {
+    setLoadingInfo(true);
+    try {
+      const data = await fetchApi<MetaTokenInfo>("/settings/meta/token-info");
+      setTokenInfo(data);
+    } catch {
+      setTokenInfo(null);
+    } finally {
+      setLoadingInfo(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasToken) {
+      loadTokenInfo();
+    } else {
+      setTokenInfo(null);
+    }
+  }, [hasToken, loadTokenInfo]);
+
+  const handleExchange = async () => {
+    setExchanging(true);
+    setResultMsg(null);
+    try {
+      const data = await fetchApi<{ status: string; message: string }>("/settings/meta/exchange-token", {
+        method: "POST",
+      });
+      setResultMsg({ type: "success", text: data.message });
+      // Refresh token info after exchange
+      await loadTokenInfo();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "トークン交換に失敗しました";
+      setResultMsg({ type: "error", text: message });
+    } finally {
+      setExchanging(false);
+    }
+  };
+
+  const formatExpiry = (expiresAt: number | undefined) => {
+    if (expiresAt === undefined) return null;
+    if (expiresAt === 0) return "無期限";
+    const date = new Date(expiresAt * 1000);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const formatted = date.toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" });
+    if (diffMs < 0) return `${formatted} (期限切れ)`;
+    if (diffDays === 0) return `${formatted} (本日中に期限切れ)`;
+    return `${formatted} (残り${diffDays}日)`;
+  };
+
+  return (
+    <div className="bg-indigo-50 border border-indigo-200 rounded p-3 mb-3">
+      <h4 className="text-[11px] font-bold text-indigo-800 mb-2">トークン管理</h4>
+
+      {/* Token Info */}
+      {loadingInfo ? (
+        <div className="flex items-center gap-2 text-[11px] text-indigo-600">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+          トークン情報を取得中...
+        </div>
+      ) : tokenInfo?.has_token ? (
+        <div className="space-y-1.5 mb-3">
+          {tokenInfo.is_valid !== undefined && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className={`w-1.5 h-1.5 rounded-full ${tokenInfo.is_valid ? "bg-emerald-500" : "bg-red-500"}`} />
+              <span className={tokenInfo.is_valid ? "text-emerald-700" : "text-red-700"}>
+                {tokenInfo.is_valid ? "有効" : "無効"}
+              </span>
+              {tokenInfo.type && (
+                <span className="text-gray-500">({tokenInfo.type})</span>
+              )}
+            </div>
+          )}
+          {tokenInfo.expires_at !== undefined && (
+            <p className="text-[11px] text-indigo-700">
+              有効期限: {formatExpiry(tokenInfo.expires_at)}
+            </p>
+          )}
+          {tokenInfo.scopes && tokenInfo.scopes.length > 0 && (
+            <p className="text-[11px] text-indigo-600">
+              スコープ: {tokenInfo.scopes.join(", ")}
+            </p>
+          )}
+          {tokenInfo.message && (
+            <p className="text-[11px] text-indigo-600">{tokenInfo.message}</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-[11px] text-indigo-600 mb-3">
+          アクセストークンが未設定です
+        </p>
+      )}
+
+      {/* Exchange Button */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleExchange}
+          disabled={!canExchange || exchanging}
+          className="px-3 py-1.5 text-[11px] font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {exchanging ? "変換中..." : "長期トークンに変換（60日）"}
+        </button>
+        {hasToken && (
+          <button
+            onClick={loadTokenInfo}
+            disabled={loadingInfo}
+            className="px-2 py-1.5 text-[11px] font-medium text-indigo-600 bg-indigo-100 rounded hover:bg-indigo-200 disabled:opacity-50 transition-colors"
+          >
+            更新
+          </button>
+        )}
+      </div>
+      {!canExchange && (
+        <p className="text-[10px] text-indigo-500 mt-1.5">
+          {!hasToken
+            ? "アクセストークンを先に設定してください"
+            : !hasAppId || !hasAppSecret
+            ? "App ID と App Secret を設定すると、長期トークンへの変換が可能になります"
+            : ""}
+        </p>
+      )}
+
+      {/* Result Message */}
+      {resultMsg && (
+        <div
+          className={`mt-2 px-2.5 py-1.5 rounded text-[11px] ${
+            resultMsg.type === "success"
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : "bg-red-50 text-red-700 border border-red-200"
+          }`}
+        >
+          {resultMsg.text}
         </div>
       )}
     </div>

@@ -25,8 +25,11 @@ class CrawledAd:
     advertiser_name: Optional[str] = None
     advertiser_url: Optional[str] = None
     brand_name: Optional[str] = None
+    creative_type: str = "unknown"  # "video" / "image" / "carousel" / "unknown"
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    image_urls: list[str] = field(default_factory=list)
+    snapshot_url: Optional[str] = None
     duration_seconds: Optional[float] = None
     view_count: Optional[int] = None
     like_count: Optional[int] = None

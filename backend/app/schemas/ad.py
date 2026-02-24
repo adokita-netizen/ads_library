@@ -11,7 +11,9 @@ class AdCreate(BaseModel):
     description: Optional[str] = None
     platform: str
     category: Optional[str] = None
+    creative_type: Optional[str] = None
     video_url: Optional[str] = None
+    image_url: Optional[str] = None
     advertiser_name: Optional[str] = None
     brand_name: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
@@ -25,8 +27,13 @@ class AdResponse(BaseModel):
     platform: str
     status: str
     category: Optional[str] = None
+    creative_type: Optional[str] = None
     video_url: Optional[str] = None
     s3_key: Optional[str] = None
+    image_url: Optional[str] = None
+    image_s3_key: Optional[str] = None
+    snapshot_url: Optional[str] = None
+    media_extraction_status: Optional[str] = None
     duration_seconds: Optional[float] = None
     advertiser_name: Optional[str] = None
     brand_name: Optional[str] = None

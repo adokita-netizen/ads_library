@@ -45,6 +45,9 @@ interface MockAd {
   publishedDate: string;
   adUrl: string;
   destination: string;
+  creativeType: string;
+  imageUrl: string;
+  snapshotUrl: string;
 }
 
 
@@ -228,6 +231,9 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
               publishedDate: (item.published_date as string) || (item.created_at as string) || "",
               adUrl: (item.ad_url as string) || "",
               destination: (item.destination_url as string) || "",
+              creativeType: (item.creative_type as string) || "unknown",
+              imageUrl: (item.image_url as string) || "",
+              snapshotUrl: (item.snapshot_url as string) || "",
             };
           });
           setAds(mapped);
@@ -492,15 +498,44 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 {/* Thumbnail */}
                 <td>
                   <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                      </svg>
+                    {(ad.imageUrl || ad.snapshotUrl || ad.thumbnail) ? (
+                      <img
+                        src={ad.imageUrl || ad.snapshotUrl || ad.thumbnail}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = "none";
+                          if (target.nextElementSibling) (target.nextElementSibling as HTMLElement).style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
+                      style={{ display: (ad.imageUrl || ad.snapshotUrl || ad.thumbnail) ? "none" : "flex" }}
+                    >
+                      {/* Creative type icon */}
+                      {ad.creativeType === "image" ? (
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                        </svg>
+                      ) : ad.creativeType === "carousel" ? (
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 6h12M6 12h12m-6-6v12M3.75 3h16.5A2.25 2.25 0 0122.5 5.25v13.5A2.25 2.25 0 0120.25 21H3.75A2.25 2.25 0 011.5 18.75V5.25A2.25 2.25 0 013.75 3z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                        </svg>
+                      )}
                     </div>
-                    {/* Duration overlay */}
-                    <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[9px] px-1 rounded leading-relaxed">
-                      {Math.floor(ad.duration / 60)}:{(ad.duration % 60).toString().padStart(2, "0")}
-                    </span>
+                    {/* Duration overlay — only for video */}
+                    {(ad.creativeType === "video" || ad.creativeType === "unknown") && ad.duration > 0 && (
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[9px] px-1 rounded leading-relaxed">
+                        {Math.floor(ad.duration / 60)}:{(ad.duration % 60).toString().padStart(2, "0")}
+                      </span>
+                    )}
                     {/* Platform icon */}
                     <span className={`absolute top-0.5 left-0.5 platform-icon ${platformColors[ad.platform]}`}>
                       {platformLabels[ad.platform]}

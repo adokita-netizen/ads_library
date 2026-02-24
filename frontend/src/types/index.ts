@@ -6,8 +6,13 @@ export interface Ad {
   platform: string;
   status: string;
   category?: string;
+  creative_type?: string;
   video_url?: string;
   s3_key?: string;
+  image_url?: string;
+  image_s3_key?: string;
+  snapshot_url?: string;
+  media_extraction_status?: string;
   duration_seconds?: number;
   advertiser_name?: string;
   brand_name?: string;

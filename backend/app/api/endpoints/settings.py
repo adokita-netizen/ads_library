@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -33,6 +34,8 @@ PLATFORM_KEY_DEFINITIONS: list[dict] = [
         "label": "Meta (Facebook / Instagram)",
         "keys": [
             {"key_name": "access_token", "label": "Meta Graph API アクセストークン", "placeholder": "EAAGm0PX..."},
+            {"key_name": "app_id", "label": "Meta App ID", "placeholder": "123456789012345"},
+            {"key_name": "app_secret", "label": "Meta App Secret", "placeholder": "abcdef1234567890..."},
         ],
         "docs_url": "https://developers.facebook.com/tools/explorer/",
         "setup_guide": "Meta for Developers → Graph APIエクスプローラー → アクセストークンを生成 → ads_read権限を付与",
@@ -274,6 +277,142 @@ async def test_api_key(
 
     # No specific check — assume valid if non-empty
     return {"valid": True, "message": "キーが設定されています"}
+
+
+# ── Meta token management ────────────────────────────────────────
+
+META_GRAPH_API_BASE = "https://graph.facebook.com/v25.0"
+
+
+async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:
+    """Fetch a single Meta platform key value from DB."""
+    result = await db.execute(
+        select(PlatformAPIKey).where(
+            PlatformAPIKey.platform == "meta",
+            PlatformAPIKey.key_name == key_name,
+            PlatformAPIKey.is_active == True,
+        )
+    )
+    row = result.scalar_one_or_none()
+    return row.key_value if row else None
+
+
+@router.post("/meta/exchange-token")
+async def exchange_meta_token(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Exchange a short-lived Meta token for a long-lived (60-day) token.
+
+    Reads app_id, app_secret, access_token from DB, calls the Meta OAuth
+    endpoint, and saves the new long-lived token back to DB.
+    """
+    app_id = await _get_meta_key(db, "app_id")
+    app_secret = await _get_meta_key(db, "app_secret")
+    access_token = await _get_meta_key(db, "access_token")
+
+    if not app_id or not app_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Meta App ID と App Secret を先に設定してください",
+        )
+    if not access_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Meta アクセストークンを先に設定してください",
+        )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{META_GRAPH_API_BASE}/oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": app_id,
+                "client_secret": app_secret,
+                "fb_exchange_token": access_token,
+            },
+        )
+
+    if resp.status_code != 200:
+        error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        error_msg = error_data.get("error", {}).get("message", resp.text)
+        logger.warning("meta_token_exchange_failed", status=resp.status_code, error=error_msg)
+        raise HTTPException(
+            status_code=400,
+            detail=f"トークン交換に失敗しました: {error_msg}",
+        )
+
+    data = resp.json()
+    new_token = data.get("access_token")
+    if not new_token:
+        raise HTTPException(status_code=500, detail="レスポンスにアクセストークンが含まれていません")
+
+    # Save the new long-lived token to DB
+    result = await db.execute(
+        select(PlatformAPIKey).where(
+            PlatformAPIKey.platform == "meta",
+            PlatformAPIKey.key_name == "access_token",
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.key_value = new_token
+        existing.is_active = True
+    else:
+        db.add(PlatformAPIKey(
+            platform="meta", key_name="access_token",
+            key_value=new_token, is_active=True,
+        ))
+
+    logger.info("meta_token_exchanged", token_type=data.get("token_type"))
+    return {
+        "status": "ok",
+        "message": "長期トークンに変換しました（有効期限: 約60日）",
+        "token_type": data.get("token_type"),
+    }
+
+
+@router.get("/meta/token-info")
+async def get_meta_token_info(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Return information about the current Meta access token (expiry, scopes, type)."""
+    app_id = await _get_meta_key(db, "app_id")
+    app_secret = await _get_meta_key(db, "app_secret")
+    access_token = await _get_meta_key(db, "access_token")
+
+    if not access_token:
+        return {"has_token": False, "message": "アクセストークンが設定されていません"}
+
+    # If app_id + app_secret are set, use debug_token for detailed info
+    if app_id and app_secret:
+        app_token = f"{app_id}|{app_secret}"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"{META_GRAPH_API_BASE}/debug_token",
+                params={
+                    "input_token": access_token,
+                    "access_token": app_token,
+                },
+            )
+
+        if resp.status_code == 200:
+            info = resp.json().get("data", {})
+            return {
+                "has_token": True,
+                "is_valid": info.get("is_valid", False),
+                "app_id": info.get("app_id"),
+                "type": info.get("type"),
+                "expires_at": info.get("expires_at"),  # unix timestamp, 0 = never
+                "scopes": info.get("scopes", []),
+            }
+
+    # Fallback: minimal check without app credentials
+    return {
+        "has_token": True,
+        "message": "App ID と App Secret を設定すると、トークンの詳細情報を確認できます",
+    }
 
 
 # ── Helpers ─────────────────────────────────────────────────────

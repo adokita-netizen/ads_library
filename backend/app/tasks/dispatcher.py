@@ -16,6 +16,7 @@ HEAVY_TASKS = frozenset({
     "crawl_ads",
     "analyze_ad",
     "crawl_and_analyze_lp",
+    "extract_media",
 })
 
 LIGHT_TASKS = frozenset({
@@ -32,6 +33,7 @@ _CELERY_TASK_MAP = {
     "crawl_ads": "app.tasks.crawl_tasks.crawl_ads_task",
     "analyze_ad": "app.tasks.analysis_tasks.analyze_ad_task",
     "crawl_and_analyze_lp": "app.tasks.lp_tasks.crawl_and_analyze_lp_task",
+    "extract_media": "app.tasks.media_tasks.extract_media_task",
     "analyze_own_lp_content": "app.tasks.lp_tasks.analyze_own_lp_content_task",
     "batch_crawl_lps": "app.tasks.lp_tasks.batch_crawl_lps_task",
     "compute_rankings": "app.tasks.ranking_tasks.compute_rankings_task",

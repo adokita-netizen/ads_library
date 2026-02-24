@@ -116,7 +116,9 @@ async def create_ad(
         description=ad_data.description,
         platform=ad_data.platform,
         category=ad_data.category,
+        creative_type=ad_data.creative_type,
         video_url=ad_data.video_url,
+        image_url=ad_data.image_url,
         advertiser_name=ad_data.advertiser_name,
         brand_name=ad_data.brand_name,
         tags=ad_data.tags,
@@ -381,7 +383,11 @@ def _inline_crawl(
                     title=crawled_ad.title,
                     description=crawled_ad.description,
                     platform=_map_platform(platform),
+                    creative_type=crawled_ad.creative_type,
                     video_url=crawled_ad.video_url,
+                    snapshot_url=crawled_ad.snapshot_url,
+                    image_url=crawled_ad.image_urls[0] if crawled_ad.image_urls else None,
+                    media_extraction_status="pending" if crawled_ad.snapshot_url else "skipped",
                     advertiser_name=crawled_ad.advertiser_name,
                     advertiser_url=crawled_ad.advertiser_url,
                     brand_name=crawled_ad.brand_name,
@@ -398,6 +404,20 @@ def _inline_crawl(
                 saved += 1
 
         session.commit()
+
+        # Dispatch media extraction for ads with snapshot_url
+        try:
+            from app.tasks.dispatcher import dispatch_task
+            ads_with_snapshot = session.query(Ad).filter(
+                Ad.media_extraction_status == "pending",
+                Ad.snapshot_url.isnot(None),
+            ).order_by(Ad.created_at.desc()).limit(saved).all()
+            for ad_to_extract in ads_with_snapshot:
+                dispatch_task("extract_media", ad_id=ad_to_extract.id)
+        except Exception as dispatch_err:
+            _logger = structlog.get_logger()
+            _logger.warning("media_extraction_dispatch_failed", error=str(dispatch_err))
+
     except Exception:
         session.rollback()
         raise
@@ -474,6 +494,110 @@ def _generate_demo_ads(
         session.close()
 
     return saved
+
+
+@router.get("/{ad_id}/media")
+async def get_ad_media(
+    ad_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Get media information for an ad with presigned URLs."""
+    result = await db.execute(select(Ad).where(Ad.id == ad_id))
+    ad = result.scalar_one_or_none()
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+
+    media_info: dict = {
+        "ad_id": ad_id,
+        "creative_type": ad.creative_type,
+        "media_extraction_status": ad.media_extraction_status,
+        "image_url": ad.image_url,
+        "video_url": ad.video_url,
+        "snapshot_url": ad.snapshot_url,
+    }
+
+    # Generate presigned URLs for stored media
+    try:
+        storage = get_storage_client()
+        if ad.image_s3_key:
+            media_info["image_presigned_url"] = storage.get_presigned_url(ad.image_s3_key)
+        if ad.s3_key:
+            media_info["video_presigned_url"] = storage.get_presigned_url(ad.s3_key)
+        if ad.thumbnail_s3_key:
+            media_info["thumbnail_presigned_url"] = storage.get_presigned_url(ad.thumbnail_s3_key)
+
+        # Carousel images
+        if ad.image_s3_keys and isinstance(ad.image_s3_keys, dict):
+            carousel_urls = ad.image_s3_keys.get("urls", [])
+            if carousel_urls:
+                media_info["carousel_image_urls"] = carousel_urls
+    except Exception as e:
+        logger.warning("presigned_url_generation_failed", ad_id=ad_id, error=str(e))
+
+    return media_info
+
+
+@router.post("/{ad_id}/extract-media")
+async def trigger_media_extraction(
+    ad_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Manually trigger media extraction for an ad."""
+    result = await db.execute(select(Ad).where(Ad.id == ad_id))
+    ad = result.scalar_one_or_none()
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+
+    if not ad.snapshot_url:
+        raise HTTPException(status_code=400, detail="No snapshot URL available for this ad")
+
+    from app.tasks.dispatcher import dispatch_task
+    try:
+        dispatch_result = dispatch_task("extract_media", ad_id=ad_id)
+    except Exception as e:
+        # Fallback: run extraction inline
+        import asyncio
+        import concurrent.futures
+        from app.services.media_extraction import MediaExtractor
+
+        def _run():
+            extractor = MediaExtractor()
+            return asyncio.run(extractor.extract(ad.snapshot_url, use_playwright=False))
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_run)
+                extracted = future.result(timeout=30)
+
+            ad.creative_type = extracted.creative_type
+            if extracted.image_urls:
+                ad.image_url = extracted.image_urls[0]
+            if extracted.video_urls and not ad.video_url:
+                ad.video_url = extracted.video_urls[0]
+            ad.media_extraction_status = "completed"
+            await db.flush()
+
+            return {
+                "status": "completed",
+                "creative_type": extracted.creative_type,
+                "image_count": len(extracted.image_urls),
+                "video_count": len(extracted.video_urls),
+                "message": "メディア抽出が完了しました（インライン実行）",
+            }
+        except Exception as inline_err:
+            logger.error("inline_media_extraction_failed", ad_id=ad_id, error=str(inline_err))
+            raise HTTPException(status_code=500, detail="メディア抽出に失敗しました")
+
+    ad.media_extraction_status = "pending"
+    await db.flush()
+
+    return {
+        "task_id": dispatch_result.id,
+        "status": "started",
+        "message": "メディア抽出を開始しました",
+    }
 
 
 @router.delete("/{ad_id}")

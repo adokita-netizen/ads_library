@@ -7,7 +7,7 @@ in-memory SQLite when the configured database is unreachable.
 import os
 import logging
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import BigInteger, create_engine, event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -60,6 +60,38 @@ def _create_sqlite_engines():
     se = create_engine("sqlite:///vaap_fallback.db", echo=settings.debug)
     # For async we use aiosqlite
     ae = create_async_engine("sqlite+aiosqlite:///vaap_fallback.db", echo=settings.debug)
+
+    # Fix: SQLite only auto-increments INTEGER PRIMARY KEY (not BIGINT).
+    # Compile BigInteger as INTEGER on SQLite so autoincrement works.
+    from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+    @event.listens_for(se, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.close()
+
+    # Register type adapter: BigInteger -> INTEGER for SQLite DDL
+    from sqlalchemy.types import TypeDecorator
+
+    class _SQLiteBigInteger(TypeDecorator):
+        impl = BigInteger
+        cache_ok = True
+
+        def load_dialect_impl(self, dialect):
+            if dialect.name == "sqlite":
+                return dialect.type_descriptor(BigInteger().adapt(BigInteger))
+            return dialect.type_descriptor(BigInteger())
+
+    # Monkey-patch BigInteger for SQLite: render as INTEGER
+    from sqlalchemy.dialects.sqlite import base as sqlite_base
+    _orig_visit = getattr(sqlite_base.SQLiteTypeCompiler, "visit_BIGINT", None)
+
+    def _visit_bigint_as_integer(self, type_, **kw):
+        return "INTEGER"
+
+    sqlite_base.SQLiteTypeCompiler.visit_BIGINT = _visit_bigint_as_integer
+
     return ae, se
 
 
