@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { adsApi } from "@/lib/api";
+import { adsApi, fetchApi } from "@/lib/api";
 import { platformBadgeColors } from "@/lib/constants";
 import type { Ad } from "@/types";
 
@@ -253,6 +253,15 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
   );
 }
 
+const ALL_PLATFORMS = ["facebook", "instagram", "youtube", "tiktok", "x_twitter", "line", "yahoo", "pinterest", "smartnews", "google_ads", "gunosy"];
+
+const PLATFORM_LABELS: Record<string, string> = {
+  facebook: "Facebook", instagram: "Instagram", youtube: "YouTube",
+  tiktok: "TikTok", x_twitter: "X (Twitter)", line: "LINE",
+  yahoo: "Yahoo!", pinterest: "Pinterest", smartnews: "SmartNews",
+  google_ads: "Google Ads", gunosy: "Gunosy",
+};
+
 function CrawlModal({
   onClose,
   onSuccess,
@@ -261,75 +270,117 @@ function CrawlModal({
   onSuccess: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [platforms, setPlatforms] = useState(["facebook", "instagram", "youtube", "tiktok", "x_twitter", "line", "yahoo", "pinterest", "smartnews", "google_ads", "gunosy"]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([]);
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(false);
+  const [loadingPlatforms, setLoadingPlatforms] = useState(true);
+  const [crawlResult, setCrawlResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchApi<{ connected: string[] }>("/ads/connected-platforms")
+      .then((data) => {
+        setConnectedPlatforms(data.connected);
+        setPlatforms(data.connected);
+      })
+      .catch(() => {
+        setConnectedPlatforms([]);
+      })
+      .finally(() => setLoadingPlatforms(false));
+  }, []);
 
   const handleCrawl = async () => {
-    if (!query.trim()) return;
+    if (!query.trim() || platforms.length === 0) return;
     setLoading(true);
+    setCrawlResult(null);
     try {
-      await adsApi.crawl({
+      const res = await adsApi.crawl({
         query,
         platforms,
         limit_per_platform: limit,
         auto_analyze: true,
       });
+      const msg = (res as { data?: { message?: string } })?.data?.message;
+      if (msg) {
+        setCrawlResult(msg);
+        toast.success(msg);
+      }
       onSuccess();
     } catch {
-      toast.error("Crawl failed. Check backend connection.");
+      toast.error("クロールに失敗しました。バックエンド接続を確認してください。");
     } finally {
       setLoading(false);
     }
   };
 
+  const disconnected = ALL_PLATFORMS.filter((p) => !connectedPlatforms.includes(p));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-semibold">Crawl Competitor Ads</h3>
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold">広告クロール</h3>
 
         <div className="mt-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Search Query
+              検索キーワード
             </label>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g., competitor name, product category..."
+              placeholder="例: 競合ブランド名、商品カテゴリ..."
               className="input mt-1"
+              onKeyDown={(e) => { if (e.key === "Enter") handleCrawl(); }}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Platforms
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              連携済み媒体 ({connectedPlatforms.length}媒体)
             </label>
-            <div className="mt-2 flex gap-3">
-              {["facebook", "instagram", "youtube", "tiktok", "x_twitter", "line", "yahoo", "pinterest", "smartnews", "google_ads", "gunosy"].map((p) => (
-                <label key={p} className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={platforms.includes(p)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPlatforms([...platforms, p]);
-                      } else {
-                        setPlatforms(platforms.filter((x) => x !== p));
-                      }
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm capitalize">{p}</span>
-                </label>
-              ))}
-            </div>
+            {loadingPlatforms ? (
+              <p className="text-xs text-gray-400">読み込み中...</p>
+            ) : connectedPlatforms.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                <p className="text-xs text-amber-700">
+                  APIキーが設定されている媒体がありません。
+                  <br />設定画面からAPIキーを登録してください。
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {connectedPlatforms.map((p) => (
+                    <label key={p} className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={platforms.includes(p)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPlatforms([...platforms, p]);
+                          } else {
+                            setPlatforms(platforms.filter((x) => x !== p));
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm font-medium text-emerald-800">{PLATFORM_LABELS[p] || p}</span>
+                    </label>
+                  ))}
+                </div>
+                {disconnected.length > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    未連携: {disconnected.map((p) => PLATFORM_LABELS[p] || p).join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Limit per Platform
+              媒体あたりの取得件数
             </label>
             <input
               type="number"
@@ -340,18 +391,24 @@ function CrawlModal({
               className="input mt-1 w-32"
             />
           </div>
+
+          {crawlResult && (
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-700">
+              {crawlResult}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
           <button onClick={onClose} className="btn-secondary">
-            Cancel
+            閉じる
           </button>
           <button
             onClick={handleCrawl}
-            disabled={loading || !query.trim()}
+            disabled={loading || !query.trim() || platforms.length === 0}
             className="btn-primary"
           >
-            {loading ? "Crawling..." : "Start Crawl"}
+            {loading ? "クロール中..." : "クロール開始"}
           </button>
         </div>
       </div>

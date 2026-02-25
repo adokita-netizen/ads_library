@@ -67,7 +67,7 @@ function deleteLocalKey(platform: string, key_name: string): void {
 
 function maskValue(value: string): string {
   if (value.length <= 8) return "*".repeat(value.length);
-  return value.slice(0, 4) + "*".repeat(value.length - 8) + value.slice(-4);
+  return value.slice(0, 4) + "****" + value.slice(-4);
 }
 
 function localKeysToStatuses(localKeys: LocalKeyEntry[]): KeyStatus[] {
@@ -715,7 +715,7 @@ function PlatformCard({
                     <div className="flex items-center gap-2">
                       {status?.is_set ? (
                         <>
-                          <div className="flex-1 px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded font-mono text-gray-500">
+                          <div className="flex-1 px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded font-mono text-gray-500 truncate min-w-0">
                             {status.masked_value}
                           </div>
                           <button

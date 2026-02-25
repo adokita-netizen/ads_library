@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_optional_user
 from app.utils.db import escape_like as _escape_like
 from app.core.config import get_settings
 from app.core.database import get_async_session, SyncSessionLocal
@@ -49,7 +49,7 @@ async def list_ads(
     category: Optional[str] = None,
     status: Optional[str] = None,
     advertiser: Optional[str] = Query(None, max_length=200),
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """List ads with filtering and pagination."""
@@ -87,10 +87,18 @@ async def list_ads(
     )
 
 
+@router.get("/connected-platforms")
+def get_connected_platforms_endpoint():
+    """Return list of platforms that have API keys configured."""
+    from app.tasks.crawl_tasks import get_connected_platforms
+    connected = get_connected_platforms()
+    return {"connected": connected}
+
+
 @router.get("/{ad_id}", response_model=AdResponse)
 async def get_ad(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get a specific ad by ID."""
@@ -104,7 +112,7 @@ async def get_ad(
 @router.post("", response_model=AdResponse)
 async def create_ad(
     ad_data: AdCreate,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Create a new ad entry."""
@@ -133,7 +141,7 @@ async def upload_ad_video(
     platform: str = "youtube",
     title: Optional[str] = None,
     auto_analyze: bool = True,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Upload a video file for analysis."""
@@ -213,7 +221,7 @@ async def upload_ad_video(
 @router.post("/{ad_id}/analyze")
 async def trigger_analysis(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Trigger analysis for an existing ad."""
@@ -237,7 +245,7 @@ async def trigger_analysis(
 @router.get("/{ad_id}/analysis", response_model=AdAnalysisResponse)
 async def get_analysis(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get analysis results for an ad."""
@@ -258,34 +266,42 @@ async def get_analysis(
 def crawl_ads(
     request: CrawlRequest,
 ):
-    """Crawl ads from external platforms.
-
-    Strategy: Celery task -> inline sample data generation (always works).
-    """
+    """Crawl ads from external platforms (connected platforms only)."""
     import structlog
     _logger = structlog.get_logger()
+
+    # Filter to only platforms with API keys configured
+    from app.tasks.crawl_tasks import get_connected_platforms
+    connected = get_connected_platforms()
+    active_platforms = [p for p in request.platforms if p in connected]
+
+    if not active_platforms:
+        return CrawlResponse(
+            task_id=str(uuid.uuid4()),
+            status="completed",
+            message=f"APIキーが設定されている媒体がありません。設定画面からAPIキーを登録してください。(連携済み: {', '.join(connected) if connected else 'なし'})",
+        )
+
+    skipped = [p for p in request.platforms if p not in connected]
 
     # Try dispatching to task backend (Celery or SQS)
     try:
         from app.tasks.dispatcher import dispatch_task, TASK_BACKEND
         if TASK_BACKEND == "sqs":
-            # SQS mode: always dispatch
             result = dispatch_task(
                 "crawl_ads",
                 query=request.query,
-                platforms=request.platforms,
+                platforms=active_platforms,
                 category=request.category,
                 limit_per_platform=request.limit_per_platform,
                 auto_analyze=request.auto_analyze,
             )
-            _logger.info("crawl_dispatched_to_sqs", task_id=result.id, query=request.query)
-            return CrawlResponse(
-                task_id=result.id,
-                status="started",
-                message=f"クロールを開始しました: '{request.query}' ({len(request.platforms)}媒体)",
-            )
+            _logger.info("crawl_dispatched_to_sqs", task_id=result.id, query=request.query, platforms=active_platforms)
+            msg = f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体: {', '.join(active_platforms)})"
+            if skipped:
+                msg += f" ※スキップ: {', '.join(skipped)}(APIキー未設定)"
+            return CrawlResponse(task_id=result.id, status="started", message=msg)
         else:
-            # Celery mode: check if worker is available
             from app.tasks.crawl_tasks import crawl_ads_task
             inspect = crawl_ads_task.app.control.inspect(timeout=1.0)
             active_workers = inspect.ping()
@@ -293,52 +309,41 @@ def crawl_ads(
                 result = dispatch_task(
                     "crawl_ads",
                     query=request.query,
-                    platforms=request.platforms,
+                    platforms=active_platforms,
                     category=request.category,
                     limit_per_platform=request.limit_per_platform,
                     auto_analyze=request.auto_analyze,
                 )
                 _logger.info("crawl_dispatched_to_celery", task_id=result.id, query=request.query)
-                return CrawlResponse(
-                    task_id=result.id,
-                    status="started",
-                    message=f"クロールを開始しました: '{request.query}' ({len(request.platforms)}媒体)",
-                )
+                return CrawlResponse(task_id=result.id, status="started", message=f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体)")
             else:
                 _logger.info("no_celery_workers_available_using_inline")
     except Exception as celery_err:
         _logger.warning("task_dispatch_failed_using_inline", error=str(celery_err))
 
-    # Fallback: run real crawlers inline (API + scraping)
+    # Fallback: run real crawlers inline
     try:
         saved_count = _inline_crawl(
             query=request.query,
-            platforms=request.platforms,
+            platforms=active_platforms,
             category=request.category,
             limit_per_platform=request.limit_per_platform,
         )
-        if saved_count > 0:
-            return CrawlResponse(
-                task_id=str(uuid.uuid4()),
-                status="completed",
-                message=f"クロール完了: {saved_count}件の広告を取得しました ({len(request.platforms)}媒体)",
-            )
-        _logger.info("real_crawlers_returned_zero_using_demo_data")
+        msg = f"クロール完了: {saved_count}件の広告を取得しました ({', '.join(active_platforms)})"
+        if skipped:
+            msg += f" ※スキップ: {', '.join(skipped)}(APIキー未設定)"
+        return CrawlResponse(
+            task_id=str(uuid.uuid4()),
+            status="completed",
+            message=msg,
+        )
     except Exception as crawl_err:
-        _logger.warning("inline_crawl_error_using_demo_data", error=str(crawl_err))
-
-    # Real crawlers returned 0 (network blocked / no API keys) — generate demo data
-    saved_count = _generate_demo_ads(
-        query=request.query,
-        platforms=request.platforms,
-        category=request.category,
-        limit_per_platform=request.limit_per_platform,
-    )
-    return CrawlResponse(
-        task_id=str(uuid.uuid4()),
-        status="completed",
-        message=f"クロール完了: {saved_count}件の広告を取得しました ({len(request.platforms)}媒体) ※デモデータ",
-    )
+        _logger.warning("inline_crawl_error", error=str(crawl_err))
+        return CrawlResponse(
+            task_id=str(uuid.uuid4()),
+            status="completed",
+            message=f"クロールエラー: {str(crawl_err)}",
+        )
 
 
 def _inline_crawl(
@@ -424,79 +429,12 @@ def _inline_crawl(
     return saved
 
 
-def _generate_demo_ads(
-    query: str,
-    platforms: list[str],
-    category: str | None,
-    limit_per_platform: int,
-) -> int:
-    """Generate demo ads when real crawlers can't reach external services."""
-    import random
-    from datetime import datetime, timedelta, timezone
-    from app.tasks.crawl_tasks import _map_platform
-
-    ADVERTISERS = [
-        "スキンケアプラス", "マネーテック", "エデュテック", "ゲームスタジオX",
-        "京都菓子工房", "ファイナンスワン", "フィットテック", "ナチュラルビューティー",
-        "ヘルスケアジャパン", "ビューティーラボ", "ウェルスナビ", "スタディAI",
-        "カラーラボ", "エンタメプラス", "モバイルセーバー", "アニマルケア",
-    ]
-    CATS = ["ec_d2c", "app", "finance", "education", "beauty", "food", "gaming", "health", "technology"]
-
-    now = datetime.now(timezone.utc)
-    saved = 0
-    session = SyncSessionLocal()
-    try:
-        from sqlalchemy import func as sqla_func
-        counter = (session.query(sqla_func.max(Ad.id)).scalar() or 0) + 1
-
-        for plat in platforms:
-            pe = _map_platform(plat.lower())
-            for i in range(limit_per_platform):
-                ext_id = f"DEMO-{plat[:2].upper()}-{counter}"
-                counter += 1
-                adv = random.choice(ADVERTISERS)
-
-                ad = Ad(
-                    external_id=ext_id,
-                    title=f"{query} - {adv}広告{i+1}",
-                    description=f"{query}に関する{plat}広告 (デモデータ)",
-                    platform=pe,
-                    status=AdStatusEnum.PENDING,
-                    category=category or random.choice(CATS),
-                    video_url=f"https://example.com/demo/{plat}_{counter}.mp4",
-                    duration_seconds=random.choice([15, 30, 60, 90]),
-                    advertiser_name=adv,
-                    brand_name=adv,
-                    view_count=random.randint(50000, 5000000),
-                    like_count=random.randint(100, 50000),
-                    first_seen_at=now - timedelta(days=random.randint(0, 30)),
-                    last_seen_at=now,
-                    ad_metadata={
-                        "destination_url": f"https://example.com/lp/{query}",
-                        "destination_type": random.choice(["記事LP", "直LP", "EC", "アプリストア"]),
-                        "crawl_query": query,
-                        "is_demo": True,
-                    },
-                    tags=[query, plat, "demo"],
-                )
-                session.add(ad)
-                saved += 1
-
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
-
-    return saved
 
 
 @router.get("/{ad_id}/media")
 async def get_ad_media(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get media information for an ad with presigned URLs."""
@@ -538,7 +476,7 @@ async def get_ad_media(
 @router.post("/{ad_id}/extract-media")
 async def trigger_media_extraction(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Manually trigger media extraction for an ad."""
@@ -600,7 +538,7 @@ async def trigger_media_extraction(
 @router.delete("/{ad_id}")
 async def delete_ad(
     ad_id: int,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Delete an ad and its analysis."""

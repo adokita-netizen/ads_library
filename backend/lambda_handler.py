@@ -37,9 +37,23 @@ def handler(event, context):
         try:
             from alembic.config import Config
             from alembic import command
+            from alembic.migration import MigrationContext
+            from app.core.database import sync_engine
+
             alembic_cfg = Config("alembic.ini")
+
+            # Check current alembic version
+            with sync_engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                current_rev = context.get_current_revision()
+
+            if current_rev is None:
+                # DB exists but no alembic_version — stamp initial schema, then upgrade
+                logger.info("migration_stamp", msg="No alembic version found, stamping 001")
+                command.stamp(alembic_cfg, "001")
+
             command.upgrade(alembic_cfg, "head")
-            return {"statusCode": 200, "body": json.dumps({"status": "migration_complete"})}
+            return {"statusCode": 200, "body": json.dumps({"status": "migration_complete", "from_rev": current_rev})}
         except Exception as e:
             return {"statusCode": 500, "body": json.dumps({"status": "migration_error", "error": str(e)})}
 

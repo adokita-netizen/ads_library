@@ -117,6 +117,48 @@ def crawl_ads_task(
         raise self.retry(exc=e)
 
 
+def get_connected_platforms() -> list[str]:
+    """Return list of platform names that have at least one API key configured."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    db_keys: dict[str, dict[str, str]] = {}
+    try:
+        from app.api.endpoints.settings import load_api_keys_from_db
+        db_keys = load_api_keys_from_db()
+    except Exception:
+        pass
+
+    def _has(platform: str, key_name: str, env_fallback: str | None) -> bool:
+        val = db_keys.get(platform, {}).get(key_name) or env_fallback
+        return bool(val and val.strip())
+
+    connected = []
+    # Meta covers both facebook and instagram
+    if _has("meta", "access_token", settings.meta_access_token):
+        connected.extend(["facebook", "instagram"])
+    if _has("youtube", "api_key", settings.youtube_api_key):
+        connected.append("youtube")
+    if _has("tiktok", "access_token", settings.tiktok_access_token):
+        connected.append("tiktok")
+    if _has("x_twitter", "bearer_token", settings.x_twitter_bearer_token):
+        connected.append("x_twitter")
+    if _has("line", "access_token", settings.line_api_access_token):
+        connected.append("line")
+    if _has("yahoo", "api_key", settings.yahoo_ads_api_key):
+        connected.append("yahoo")
+    if _has("pinterest", "access_token", settings.pinterest_access_token):
+        connected.append("pinterest")
+    if _has("smartnews", "api_key", settings.smartnews_ads_api_key):
+        connected.append("smartnews")
+    if _has("google_ads", "developer_token", settings.google_ads_developer_token):
+        connected.append("google_ads")
+    if _has("gunosy", "api_key", settings.gunosy_ads_api_key):
+        connected.append("gunosy")
+
+    return connected
+
+
 async def _crawl_platforms(
     query: str,
     platforms: list[str],

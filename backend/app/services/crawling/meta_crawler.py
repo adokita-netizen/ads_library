@@ -177,7 +177,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
         params = {
             "access_token": self.access_token,
             "search_terms": query,
-            "ad_reached_countries": f"['{country}']",
+            "ad_reached_countries": f'["{country}"]',
             "ad_type": ad_type,
             "limit": min(limit, 100),
             "fields": (
@@ -195,10 +195,20 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
         try:
             response = await client.get(META_AD_LIBRARY_API, params=params)
-            if response.status_code == 500:
-                logger.warning("meta_api_500", query=query)
-                return []  # trigger browser fallback
-            response.raise_for_status()
+            if response.status_code != 200:
+                try:
+                    error_body = response.json()
+                except Exception:
+                    error_body = response.text[:500]
+                logger.warning(
+                    "meta_api_non_200",
+                    status=response.status_code,
+                    query=query,
+                    error_body=error_body,
+                )
+                if response.status_code == 500:
+                    return []  # trigger browser fallback
+                response.raise_for_status()
             data = response.json()
 
             if "error" in data:

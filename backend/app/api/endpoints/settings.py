@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_optional_user
 from app.core.database import get_async_session, is_in_memory_mode, get_connection_error, reconnect
 from app.models.api_key import PlatformAPIKey
 from app.models.user import User
@@ -169,7 +169,7 @@ async def get_platform_definitions():
 
 @router.get("/api-keys")
 async def list_api_keys(
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """List all configured API keys (masked values)."""
@@ -196,7 +196,7 @@ async def list_api_keys(
 @router.post("/api-keys")
 async def set_api_key(
     request: APIKeySetRequest,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Set or update an API key for a platform."""
@@ -232,7 +232,7 @@ async def set_api_key(
 @router.delete("/api-keys")
 async def delete_api_key(
     request: APIKeyDeleteRequest,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Delete an API key."""
@@ -254,7 +254,7 @@ async def delete_api_key(
 @router.post("/api-keys/test")
 async def test_api_key(
     request: APIKeySetRequest,
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
 ):
     """Test if an API key is valid (basic validation only)."""
     value = request.key_value.strip()
@@ -304,7 +304,7 @@ async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:
 
 @router.post("/meta/exchange-token")
 async def exchange_meta_token(
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Exchange a short-lived Meta token for a long-lived (60-day) token.
@@ -380,7 +380,7 @@ async def exchange_meta_token(
 
 @router.get("/meta/token-info")
 async def get_meta_token_info(
-    current_user: User = Depends(get_current_user),
+    _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Return information about the current Meta access token (expiry, scopes, type)."""
@@ -436,7 +436,7 @@ def _mask_value(value: str) -> str:
     """Mask API key value showing only first 4 and last 4 characters."""
     if len(value) <= 8:
         return "*" * len(value)
-    return value[:4] + "*" * (len(value) - 8) + value[-4:]
+    return value[:4] + "****" + value[-4:]
 
 
 # ── Utility: load keys from DB for crawler usage ────────────────
