@@ -684,32 +684,40 @@ function PlatformCard({
                   <label className="text-[11px] font-medium text-gray-600">{keyDef.label}</label>
 
                   {isEditing ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
+                    <div className="space-y-2">
+                      <textarea
                         value={editValue}
-                        onChange={(e) => onEditValueChange(e.target.value)}
-                        placeholder={keyDef.placeholder || "APIキーを入力..."}
-                        className="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF] font-mono"
+                        onChange={(e) => onEditValueChange(e.target.value.replace(/\s/g, ""))}
+                        placeholder={keyDef.placeholder || "APIキーを入力（ペースト可）..."}
+                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF] font-mono resize-none break-all"
+                        rows={3}
                         autoFocus
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") onSave(platform.platform, keyDef.key_name);
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            onSave(platform.platform, keyDef.key_name);
+                          }
                           if (e.key === "Escape") onCancel();
                         }}
                       />
-                      <button
-                        onClick={() => onSave(platform.platform, keyDef.key_name)}
-                        disabled={saving || !editValue.trim()}
-                        className="px-3 py-1.5 text-[11px] font-medium bg-[#4A7DFF] text-white rounded hover:bg-[#3a6ae6] disabled:opacity-50 transition-colors"
-                      >
-                        {saving ? "保存中..." : "保存"}
-                      </button>
-                      <button
-                        onClick={onCancel}
-                        className="px-3 py-1.5 text-[11px] font-medium bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-                      >
-                        キャンセル
-                      </button>
+                      {editValue && (
+                        <p className="text-[10px] text-gray-400">{editValue.length} 文字</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onSave(platform.platform, keyDef.key_name)}
+                          disabled={saving || !editValue.trim()}
+                          className="px-4 py-1.5 text-[11px] font-medium bg-[#4A7DFF] text-white rounded hover:bg-[#3a6ae6] disabled:opacity-50 transition-colors"
+                        >
+                          {saving ? "保存中..." : "保存"}
+                        </button>
+                        <button
+                          onClick={onCancel}
+                          className="px-4 py-1.5 text-[11px] font-medium bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">

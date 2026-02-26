@@ -7,7 +7,19 @@ import structlog
 from app.core.database import SyncSessionLocal
 from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum
 from app.services.crawling.crawler_manager import CrawlerManager
-from app.tasks.worker import celery_app
+
+try:
+    from app.tasks.worker import celery_app
+except ImportError:
+    # Celery not installed — provide a no-op decorator so the module still loads
+    class _FakeCelery:
+        def task(self, *a, **kw):
+            def decorator(fn):
+                fn.delay = lambda *a2, **kw2: None
+                fn.apply_async = lambda *a2, **kw2: None
+                return fn
+            return decorator
+    celery_app = _FakeCelery()
 
 logger = structlog.get_logger()
 

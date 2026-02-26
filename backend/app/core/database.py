@@ -16,6 +16,16 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# ── Always patch BigInteger for SQLite compatibility ─────────────
+# SQLite only auto-increments INTEGER PRIMARY KEY (not BIGINT).
+# Apply this unconditionally so SQLite URLs in DATABASE_URL work.
+from sqlalchemy.dialects.sqlite import base as _sqlite_base
+
+def _visit_bigint_as_integer(self, type_, **kw):
+    return "INTEGER"
+
+_sqlite_base.SQLiteTypeCompiler.visit_BIGINT = _visit_bigint_as_integer
+
 # ── State ────────────────────────────────────────────────────────
 _in_memory_mode = False
 _connection_error: str | None = None
