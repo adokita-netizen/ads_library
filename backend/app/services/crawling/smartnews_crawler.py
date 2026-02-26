@@ -169,6 +169,7 @@ class SmartNewsAdCrawler(BaseCrawler):
 
             video_url = creative.get("videoUrl")
             thumbnail_url = creative.get("imageUrl") or creative.get("thumbnailUrl")
+            destination_url = creative.get("landingUrl") or creative.get("clickUrl")
 
             return CrawledAd(
                 external_id=ad_id,
@@ -178,16 +179,16 @@ class SmartNewsAdCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("advertiserName") or ad_data.get("sponsorName"),
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
+                impressions=ad_data.get("impressions"),
                 first_seen_at=first_seen,
                 metadata={
                     "source": "smartnews_ads_api",
                     "campaign_id": ad_data.get("campaignId"),
                     "ad_format": creative.get("format"),
                     "placement": ad_data.get("placement"),
-                    "destination_url": creative.get("landingUrl") or creative.get("clickUrl"),
                     "call_to_action": creative.get("ctaText"),
                     "category": ad_data.get("category"),
-                    "impression_count": ad_data.get("impressions"),
                     "click_count": ad_data.get("clicks"),
                 },
             )
@@ -220,10 +221,10 @@ class SmartNewsAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 category=category,
                 metadata={
                     "source": "smartnews_web_scrape",
-                    "destination_url": destination_url,
                 },
             )
         except Exception as e:

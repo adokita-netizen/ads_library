@@ -171,6 +171,7 @@ class LPResponse(BaseModel):
     advertiser_name: Optional[str] = None
     product_name: Optional[str] = None
     status: str
+    error_message: Optional[str] = None
 
     # Ownership
     is_own: bool = False

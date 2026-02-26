@@ -2,7 +2,7 @@
 
 import csv
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
@@ -10,13 +10,13 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from app.utils.db import escape_like as _escape_like
-from sqlalchemy import func, desc, or_
+from sqlalchemy import case, func, desc, or_
 
 from app.core.database import SyncSessionLocal, sync_session_scope
 from app.models.ad import Ad
 from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 from app.models.analysis import AdAnalysis, TextDetection, Transcription
-from app.services.ranking.ranking_service import RankingService
+from app.services.ranking.ranking_service import RankingService, _today_jst
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
@@ -42,6 +42,106 @@ def _sanitize_csv(value: str | None) -> str:
     if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + s
     return s
+
+
+# ==================== Cleanup ====================
+
+
+@router.post("/cleanup-non-japanese")
+def cleanup_non_japanese(dry_run: bool = Query(True)):
+    """Remove non-Japanese ads from the database.
+
+    Uses japanese_text_ratio to identify ads whose title+description
+    contain less than 10% Japanese characters.
+
+    - dry_run=true  → list ads that would be deleted (no changes)
+    - dry_run=false → actually delete Ad + AdDailyMetrics + ProductRanking rows
+    """
+    from app.utils.text import japanese_text_ratio
+
+    with sync_session_scope() as session:
+        ads = session.query(Ad).all()
+        non_jp_ads = []
+
+        for ad in ads:
+            text = (ad.title or "") + " " + (ad.description or "")
+            ratio = japanese_text_ratio(text)
+            if ratio <= 0.1:
+                non_jp_ads.append({
+                    "id": ad.id,
+                    "title": (ad.title or "")[:80],
+                    "advertiser": ad.advertiser_name or "",
+                    "japanese_ratio": round(ratio, 3),
+                })
+
+        if dry_run:
+            return {
+                "dry_run": True,
+                "total_ads": len(ads),
+                "non_japanese_count": len(non_jp_ads),
+                "ads_to_delete": non_jp_ads,
+            }
+
+        # Actually delete
+        ids_to_delete = [a["id"] for a in non_jp_ads]
+        if ids_to_delete:
+            session.query(ProductRanking).filter(
+                ProductRanking.ad_id.in_(ids_to_delete)
+            ).delete(synchronize_session=False)
+            session.query(AdDailyMetrics).filter(
+                AdDailyMetrics.ad_id.in_(ids_to_delete)
+            ).delete(synchronize_session=False)
+            session.query(Ad).filter(
+                Ad.id.in_(ids_to_delete)
+            ).delete(synchronize_session=False)
+            session.commit()
+
+        logger.info(
+            "cleanup_non_japanese_done",
+            deleted=len(ids_to_delete),
+            remaining=len(ads) - len(ids_to_delete),
+        )
+
+        return {
+            "dry_run": False,
+            "deleted_count": len(ids_to_delete),
+            "remaining_count": len(ads) - len(ids_to_delete),
+        }
+
+
+# ==================== Manual Compute ====================
+
+
+@router.post("/compute")
+def compute_rankings_now():
+    """Manually trigger metrics collection + ranking computation.
+
+    This runs inline (no Celery required) and returns the results.
+    """
+    from app.tasks.metrics_tasks import collect_metrics_for_ads
+
+    with sync_session_scope() as session:
+        # Step 1: Collect daily metrics for all ads
+        today = _today_jst()
+        metrics_created = collect_metrics_for_ads(session, target_date=today)
+        session.commit()
+
+        # Step 2: Compute rankings for all periods
+        svc = RankingService()
+        ranking_summary = svc.compute_all_rankings(session)
+        session.commit()
+
+        logger.info(
+            "manual_compute_complete",
+            metrics_created=metrics_created,
+            rankings=ranking_summary,
+        )
+
+        return {
+            "status": "completed",
+            "metrics_created": metrics_created,
+            "rankings": ranking_summary,
+        }
 
 
 # ==================== Rankings ====================
@@ -85,6 +185,8 @@ def get_product_rankings(
                     "duration_seconds": ad.duration_seconds or 0,
                     "management_id": ad.external_id or f"AD-{ad.id}",
                     "ad_url": ad.video_url or "",
+                    "image_url": ad.image_url or "",
+                    "snapshot_url": ad.snapshot_url or "",
                     "destination_url": metadata.get("destination_url", ""),
                     "destination_type": metadata.get("destination_type", ""),
                     "published_date": (
@@ -117,6 +219,8 @@ def get_product_rankings(
                 "duration_seconds": ad_info.get("duration_seconds", 0),
                 "management_id": ad_info.get("management_id", f"AD-{r.ad_id}"),
                 "ad_url": ad_info.get("ad_url", ""),
+                "image_url": ad_info.get("image_url", ""),
+                "snapshot_url": ad_info.get("snapshot_url", ""),
                 "destination_url": ad_info.get("destination_url", ""),
                 "destination_type": ad_info.get("destination_type", ""),
                 "published_date": ad_info.get("published_date", ""),
@@ -139,30 +243,69 @@ def get_product_rankings(
 
 
 def _fallback_ad_list(session, genre, platform, page, page_size, period):
-    """When no pre-computed rankings exist, rank ads by view_count.
+    """When no pre-computed rankings exist, rank ads using AdDailyMetrics.
 
-    Computes basic hit_score and trend_score from available data and marks
+    Queries actual spend/view increase data from AdDailyMetrics and marks
     demo ads so the frontend can distinguish real vs demo data.
     """
-    query = session.query(Ad)
+    from sqlalchemy.orm import aliased
+
+    yesterday = _today_jst() - timedelta(days=1)
+    days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 7)
+    start = yesterday - timedelta(days=days - 1)
+
+    # Subquery: aggregate metrics per ad for the period
+    metrics_sq = (
+        session.query(
+            AdDailyMetrics.ad_id,
+            func.sum(AdDailyMetrics.view_count_increase).label("view_increase"),
+            func.sum(AdDailyMetrics.estimated_spend_increase).label("spend_increase"),
+            func.max(AdDailyMetrics.view_count).label("cumulative_views"),
+            func.max(AdDailyMetrics.estimated_spend).label("cumulative_spend"),
+        )
+        .filter(
+            AdDailyMetrics.metric_date >= start,
+            AdDailyMetrics.metric_date <= yesterday,
+        )
+        .group_by(AdDailyMetrics.ad_id)
+        .subquery()
+    )
+
+    query = (
+        session.query(Ad, metrics_sq)
+        .outerjoin(metrics_sq, Ad.id == metrics_sq.c.ad_id)
+    )
 
     query = _resolve_platform_filter(query, Ad.platform, platform)
     if genre:
         query = query.filter(Ad.category == genre)
 
     total = query.count()
-    ads = (
-        query.order_by(desc(Ad.view_count).nullslast(), desc(Ad.created_at))
+    rows = (
+        query.order_by(
+            case((metrics_sq.c.spend_increase.is_(None), 0), else_=1).desc(),
+            desc(metrics_sq.c.spend_increase),
+            case((Ad.view_count.is_(None), 0), else_=1).desc(),
+            desc(Ad.view_count),
+            desc(Ad.created_at),
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
 
     # Compute max view_count for relative scoring
-    max_views = max((ad.view_count or 0 for ad in ads), default=1) or 1
+    max_views = max((ad.view_count or 0 for ad, *_ in rows), default=1) or 1
 
     items = []
-    for rank, ad in enumerate(ads, start=(page - 1) * page_size + 1):
+    for rank_idx, row in enumerate(rows):
+        ad = row[0]
+        view_increase = row[1] or 0
+        spend_increase = row[2] or 0
+        cumulative_views = row[3] or (ad.view_count or 0)
+        cumulative_spend = row[4] or 0
+
+        rank = (page - 1) * page_size + rank_idx + 1
         metadata = ad.ad_metadata or {}
         views = ad.view_count or 0
         likes = ad.like_count or 0
@@ -183,10 +326,10 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "advertiser_name": ad.advertiser_name or "",
             "genre": str(ad.category.value) if ad.category else "",
             "platform": str(ad.platform.value) if ad.platform else "",
-            "view_increase": views,
-            "spend_increase": 0,
-            "cumulative_views": views,
-            "cumulative_spend": 0,
+            "view_increase": view_increase,
+            "spend_increase": round(spend_increase),
+            "cumulative_views": cumulative_views,
+            "cumulative_spend": round(cumulative_spend),
             "is_hit": hit_score >= 80,
             "hit_score": hit_score,
             "trend_score": trend_score,
@@ -195,6 +338,8 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "duration_seconds": ad.duration_seconds or 0,
             "management_id": ad.external_id or f"AD-{ad.id}",
             "ad_url": ad.video_url or "",
+            "image_url": ad.image_url or "",
+            "snapshot_url": ad.snapshot_url or "",
             "destination_url": metadata.get("destination_url", ""),
             "destination_type": metadata.get("destination_type", ""),
             "published_date": (
@@ -262,9 +407,9 @@ def get_genre_summary(
 ):
     """Get summary statistics per genre (market overview)."""
     with sync_session_scope() as session:
-        today = date.today()
+        yesterday = _today_jst() - timedelta(days=1)
         days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 7)
-        start = today - timedelta(days=days)
+        start = yesterday - timedelta(days=days - 1)
 
         results = (
             session.query(
@@ -276,6 +421,7 @@ def get_genre_summary(
             )
             .filter(
                 AdDailyMetrics.metric_date >= start,
+                AdDailyMetrics.metric_date <= yesterday,
                 AdDailyMetrics.genre.isnot(None),
             )
             .group_by(AdDailyMetrics.genre)
@@ -485,7 +631,10 @@ def export_rankings_csv(
             ad_query = session.query(Ad)
             if genre:
                 ad_query = ad_query.filter(Ad.category == genre)
-            ads = ad_query.order_by(desc(Ad.view_count).nullslast()).limit(500).all()
+            ads = ad_query.order_by(
+                case((Ad.view_count.is_(None), 0), else_=1).desc(),
+                desc(Ad.view_count),
+            ).limit(500).all()
 
             writer.writerow([
                 "順位", "商材名", "広告主", "媒体", "カテゴリ",

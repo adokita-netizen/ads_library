@@ -146,15 +146,16 @@ class TikTokAdCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("business_name"),
                 video_url=ad_data.get("video_url"),
                 thumbnail_url=ad_data.get("image_url"),
+                destination_url=destination_url,
                 duration_seconds=ad_data.get("video_duration"),
                 view_count=ad_data.get("reach"),
+                reach=ad_data.get("reach"),
+                impressions=ad_data.get("impressions"),
                 first_seen_at=first_seen,
                 last_seen_at=last_seen,
                 metadata={
                     "paid_for_by": ad_data.get("paid_for_by"),
                     "target_audience": ad_data.get("target_audience"),
-                    "reach": ad_data.get("reach"),
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )
@@ -173,6 +174,9 @@ class TikTokAdCrawler(BaseCrawler):
             video_el = card.select_one("video source")
             video_url = video_el.get("src") if video_el else None
 
+            img_el = card.select_one("img.cover, img.thumbnail, img")
+            thumbnail_url = img_el.get("src") if img_el else None
+
             # Extract destination URL from card
             link_el = card.select_one("a.landing-page, a[data-landing-url], a[href]:not([href*='tiktok.com'])")
             destination_url = None
@@ -188,8 +192,9 @@ class TikTokAdCrawler(BaseCrawler):
                 description=desc_el.get_text(strip=True) if desc_el else None,
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
+                thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

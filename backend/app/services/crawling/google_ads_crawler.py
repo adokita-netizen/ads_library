@@ -230,6 +230,15 @@ class GoogleAdsCrawler(BaseCrawler):
             video_id = ad.get("videoAd", {}).get("video", {}).get("id")
             video_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else None
 
+            # Extract thumbnail from responsive display ad or video thumbnail
+            thumbnail_url = None
+            if responsive.get("marketingImages"):
+                marketing_imgs = responsive["marketingImages"]
+                if marketing_imgs:
+                    thumbnail_url = marketing_imgs[0].get("asset", {}).get("imageUrl")
+            if not thumbnail_url and video_id:
+                thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+
             return CrawledAd(
                 external_id=ad_id,
                 platform="google_ads",
@@ -237,13 +246,14 @@ class GoogleAdsCrawler(BaseCrawler):
                 description=description,
                 advertiser_name=customer.get("descriptiveName"),
                 video_url=video_url,
+                thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
                     "source": "google_ads_api",
                     "ad_type": ad.get("type"),
                     "campaign_name": campaign.get("name"),
                     "channel_type": campaign.get("advertisingChannelType"),
                     "final_urls": final_urls,
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                     "responsive_headlines": [h.get("text") for h in headlines],
                     "responsive_descriptions": [d.get("text") for d in descriptions],
@@ -295,11 +305,11 @@ class GoogleAdsCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 first_seen_at=first_seen,
                 metadata={
                     "source": "google_ads_transparency",
                     "ad_format": ad_format,
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

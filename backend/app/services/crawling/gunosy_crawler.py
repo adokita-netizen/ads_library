@@ -168,6 +168,8 @@ class GunosyAdCrawler(BaseCrawler):
                 date_str = ad_data.get("startDate") or ad_data.get("createdAt")
                 first_seen = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
 
+            destination_url = creative.get("landingUrl")
+
             return CrawledAd(
                 external_id=ad_id,
                 platform="gunosy",
@@ -176,12 +178,12 @@ class GunosyAdCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("advertiserName") or ad_data.get("sponsorName"),
                 video_url=creative.get("videoUrl"),
                 thumbnail_url=creative.get("imageUrl") or creative.get("thumbnailUrl"),
+                destination_url=destination_url,
                 first_seen_at=first_seen,
                 metadata={
                     "source": "gunosy_ads_api",
                     "campaign_id": ad_data.get("campaignId"),
                     "ad_format": creative.get("format"),
-                    "destination_url": creative.get("landingUrl"),
                     "category": ad_data.get("category"),
                 },
             )
@@ -214,10 +216,10 @@ class GunosyAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 category=category,
                 metadata={
                     "source": "gunosy_web_scrape",
-                    "destination_url": destination_url,
                 },
             )
         except Exception as e:

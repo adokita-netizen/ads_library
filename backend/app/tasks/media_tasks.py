@@ -81,6 +81,21 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
         if len(extracted.image_urls) > 1:
             ad.image_s3_keys = {"urls": extracted.image_urls}
 
+        # Download and store thumbnail
+        if ad.thumbnail_url and not ad.thumbnail_s3_key:
+            try:
+                thumb_data = _download_sync(ad.thumbnail_url)
+                if thumb_data:
+                    from app.core.storage import get_storage_client
+                    storage = get_storage_client()
+                    thumb_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+                    thumb_key = f"thumbnails/{uuid.uuid4()}_{thumb_hash}.jpg"
+                    storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
+                    ad.thumbnail_s3_key = thumb_key
+                    logger.info("thumbnail_uploaded_to_storage", ad_id=ad_id, s3_key=thumb_key)
+            except Exception as e:
+                logger.warning("thumbnail_upload_failed", ad_id=ad_id, error=str(e))
+
         ad.media_extraction_status = "completed"
         session.commit()
 
@@ -105,6 +120,47 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                 session.commit()
         except Exception:
             session.rollback()
+        raise self.retry(exc=e)
+    finally:
+        session.close()
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=30)
+def download_thumbnail_task(self, ad_id: int):
+    """Download thumbnail from thumbnail_url and upload to S3.
+
+    Lightweight task for ads that already have direct media URLs
+    (skipped full media extraction) but need thumbnail stored in S3.
+    """
+    logger.info("thumbnail_download_started", ad_id=ad_id)
+
+    session = SyncSessionLocal()
+    try:
+        ad = session.query(Ad).filter(Ad.id == ad_id).first()
+        if not ad:
+            return {"status": "error", "message": "Ad not found"}
+
+        if not ad.thumbnail_url or ad.thumbnail_s3_key:
+            return {"status": "skipped", "message": "No thumbnail_url or already stored"}
+
+        thumb_data = _download_sync(ad.thumbnail_url)
+        if thumb_data:
+            from app.core.storage import get_storage_client
+            storage = get_storage_client()
+            thumb_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+            thumb_key = f"thumbnails/{uuid.uuid4()}_{thumb_hash}.jpg"
+            storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
+            ad.thumbnail_s3_key = thumb_key
+            session.commit()
+            logger.info("thumbnail_downloaded", ad_id=ad_id, s3_key=thumb_key)
+            return {"status": "completed", "s3_key": thumb_key}
+        else:
+            logger.warning("thumbnail_download_empty", ad_id=ad_id, url=ad.thumbnail_url)
+            return {"status": "failed", "message": "Download returned no data"}
+
+    except Exception as e:
+        logger.error("thumbnail_download_failed", ad_id=ad_id, error=str(e))
+        session.rollback()
         raise self.retry(exc=e)
     finally:
         session.close()

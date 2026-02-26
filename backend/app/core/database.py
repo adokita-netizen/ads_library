@@ -1,6 +1,6 @@
 """Database connection and session management.
 
-Supports PostgreSQL (Supabase/Render/etc.) with automatic fallback to
+Supports PostgreSQL with automatic fallback to
 in-memory SQLite when the configured database is unreachable.
 """
 
@@ -110,15 +110,12 @@ def _diagnose_error(error: Exception, url: str) -> str:
     err_str = str(error).lower()
     if "password authentication failed" in err_str:
         msg = "接続エラー: パスワード認証に失敗しました。"
-        if ":6543" in url or "pooler" in url.lower():
-            msg += "Supabaseダッシュボードでパスワードを確認してください。Pooler (ポート6543) を使用する場合、ユーザー名は 'postgres.{project-ref}' 形式が必要です。"
-        else:
-            msg += "Supabaseダッシュボードでパスワードを確認してください。"
+        msg += "DATABASE_URLのパスワードを確認してください。"
         return msg
     if "could not connect" in err_str or "connection refused" in err_str:
         return "接続エラー: データベースサーバーに接続できません。DATABASE_URLを確認してください。"
     if "does not exist" in err_str:
-        return "接続エラー: データベースが存在しません。Supabaseでプロジェクトが作成されているか確認してください。"
+        return "接続エラー: データベースが存在しません。データベースが存在するか確認してください。"
     if "timeout" in err_str:
         return "接続エラー: データベースサーバーへの接続がタイムアウトしました。"
     return f"接続エラー: {str(error)}"
@@ -190,6 +187,43 @@ def get_sync_session():
 from contextlib import contextmanager  # noqa: E402
 
 
+def _run_migrations(engine):
+    """Add missing columns to existing tables (lightweight auto-migration)."""
+    from sqlalchemy import inspect as sa_inspect, text as sa_text
+    try:
+        insp = sa_inspect(engine)
+        # landing_pages: add error_message
+        if insp.has_table("landing_pages"):
+            cols = {c["name"] for c in insp.get_columns("landing_pages")}
+            if "error_message" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(sa_text("ALTER TABLE landing_pages ADD COLUMN error_message TEXT"))
+                    logger.info("migration: added landing_pages.error_message")
+
+        # ads: add new columns for thumbnail, destination, and operational metrics
+        if insp.has_table("ads"):
+            cols = {c["name"] for c in insp.get_columns("ads")}
+            new_cols = {
+                "thumbnail_url": "TEXT",
+                "destination_url": "TEXT",
+                "spend": "FLOAT",
+                "impressions": "BIGINT",
+                "reach": "BIGINT",
+                "cpc": "FLOAT",
+                "cpm": "FLOAT",
+                "frequency": "FLOAT",
+            }
+            with engine.begin() as conn:
+                for col_name, col_type in new_cols.items():
+                    if col_name not in cols:
+                        conn.execute(sa_text(f"ALTER TABLE ads ADD COLUMN {col_name} {col_type}"))
+                        logger.info("migration: added ads.%s", col_name)
+
+        # crawl_jobs table is created via create_all, no migration needed for new tables
+    except Exception as e:
+        logger.warning("migration_check_failed", error=str(e))
+
+
 @contextmanager
 def sync_session_scope():
     """Context manager for sync session with automatic rollback on error.
@@ -247,6 +281,7 @@ def reconnect(new_database_url: str) -> dict:
         import app.models.user  # noqa: F401
         import app.models.landing_page  # noqa: F401
         import app.models.api_key  # noqa: F401
+        import app.models.crawl_job  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
         logger.info("Tables created on new database.")
     except Exception as table_err:

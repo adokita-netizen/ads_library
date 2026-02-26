@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { adsApi, fetchApi } from "@/lib/api";
 import { platformBadgeColors } from "@/lib/constants";
@@ -171,21 +171,42 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
               onClick={() => onAdSelect(ad.id)}
               className="card cursor-pointer transition-shadow hover:shadow-md"
             >
-              {/* Thumbnail placeholder */}
-              <div className="mb-3 flex h-40 items-center justify-center rounded-lg bg-gray-100">
-                <svg
-                  className="h-12 w-12 text-gray-300"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1}
-                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+              {/* Thumbnail */}
+              <div className="mb-3 h-40 rounded-lg bg-gray-100 overflow-hidden">
+                {(ad.thumbnail_url || ad.image_url || ad.snapshot_url) ? (
+                  <img
+                    src={ad.thumbnail_url || ad.image_url || ad.snapshot_url}
+                    alt={ad.title || "Ad thumbnail"}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                      (e.target as HTMLImageElement).parentElement!.classList.add("flex", "items-center", "justify-center");
+                      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                      svg.setAttribute("class", "h-12 w-12 text-gray-300");
+                      svg.setAttribute("fill", "none");
+                      svg.setAttribute("viewBox", "0 0 24 24");
+                      svg.setAttribute("stroke", "currentColor");
+                      svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />';
+                      (e.target as HTMLImageElement).parentElement!.appendChild(svg);
+                    }}
                   />
-                </svg>
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <svg
+                      className="h-12 w-12 text-gray-300"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1}
+                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                )}
               </div>
 
               {/* Ad Info */}
@@ -196,7 +217,7 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
                 {ad.advertiser_name || "Unknown Advertiser"}
               </p>
 
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <span
                   className={`badge ${platformColors[ad.platform] || "bg-gray-100 text-gray-800"}`}
                 >
@@ -211,6 +232,23 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
                   </span>
                 )}
               </div>
+              {/* Metrics row */}
+              {(ad.impressions || ad.spend || ad.view_count) ? (
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-gray-400">
+                  {ad.impressions != null && ad.impressions > 0 && (
+                    <span title="Impressions">{ad.impressions.toLocaleString()} imp</span>
+                  )}
+                  {ad.spend != null && ad.spend > 0 && (
+                    <span title="Spend">&yen;{ad.spend.toLocaleString()}</span>
+                  )}
+                  {ad.cpc != null && ad.cpc > 0 && (
+                    <span title="CPC">CPC &yen;{ad.cpc.toFixed(0)}</span>
+                  )}
+                  {!ad.impressions && ad.view_count != null && ad.view_count > 0 && (
+                    <span title="Views">{ad.view_count.toLocaleString()} views</span>
+                  )}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -277,6 +315,16 @@ function CrawlModal({
   const [loadingPlatforms, setLoadingPlatforms] = useState(true);
   const [crawlResult, setCrawlResult] = useState<string | null>(null);
 
+  // Progress tracking
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
+  const [completedPlatforms, setCompletedPlatforms] = useState(0);
+  const [totalPlatforms, setTotalPlatforms] = useState(0);
+  const [adsFound, setAdsFound] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
+
   useEffect(() => {
     fetchApi<{ connected: string[] }>("/ads/connected-platforms")
       .then((data) => {
@@ -289,10 +337,56 @@ function CrawlModal({
       .finally(() => setLoadingPlatforms(false));
   }, []);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  const startPolling = useCallback((id: string) => {
+    pollCountRef.current = 0;
+    pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > 60) {
+        // Max 3 min polling
+        if (pollRef.current) clearInterval(pollRef.current);
+        return;
+      }
+      try {
+        const status = await adsApi.crawlStatus(id);
+        setProgress(status.progress_percent);
+        setCurrentPlatform(status.current_platform);
+        setCompletedPlatforms(status.completed_platforms);
+        setTotalPlatforms(status.total_platforms);
+        setAdsFound(status.total_ads_found);
+
+        if (status.status === "completed") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setLoading(false);
+          toast.success(`クロール完了: ${status.total_ads_found}件の広告を取得しました`);
+          onSuccess();
+        } else if (status.status === "failed") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setLoading(false);
+          toast.error(status.error_message || "クロールに失敗しました");
+        }
+      } catch {
+        // Silently continue polling
+      }
+    }, 3000);
+  }, [onSuccess]);
+
   const handleCrawl = async () => {
     if (!query.trim() || platforms.length === 0) return;
     setLoading(true);
     setCrawlResult(null);
+    setProgress(0);
+    setAdsFound(0);
+    setCurrentPlatform(null);
+    setCompletedPlatforms(0);
+    setTotalPlatforms(platforms.length);
+
     try {
       const res = await adsApi.crawl({
         query,
@@ -300,16 +394,37 @@ function CrawlModal({
         limit_per_platform: limit,
         auto_analyze: true,
       });
-      const msg = (res as { data?: { message?: string } })?.data?.message;
-      if (msg) {
-        setCrawlResult(msg);
-        toast.success(msg);
+      const data = res?.data as { task_id?: string; status?: string; message?: string } | undefined;
+      const taskId = data?.task_id;
+      const msg = data?.message;
+
+      if (taskId) {
+        setJobId(taskId);
+        if (data?.status === "completed") {
+          // Inline crawl completed immediately
+          setProgress(100);
+          setLoading(false);
+          if (msg) {
+            setCrawlResult(msg);
+            toast.success(msg);
+          }
+          onSuccess();
+        } else {
+          // Async task dispatched, start polling
+          if (msg) setCrawlResult(msg);
+          startPolling(taskId);
+        }
+      } else {
+        setLoading(false);
+        if (msg) {
+          setCrawlResult(msg);
+          toast.success(msg);
+        }
+        onSuccess();
       }
-      onSuccess();
     } catch {
-      toast.error("クロールに失敗しました。バックエンド接続を確認してください。");
-    } finally {
       setLoading(false);
+      toast.error("クロールに失敗しました。バックエンド接続を確認してください。");
     }
   };
 
@@ -332,6 +447,7 @@ function CrawlModal({
               placeholder="例: 競合ブランド名、商品カテゴリ..."
               className="input mt-1"
               onKeyDown={(e) => { if (e.key === "Enter") handleCrawl(); }}
+              disabled={loading}
             />
           </div>
 
@@ -364,6 +480,7 @@ function CrawlModal({
                           }
                         }}
                         className="rounded border-gray-300"
+                        disabled={loading}
                       />
                       <span className="text-sm font-medium text-emerald-800">{PLATFORM_LABELS[p] || p}</span>
                     </label>
@@ -389,10 +506,35 @@ function CrawlModal({
               min={1}
               max={100}
               className="input mt-1 w-32"
+              disabled={loading}
             />
           </div>
 
-          {crawlResult && (
+          {/* Progress bar */}
+          {loading && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span>
+                  {currentPlatform
+                    ? `処理中: ${PLATFORM_LABELS[currentPlatform] || currentPlatform}`
+                    : "クロール中..."}
+                </span>
+                <span>{completedPlatforms}/{totalPlatforms} 媒体完了</span>
+              </div>
+              <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(progress, 5)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                <span>{progress}%</span>
+                <span>{adsFound}件の広告を取得済み</span>
+              </div>
+            </div>
+          )}
+
+          {crawlResult && !loading && (
             <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-700">
               {crawlResult}
             </div>

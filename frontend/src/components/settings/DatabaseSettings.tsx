@@ -69,7 +69,7 @@ export default function DatabaseSettings() {
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-lg p-5">
         <h3 className="text-[14px] font-bold text-gray-900 mb-1">データベース接続</h3>
-        <p className="text-[11px] text-gray-400 mb-4">PostgreSQL (Supabase) の接続設定</p>
+        <p className="text-[11px] text-gray-400 mb-4">PostgreSQL の接続設定</p>
 
         {/* Status indicator */}
         {status?.in_memory_mode ? (
@@ -81,7 +81,7 @@ export default function DatabaseSettings() {
               </div>
               <p className="text-[12px] text-amber-700">
                 現在インメモリモードで動作中です。データはサーバー再起動時に失われます。
-                永続化するにはPostgreSQL (Supabase) のDATABASE_URLを設定してください。
+                永続化するにはPostgreSQLのDATABASE_URLを設定してください。
               </p>
             </div>
 
@@ -106,16 +106,14 @@ export default function DatabaseSettings() {
       <div className="bg-white border border-gray-200 rounded-lg p-5">
         <label className="block text-[12px] font-semibold text-gray-700 mb-1">DATABASE_URL</label>
         <p className="text-[11px] text-gray-400 mb-2">
-          Supabase: プロジェクト設定 &gt; Database &gt; Connection string (URI)
-          <br />
-          Pooler(6543)は <code className="bg-gray-100 px-1 rounded">postgres.project-ref</code> 形式のユーザー名を使用し、パスワードを必ず含めてください。
+          RDS エンドポイントを含む PostgreSQL 接続 URL を入力してください。
         </p>
         <div className="flex gap-2">
           <input
             type="password"
             value={databaseUrl}
             onChange={(e) => setDatabaseUrl(e.target.value)}
-            placeholder="postgresql://postgres.xxxxx:password@db.xxxxx.supabase.co:6543/postgres"
+            placeholder="postgresql://vaap:password@your-rds-endpoint.ap-northeast-1.rds.amazonaws.com:5432/vaap_db"
             className="flex-1 px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF] font-mono"
             onKeyDown={(e) => {
               if (e.key === "Enter") handleConnect();

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { fetchApi } from "@/lib/api";
+import { fetchApi, adsApi } from "@/lib/api";
 import { platformLabels, platformColors, genreOptions as sharedGenreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
 
@@ -98,7 +98,7 @@ function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<s
     return {
       id: adId,
       rank: (item.rank as number) || idx + 1,
-      thumbnail: (item.thumbnail as string) || "",
+      thumbnail: (item.thumbnail_url as string) || (item.thumbnail as string) || "",
       duration: (item.duration_seconds as number) || 0,
       platform: platformRaw || "youtube",
       managementId: (item.management_id as string) || `AD-${adId}`,
@@ -428,9 +428,9 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 {/* Thumbnail */}
                 <td>
                   <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
-                    {(ad.imageUrl || ad.snapshotUrl || ad.thumbnail) ? (
+                    {(ad.thumbnail || ad.imageUrl || ad.snapshotUrl) ? (
                       <img
-                        src={ad.imageUrl || ad.snapshotUrl || ad.thumbnail}
+                        src={ad.thumbnail || ad.imageUrl || ad.snapshotUrl}
                         alt=""
                         className="absolute inset-0 w-full h-full object-cover"
                         loading="lazy"
@@ -443,7 +443,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                     ) : null}
                     <div
                       className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
-                      style={{ display: (ad.imageUrl || ad.snapshotUrl || ad.thumbnail) ? "none" : "flex" }}
+                      style={{ display: (ad.thumbnail || ad.imageUrl || ad.snapshotUrl) ? "none" : "flex" }}
                     >
                       {/* Creative type icon */}
                       {ad.creativeType === "image" ? (
@@ -659,6 +659,13 @@ const ALL_CRAWL_PLATFORMS = [
   { value: "gunosy", label: "Gunosy" },
 ];
 
+const PLATFORM_LABELS_MAP: Record<string, string> = {
+  facebook: "Facebook", instagram: "Instagram", youtube: "YouTube",
+  tiktok: "TikTok", x_twitter: "X (Twitter)", line: "LINE",
+  yahoo: "Yahoo!", pinterest: "Pinterest", smartnews: "SmartNews",
+  google_ads: "Google Ads", gunosy: "Gunosy",
+};
+
 function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [query, setQuery] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
@@ -668,6 +675,54 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
   const [limit, setLimit] = useState(20);
   const [crawling, setCrawling] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Progress tracking
+  const [progress, setProgress] = useState(0);
+  const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
+  const [completedPlatforms, setCompletedPlatforms] = useState(0);
+  const [totalPlatformsCount, setTotalPlatformsCount] = useState(0);
+  const [adsFound, setAdsFound] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  const startPolling = useCallback((id: string) => {
+    pollCountRef.current = 0;
+    pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > 60) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        return;
+      }
+      try {
+        const status = await adsApi.crawlStatus(id);
+        setProgress(status.progress_percent);
+        setCurrentPlatform(status.current_platform);
+        setCompletedPlatforms(status.completed_platforms);
+        setTotalPlatformsCount(status.total_platforms);
+        setAdsFound(status.total_ads_found);
+
+        if (status.status === "completed") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setCrawling(false);
+          toast.success(`クロール完了: ${status.total_ads_found}件の広告を取得しました`);
+          onSuccess();
+        } else if (status.status === "failed") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setCrawling(false);
+          setMessage(status.error_message || "クロールに失敗しました");
+          toast.error(status.error_message || "クロールに失敗しました");
+        }
+      } catch {
+        // Silently continue polling
+      }
+    }, 3000);
+  }, [onSuccess]);
 
   const togglePlatform = (value: string) => {
     setSelectedPlatforms((prev) =>
@@ -691,8 +746,13 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
     }
     setCrawling(true);
     setMessage("");
+    setProgress(0);
+    setAdsFound(0);
+    setCurrentPlatform(null);
+    setCompletedPlatforms(0);
+    setTotalPlatformsCount(selectedPlatforms.length);
+
     try {
-      // Use native fetch (same transport as health check)
       const data = await fetchApi<{ task_id: string; status: string; message: string }>("/ads/crawl", {
         method: "POST",
         body: {
@@ -703,9 +763,21 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           auto_analyze: true,
         },
       });
+
       if (data?.status === "error") {
         setMessage(data.message || "クロール中にエラーが発生しました");
         setCrawling(false);
+      } else if (data?.status === "completed") {
+        // Inline crawl completed immediately
+        setProgress(100);
+        setCrawling(false);
+        setMessage(data?.message || "クロール完了");
+        toast.success(data?.message || "クロール完了");
+        onSuccess();
+      } else if (data?.task_id) {
+        // Async task dispatched, start polling
+        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
+        startPolling(data.task_id);
       } else {
         setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
         setTimeout(() => onSuccess(), 3000);
@@ -740,6 +812,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
               placeholder="商材名、競合名、カテゴリなど"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
               autoFocus
+              disabled={crawling}
             />
           </div>
 
@@ -747,7 +820,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-gray-700">対象媒体</label>
-              <button className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll}>
+              <button className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll} disabled={crawling}>
                 {selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length ? "全解除" : "全選択"}
               </button>
             </div>
@@ -761,6 +834,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
                       : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
                   }`}
                   onClick={() => togglePlatform(p.value)}
+                  disabled={crawling}
                 >
                   {p.label}
                 </button>
@@ -777,6 +851,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+                disabled={crawling}
               >
                 <option value="">指定なし</option>
                 {genreFilterOptions.filter((g) => g.value !== "all").map((g) => (
@@ -793,13 +868,38 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
                 min={1}
                 max={100}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
+                disabled={crawling}
               />
             </div>
           </div>
+
+          {/* Progress bar */}
+          {crawling && (
+            <div className="space-y-2 bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span>
+                  {currentPlatform
+                    ? `処理中: ${PLATFORM_LABELS_MAP[currentPlatform] || currentPlatform}`
+                    : "クロール中..."}
+                </span>
+                <span>{completedPlatforms}/{totalPlatformsCount} 媒体完了</span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#4A7DFF] rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(progress, 5)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-gray-400">
+                <span>{progress}%</span>
+                <span>{adsFound}件の広告を取得済み</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Message */}
-        {message && (
+        {message && !crawling && (
           <p className={`mt-3 text-xs ${message.includes("失敗") || message.includes("エラー") || message.includes("HTTP") ? "text-red-500" : message.includes("保留") ? "text-amber-600" : "text-green-600"}`}>
             {message}
           </p>

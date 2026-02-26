@@ -79,8 +79,25 @@ async def list_ads(
     result = await db.execute(query)
     ads = result.scalars().all()
 
+    # Build response with presigned thumbnail URLs
+    ad_responses = []
+    for ad in ads:
+        resp = AdResponse.model_validate(ad)
+        # Resolve thumbnail: presigned S3 URL > original thumbnail_url > first image_url
+        if ad.thumbnail_s3_key:
+            try:
+                storage = get_storage_client()
+                resp.thumbnail_url = storage.get_presigned_url(ad.thumbnail_s3_key)
+            except Exception:
+                pass
+        if not resp.thumbnail_url and ad.thumbnail_url:
+            resp.thumbnail_url = ad.thumbnail_url
+        if not resp.thumbnail_url and ad.image_url:
+            resp.thumbnail_url = ad.image_url
+        ad_responses.append(resp)
+
     return AdListResponse(
-        ads=[AdResponse.model_validate(ad) for ad in ads],
+        ads=ad_responses,
         total=total,
         page=page,
         page_size=page_size,
@@ -95,6 +112,103 @@ def get_connected_platforms_endpoint():
     return {"connected": connected}
 
 
+@router.get("/crawl/{job_id}/status")
+async def crawl_job_status(
+    job_id: str,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Get crawl job progress status."""
+    from app.models.crawl_job import CrawlJob
+    result = await db.execute(select(CrawlJob).where(CrawlJob.job_id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Crawl job not found")
+
+    progress_percent = 0
+    if job.total_platforms > 0:
+        progress_percent = round(job.completed_platforms / job.total_platforms * 100)
+    if job.status.value == "completed":
+        progress_percent = 100
+
+    return {
+        "job_id": job.job_id,
+        "status": job.status.value,
+        "progress_percent": progress_percent,
+        "total_platforms": job.total_platforms,
+        "completed_platforms": job.completed_platforms,
+        "current_platform": job.current_platform,
+        "total_ads_found": job.total_ads_found,
+        "error_message": job.error_message,
+        "platforms": job.platforms,
+    }
+
+
+@router.get("/health/data-integrity")
+async def ad_data_integrity(
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Check data integrity of crawled ads."""
+    # Total ads
+    total_result = await db.execute(select(func.count()).select_from(Ad))
+    total_ads = total_result.scalar() or 0
+
+    # Ads missing all media (no image, no video, no snapshot)
+    no_media_result = await db.execute(
+        select(func.count()).select_from(Ad).where(
+            Ad.image_url.is_(None),
+            Ad.video_url.is_(None),
+            Ad.snapshot_url.is_(None),
+        )
+    )
+    no_media_count = no_media_result.scalar() or 0
+
+    # Ads missing title
+    no_title_result = await db.execute(
+        select(func.count()).select_from(Ad).where(
+            (Ad.title.is_(None)) | (Ad.title == "")
+        )
+    )
+    no_title_count = no_title_result.scalar() or 0
+
+    # Ads with pending media extraction
+    pending_media_result = await db.execute(
+        select(func.count()).select_from(Ad).where(
+            Ad.media_extraction_status == "pending"
+        )
+    )
+    pending_media_count = pending_media_result.scalar() or 0
+
+    # Ads missing thumbnail
+    no_thumb_result = await db.execute(
+        select(func.count()).select_from(Ad).where(
+            Ad.thumbnail_url.is_(None),
+            Ad.thumbnail_s3_key.is_(None),
+        )
+    )
+    no_thumbnail_count = no_thumb_result.scalar() or 0
+
+    # Calculate health score (0-100)
+    if total_ads == 0:
+        health_score = 100.0
+    else:
+        issue_count = no_media_count + no_title_count
+        health_score = round(max(0, (1 - issue_count / total_ads)) * 100, 1)
+
+    return {
+        "total_ads": total_ads,
+        "no_media_count": no_media_count,
+        "no_title_count": no_title_count,
+        "no_thumbnail_count": no_thumbnail_count,
+        "pending_media_extraction": pending_media_count,
+        "health_score": health_score,
+        "details": {
+            "no_media_percent": round(no_media_count / total_ads * 100, 1) if total_ads else 0,
+            "no_title_percent": round(no_title_count / total_ads * 100, 1) if total_ads else 0,
+            "no_thumbnail_percent": round(no_thumbnail_count / total_ads * 100, 1) if total_ads else 0,
+        },
+    }
+
+
 @router.get("/{ad_id}", response_model=AdResponse)
 async def get_ad(
     ad_id: int,
@@ -106,7 +220,19 @@ async def get_ad(
     ad = result.scalar_one_or_none()
     if not ad:
         raise HTTPException(status_code=404, detail="Ad not found")
-    return AdResponse.model_validate(ad)
+    resp = AdResponse.model_validate(ad)
+    # Resolve thumbnail URL
+    if ad.thumbnail_s3_key:
+        try:
+            storage = get_storage_client()
+            resp.thumbnail_url = storage.get_presigned_url(ad.thumbnail_s3_key)
+        except Exception:
+            pass
+    if not resp.thumbnail_url and ad.thumbnail_url:
+        resp.thumbnail_url = ad.thumbnail_url
+    if not resp.thumbnail_url and ad.image_url:
+        resp.thumbnail_url = ad.image_url
+    return resp
 
 
 @router.post("", response_model=AdResponse)
@@ -322,6 +448,28 @@ def crawl_ads(
         _logger.warning("task_dispatch_failed_using_inline", error=str(celery_err))
 
     # Fallback: run real crawlers inline
+    inline_job_id = str(uuid.uuid4())
+
+    # Create CrawlJob record for inline crawl
+    from app.models.crawl_job import CrawlJob, CrawlJobStatusEnum
+    inline_session = SyncSessionLocal()
+    try:
+        crawl_job = CrawlJob(
+            job_id=inline_job_id,
+            status=CrawlJobStatusEnum.RUNNING,
+            query=request.query,
+            platforms=active_platforms,
+            total_platforms=len(active_platforms),
+            completed_platforms=0,
+            total_ads_found=0,
+        )
+        inline_session.add(crawl_job)
+        inline_session.commit()
+    except Exception:
+        pass
+    finally:
+        inline_session.close()
+
     try:
         saved_count = _inline_crawl(
             query=request.query,
@@ -329,19 +477,49 @@ def crawl_ads(
             category=request.category,
             limit_per_platform=request.limit_per_platform,
         )
+
+        # Update CrawlJob to COMPLETED
+        done_session = SyncSessionLocal()
+        try:
+            cj = done_session.query(CrawlJob).filter(CrawlJob.job_id == inline_job_id).first()
+            if cj:
+                cj.status = CrawlJobStatusEnum.COMPLETED
+                cj.completed_platforms = len(active_platforms)
+                cj.total_ads_found = saved_count
+                cj.current_platform = None
+                done_session.commit()
+        except Exception:
+            pass
+        finally:
+            done_session.close()
+
         msg = f"クロール完了: {saved_count}件の広告を取得しました ({', '.join(active_platforms)})"
         if skipped:
             msg += f" ※スキップ: {', '.join(skipped)}(APIキー未設定)"
         return CrawlResponse(
-            task_id=str(uuid.uuid4()),
+            task_id=inline_job_id,
             status="completed",
             message=msg,
         )
     except Exception as crawl_err:
         _logger.warning("inline_crawl_error", error=str(crawl_err))
+
+        # Update CrawlJob to FAILED
+        fail_session = SyncSessionLocal()
+        try:
+            cj = fail_session.query(CrawlJob).filter(CrawlJob.job_id == inline_job_id).first()
+            if cj:
+                cj.status = CrawlJobStatusEnum.FAILED
+                cj.error_message = str(crawl_err)[:500]
+                fail_session.commit()
+        except Exception:
+            pass
+        finally:
+            fail_session.close()
+
         return CrawlResponse(
-            task_id=str(uuid.uuid4()),
-            status="completed",
+            task_id=inline_job_id,
+            status="failed",
             message=f"クロールエラー: {str(crawl_err)}",
         )
 
@@ -380,6 +558,29 @@ def _inline_crawl(
                     if existing:
                         continue
 
+                # Determine media extraction status
+                has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
+                if has_direct_media:
+                    extraction_status = "skipped"
+                elif crawled_ad.snapshot_url:
+                    extraction_status = "pending"
+                else:
+                    extraction_status = "skipped"
+
+                # Extract destination_url from CrawledAd field or metadata
+                dest_url = crawled_ad.destination_url
+                if not dest_url:
+                    dest_url = (crawled_ad.metadata or {}).get("destination_url")
+
+                # Map category string to enum
+                ad_category = None
+                if crawled_ad.category:
+                    from app.models.ad import AdCategoryEnum
+                    try:
+                        ad_category = AdCategoryEnum(crawled_ad.category)
+                    except ValueError:
+                        ad_category = AdCategoryEnum.OTHER
+
                 ad = Ad(
                     external_id=crawled_ad.external_id,
                     title=crawled_ad.title,
@@ -388,14 +589,24 @@ def _inline_crawl(
                     creative_type=crawled_ad.creative_type,
                     video_url=crawled_ad.video_url,
                     snapshot_url=crawled_ad.snapshot_url,
+                    thumbnail_url=crawled_ad.thumbnail_url,
                     image_url=crawled_ad.image_urls[0] if crawled_ad.image_urls else None,
-                    media_extraction_status="pending" if crawled_ad.snapshot_url else "skipped",
+                    image_s3_keys={"urls": crawled_ad.image_urls} if len(crawled_ad.image_urls) > 1 else None,
+                    destination_url=dest_url,
+                    category=ad_category,
+                    media_extraction_status=extraction_status,
                     advertiser_name=crawled_ad.advertiser_name,
                     advertiser_url=crawled_ad.advertiser_url,
                     brand_name=crawled_ad.brand_name,
                     duration_seconds=crawled_ad.duration_seconds,
                     view_count=crawled_ad.view_count,
                     like_count=crawled_ad.like_count,
+                    spend=crawled_ad.spend,
+                    impressions=crawled_ad.impressions,
+                    reach=crawled_ad.reach,
+                    cpc=crawled_ad.cpc,
+                    cpm=crawled_ad.cpm,
+                    frequency=crawled_ad.frequency,
                     first_seen_at=crawled_ad.first_seen_at,
                     last_seen_at=crawled_ad.last_seen_at,
                     tags=crawled_ad.tags,
@@ -406,6 +617,22 @@ def _inline_crawl(
                 saved += 1
 
         session.commit()
+
+        # Generate initial AdDailyMetrics for newly saved ads
+        if saved > 0:
+            try:
+                from app.tasks.metrics_tasks import collect_metrics_for_ads
+                from datetime import date, datetime, timedelta, timezone as _tz
+                _JST = _tz(timedelta(hours=9))
+                today_jst = datetime.now(_JST).date()
+                metrics_created = collect_metrics_for_ads(session, target_date=today_jst)
+                session.commit()
+                _logger = structlog.get_logger()
+                _logger.info("inline_crawl_initial_metrics", metrics_created=metrics_created)
+            except Exception as metrics_err:
+                _logger = structlog.get_logger()
+                _logger.warning("inline_crawl_metrics_failed", error=str(metrics_err))
+                session.rollback()
 
         # Dispatch media extraction for ads with snapshot_url
         try:

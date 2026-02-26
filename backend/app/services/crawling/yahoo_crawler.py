@@ -148,6 +148,10 @@ class YahooAdCrawler(BaseCrawler):
             if ad_info.get("video"):
                 video_url = ad_info["video"].get("videoUrl")
                 thumbnail_url = ad_info["video"].get("thumbnailUrl")
+            if not thumbnail_url:
+                thumbnail_url = ad_info.get("imageUrl") or ad_info.get("thumbnailUrl")
+
+            destination_url = ad_info.get("finalUrl") or ad_info.get("displayUrl")
 
             return CrawledAd(
                 external_id=ad_id,
@@ -157,6 +161,7 @@ class YahooAdCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("accountName"),
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
                     "source": "yahoo_ads_api",
                     "campaign_id": ad_data.get("campaignId"),
@@ -165,8 +170,7 @@ class YahooAdCrawler(BaseCrawler):
                     "approval_status": ad_data.get("approvalStatus"),
                     "display_url": ad_info.get("displayUrl"),
                     "final_url": ad_info.get("finalUrl"),
-                    "destination_url": ad_info.get("finalUrl") or ad_info.get("displayUrl"),
-                    "destination_type": "LP" if ad_info.get("finalUrl") or ad_info.get("displayUrl") else None,
+                    "destination_type": "LP" if destination_url else None,
                 },
             )
         except Exception as e:
@@ -203,9 +207,9 @@ class YahooAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
                     "source": "yahoo_transparency_scrape",
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

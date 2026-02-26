@@ -86,10 +86,12 @@ class Ad(Base):
     video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     thumbnail_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # original thumbnail source URL
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_s3_keys: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # carousel multiple images
     snapshot_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # platform preview URL
+    destination_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # CTA destination URL
     media_extraction_status: Mapped[str | None] = mapped_column(String(50), nullable=True)  # pending/completed/failed/skipped
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     resolution_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -107,6 +109,14 @@ class Ad(Base):
     estimated_cvr: Mapped[float | None] = mapped_column(Float, nullable=True)
     view_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     like_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # Operational metrics
+    spend: Mapped[float | None] = mapped_column(Float, nullable=True)
+    impressions: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    reach: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cpc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cpm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    frequency: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Dates
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

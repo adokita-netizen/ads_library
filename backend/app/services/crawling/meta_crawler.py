@@ -15,6 +15,7 @@ from typing import Optional
 import structlog
 
 from app.services.crawling.base_crawler import BaseCrawler, CrawledAd
+from app.utils.text import japanese_text_ratio
 
 logger = structlog.get_logger()
 
@@ -101,6 +102,30 @@ _BROWSER_EXTRACT_JS = r"""() => {
         if (platformText.includes('messenger') || card.querySelector('[aria-label*="Messenger"]')) platforms.push('messenger');
         if (platformText.includes('threads') || card.querySelector('[aria-label*="Threads"]')) platforms.push('threads');
 
+        // Extract image URLs from card (thumbnails, creative images)
+        const imageUrls = [];
+        const imgs = card.querySelectorAll('img');
+        for (const img of imgs) {
+            const src = img.getAttribute('src') || '';
+            if (!src || src.startsWith('data:')) continue;
+            // Skip tiny icons/avatars (< 50px)
+            const w = img.naturalWidth || img.width || parseInt(img.getAttribute('width') || '0');
+            const h = img.naturalHeight || img.height || parseInt(img.getAttribute('height') || '0');
+            if ((w > 0 && w < 50) || (h > 0 && h < 50)) continue;
+            // Skip common icon/emoji patterns
+            if (src.includes('emoji') || src.includes('rsrc.php')) continue;
+            if (!imageUrls.includes(src)) imageUrls.push(src);
+        }
+        // Also check CSS background images on divs
+        const bgDivs = card.querySelectorAll('div[style*="background-image"]');
+        for (const div of bgDivs) {
+            const style = div.getAttribute('style') || '';
+            const bgMatch = style.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+            if (bgMatch && !imageUrls.includes(bgMatch[1])) {
+                imageUrls.push(bgMatch[1]);
+            }
+        }
+
         if (idMatch || advertiser) {
             results.push({
                 ad_id: idMatch ? idMatch[1] : null,
@@ -111,6 +136,7 @@ _BROWSER_EXTRACT_JS = r"""() => {
                 all_external_links: extLinks,
                 display_url: displayUrl,
                 platforms: platforms.length > 0 ? platforms : ['facebook'],
+                image_urls: imageUrls,
             });
         }
     }
@@ -330,12 +356,30 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 platforms = ad.get("platforms", ["facebook"])
                 platform = "instagram" if "instagram" in platforms else "facebook"
 
+                # Derive title from body text (first line, capped)
+                body_text = ad.get("body") or ""
+                title = None
+                if body_text:
+                    first_line = body_text.split("\n")[0].strip()
+                    title = first_line[:80] if first_line else None
+
+                # Build snapshot URL from ad library ID
+                snapshot_url = None
+                if ad_id and ad_id.isdigit():
+                    snapshot_url = f"https://www.facebook.com/ads/library/?id={ad_id}"
+
+                ad_image_urls = ad.get("image_urls", [])
+
                 results.append(CrawledAd(
-                    external_id=ad_id or f"meta_browser_{hash(ad.get('body', '')):#010x}",
+                    external_id=ad_id or f"meta_browser_{hash(body_text):#010x}",
                     platform=platform,
-                    title=None,
-                    description=ad.get("body"),
+                    title=title,
+                    description=body_text,
                     advertiser_name=ad.get("advertiser"),
+                    image_urls=ad_image_urls,
+                    thumbnail_url=ad_image_urls[0] if ad_image_urls else None,
+                    snapshot_url=snapshot_url,
+                    destination_url=destination_url,
                     first_seen_at=first_seen,
                     metadata={
                         "source": "browser_scraping",
@@ -347,10 +391,23 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     },
                 ))
 
+            # Sort results: prioritize Japanese-language ads
+            for crawled_ad in results:
+                text = (crawled_ad.title or "") + " " + (crawled_ad.description or "")
+                ratio = japanese_text_ratio(text)
+                crawled_ad.metadata["japanese_ratio"] = round(ratio, 3)
+
+            jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) > 0.1]
+            non_jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) <= 0.1]
+            # Japanese ads first, then fill remaining slots with non-Japanese
+            results = jp_ads + non_jp_ads
+
             logger.info(
                 "meta_browser_scraping_done",
                 query=query,
                 results=len(results),
+                japanese_ads=len(jp_ads),
+                non_japanese_ads=len(non_jp_ads),
             )
 
         except Exception as e:
@@ -462,6 +519,15 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     elif "http" in caption:
                         destination_url = caption
 
+            # Extract spend bounds from API response
+            spend_data = ad_data.get("spend", {})
+            spend_lower = None
+            if isinstance(spend_data, dict) and spend_data.get("lower_bound"):
+                try:
+                    spend_lower = float(spend_data["lower_bound"])
+                except (ValueError, TypeError):
+                    pass
+
             return CrawledAd(
                 external_id=ad_id,
                 platform=platform,
@@ -470,6 +536,10 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("page_name"),
                 snapshot_url=ad_data.get("ad_snapshot_url"),
                 creative_type="unknown",
+                destination_url=destination_url,
+                view_count=impressions_lower,
+                impressions=impressions_lower,
+                spend=spend_lower,
                 first_seen_at=first_seen,
                 last_seen_at=last_seen,
                 metadata={
@@ -482,6 +552,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     "demographic_distribution": ad_data.get("demographic_distribution"),
                     "delivery_by_region": ad_data.get("delivery_by_region"),
                     "impressions_lower": impressions_lower,
+                    "spend_lower": spend_lower,
                     "languages": ad_data.get("languages"),
                     "link_descriptions": link_descriptions or None,
                     "destination_url": destination_url,
@@ -526,6 +597,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 advertiser_name=(
                     advertiser_el.get_text(strip=True) if advertiser_el else None
                 ),
+                destination_url=destination_url,
                 metadata={
                     "source": "httpx_scraping",
                     "destination_url": destination_url,

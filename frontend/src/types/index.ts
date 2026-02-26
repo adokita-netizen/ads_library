@@ -9,8 +9,10 @@ export interface Ad {
   creative_type?: string;
   video_url?: string;
   s3_key?: string;
+  thumbnail_url?: string;
   image_url?: string;
   image_s3_key?: string;
+  all_image_urls?: string[];
   snapshot_url?: string;
   media_extraction_status?: string;
   duration_seconds?: number;
@@ -18,6 +20,14 @@ export interface Ad {
   brand_name?: string;
   estimated_ctr?: number;
   view_count?: number;
+  spend?: number;
+  impressions?: number;
+  reach?: number;
+  cpc?: number;
+  cpm?: number;
+  frequency?: number;
+  destination_url?: string;
+  destination_type?: string;
   tags?: string[];
   created_at: string;
   updated_at: string;
@@ -474,6 +484,366 @@ export interface FunnelItem {
     page_title?: string;
     estimated_dropoff_rate?: number;
   }>;
+}
+
+// Campaign types
+export interface Campaign {
+  id: number;
+  name: string;
+  description?: string;
+  user_id: number;
+  ad_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignAdItem {
+  id: number;
+  ad_id: number;
+  notes?: string;
+  created_at: string;
+  title?: string;
+  platform?: string;
+  creative_type?: string;
+  advertiser_name?: string;
+  brand_name?: string;
+  duration_seconds?: number;
+  view_count?: number;
+  image_url?: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  snapshot_url?: string;
+}
+
+export interface CampaignDetail {
+  id: number;
+  name: string;
+  description?: string;
+  user_id: number;
+  ads: CampaignAdItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ==================== Meta Marketing Types ====================
+
+export interface MetaTokenStatus {
+  has_token: boolean;
+  is_valid: boolean;
+  scopes: string[];
+  has_required_scopes: boolean;
+  missing_scopes: string[];
+  has_management: boolean;
+  expires_at?: number;
+  days_remaining?: number;
+  is_expiring: boolean;
+  user_id?: string;
+  user_name?: string;
+  app_id?: string;
+  token_type?: string;
+  note?: string;
+  error?: string;
+}
+
+export interface MetaAdAccount {
+  id: number;
+  user_id: number;
+  account_id: string;
+  account_name?: string;
+  business_name?: string;
+  currency: string;
+  timezone_name: string;
+  account_status?: number;
+  last_synced_at?: string;
+  sync_status: string;
+  sync_error?: string;
+  amount_spent?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaAvailableAccount {
+  account_id: string;
+  name?: string;
+  business_name?: string;
+  currency?: string;
+  timezone_name?: string;
+  account_status?: number;
+  amount_spent?: string;
+  is_connected: boolean;
+}
+
+export interface MetaCampaign {
+  id: number;
+  meta_id: string;
+  account_id: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  objective?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  budget_remaining?: string;
+  start_time?: string;
+  stop_time?: string;
+  buying_type?: string;
+  special_ad_categories?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaAdSet {
+  id: number;
+  meta_id: string;
+  campaign_meta_id: string;
+  account_id: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  bid_amount?: string;
+  billing_event?: string;
+  optimization_goal?: string;
+  targeting?: Record<string, unknown>;
+  start_time?: string;
+  end_time?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaAd {
+  id: number;
+  meta_id: string;
+  ad_set_meta_id: string;
+  account_id: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  creative_id?: string;
+  creative_thumbnail_url?: string;
+  creative_body?: string;
+  creative_title?: string;
+  creative_link_url?: string;
+  creative_image_url?: string;
+  creative_video_url?: string;
+  creative_type?: string;
+  linked_ad_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaInsight {
+  id: number;
+  account_id: string;
+  entity_type: string;
+  entity_id: string;
+  date_start: string;
+  date_stop: string;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  spend: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  frequency: number;
+  conversions?: number;
+  conversion_values?: number;
+  cost_per_conversion?: number;
+}
+
+export interface ABTestExperiment {
+  id: number;
+  user_id: number;
+  account_id: string;
+  name: string;
+  description?: string;
+  hypothesis?: string;
+  status: string;
+  test_type: string;
+  primary_metric: string;
+  confidence_level: number;
+  min_sample_size: number;
+  campaign_meta_id?: string;
+  winner_variant_id?: number;
+  statistical_significance?: number;
+  started_at?: string;
+  completed_at?: string;
+  variants: ABTestVariant[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ABTestVariant {
+  id: number;
+  experiment_id: number;
+  name: string;
+  variant_type: string;
+  ad_set_meta_id?: string;
+  ad_meta_id?: string;
+  creative_meta_id?: string;
+  variation_description?: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  ctr: number;
+  cvr: number;
+  cpa: number;
+  is_winner: boolean;
+}
+
+export interface OptimizationRecommendation {
+  id: number;
+  user_id: number;
+  account_id: string;
+  entity_type: string;
+  entity_id: string;
+  entity_name?: string;
+  recommendation_type: string;
+  severity: string;
+  title: string;
+  description?: string;
+  rationale?: string;
+  predicted_impact?: {
+    metric: string;
+    current: number;
+    predicted: number;
+    change_percent: number;
+  };
+  action_payload?: Record<string, unknown>;
+  status: string;
+  applied_at?: string;
+  user_feedback?: string;
+  actual_impact?: Record<string, unknown>;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface CreativeInsightsSummary {
+  account_id: string;
+  creative_type_distribution: Record<string, number>;
+  total_ads: number;
+  top_performers: Array<{
+    entity_id: string;
+    total_spend: number;
+    total_clicks: number;
+    total_impressions: number;
+    ctr: number;
+  }>;
+}
+
+export interface CompetitorComparison {
+  meta_ad_id: string;
+  own_ad_name: string;
+  own_scores: Record<string, number>;
+  competitor_averages: Record<string, number>;
+  advantages: string[];
+  disadvantages: string[];
+  suggestions: string[];
+}
+
+// ==================== Smart Insights Types ====================
+
+export interface PerformanceSummary {
+  account_id: string;
+  period_days: number;
+  current_period: PerformanceMetrics;
+  previous_period: PerformanceMetrics;
+  deltas: Record<string, number | null>;
+}
+
+export interface PerformanceMetrics {
+  impressions: number;
+  reach: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  conversion_values: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  cpa: number;
+  roas: number;
+  avg_frequency: number;
+}
+
+export interface DailyTrendPoint {
+  date: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  ctr: number;
+  cpc: number;
+  cpa: number;
+}
+
+export interface DailyTrendsData {
+  account_id: string;
+  days: number;
+  trends: DailyTrendPoint[];
+}
+
+export interface CreativePerformanceAd {
+  meta_id: string;
+  name: string;
+  status: string;
+  creative_type: string;
+  creative_title?: string;
+  creative_body?: string;
+  creative_thumbnail_url?: string;
+  creative_image_url?: string;
+  creative_video_url?: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  conversion_values: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  cpa: number;
+  roas: number;
+  video_thruplay?: number;
+  video_completion_rate?: number;
+  video_retention?: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p100: number;
+  };
+}
+
+export interface CreativeTypeSummary {
+  count: number;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  avg_ctr: number;
+  avg_cpc: number;
+  avg_cpa: number;
+}
+
+export interface CreativePerformanceData {
+  account_id: string;
+  period_days: number;
+  ads: CreativePerformanceAd[];
+  type_summary: Record<string, CreativeTypeSummary>;
+}
+
+export interface SmartInsight {
+  category: string;
+  severity: "critical" | "negative" | "warning" | "positive";
+  title: string;
+  description: string;
+  metric: string;
+  value: number;
+  delta: number | null;
 }
 
 // LP Fingerprint

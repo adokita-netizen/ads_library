@@ -121,6 +121,7 @@ class LandingPage(Base):
     status: Mapped[LPStatusEnum] = mapped_column(
         Enum(LPStatusEnum), default=LPStatusEnum.PENDING, nullable=False
     )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

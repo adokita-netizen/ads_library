@@ -30,8 +30,10 @@ class AdResponse(BaseModel):
     creative_type: Optional[str] = None
     video_url: Optional[str] = None
     s3_key: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     image_url: Optional[str] = None
     image_s3_key: Optional[str] = None
+    all_image_urls: Optional[list[str]] = None
     snapshot_url: Optional[str] = None
     media_extraction_status: Optional[str] = None
     duration_seconds: Optional[float] = None
@@ -39,6 +41,12 @@ class AdResponse(BaseModel):
     brand_name: Optional[str] = None
     estimated_ctr: Optional[float] = None
     view_count: Optional[int] = None
+    spend: Optional[float] = None
+    impressions: Optional[int] = None
+    reach: Optional[int] = None
+    cpc: Optional[float] = None
+    cpm: Optional[float] = None
+    frequency: Optional[float] = None
     tags: Optional[list[str]] = None
     destination_url: Optional[str] = None
     destination_type: Optional[str] = None
@@ -50,18 +58,30 @@ class AdResponse(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def extract_metadata_fields(cls, data):
-        """Extract destination_url and destination_type from ad_metadata JSONB."""
+        """Extract extra fields from ad_metadata JSONB and resolve thumbnail/image URLs."""
         if hasattr(data, "__dict__"):
             metadata = getattr(data, "ad_metadata", None) or {}
             d = {k: v for k, v in data.__dict__.items() if not k.startswith("_")}
-            d["destination_url"] = metadata.get("destination_url")
+            # destination_url: prefer column value, fallback to metadata
+            if not d.get("destination_url"):
+                d["destination_url"] = metadata.get("destination_url")
             d["destination_type"] = metadata.get("destination_type")
+            # thumbnail_url: prefer column, then try to build from thumbnail_s3_key
+            # (presigned URL generation happens in endpoint, here we just ensure the field is set)
+            # all_image_urls: expand from image_s3_keys JSONB
+            image_s3_keys = d.get("image_s3_keys")
+            if isinstance(image_s3_keys, dict):
+                d["all_image_urls"] = image_s3_keys.get("urls", [])
             return d
         if isinstance(data, dict):
             metadata = data.get("ad_metadata") or data.get("metadata") or {}
             if isinstance(metadata, dict):
-                data.setdefault("destination_url", metadata.get("destination_url"))
+                if not data.get("destination_url"):
+                    data["destination_url"] = metadata.get("destination_url")
                 data.setdefault("destination_type", metadata.get("destination_type"))
+            image_s3_keys = data.get("image_s3_keys")
+            if isinstance(image_s3_keys, dict):
+                data["all_image_urls"] = image_s3_keys.get("urls", [])
         return data
 
 

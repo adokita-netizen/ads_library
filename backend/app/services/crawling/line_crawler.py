@@ -147,6 +147,8 @@ class LineAdCrawler(BaseCrawler):
                 date_str = ad_data.get("startDate") or ad_data.get("createdAt")
                 first_seen = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
 
+            destination_url = creative.get("landingPageUrl")
+
             return CrawledAd(
                 external_id=ad_id,
                 platform="line",
@@ -155,6 +157,7 @@ class LineAdCrawler(BaseCrawler):
                 advertiser_name=ad_data.get("advertiserName") or ad_data.get("accountName"),
                 video_url=video_info.get("videoUrl"),
                 thumbnail_url=creative.get("imageUrl") or video_info.get("thumbnailUrl"),
+                destination_url=destination_url,
                 duration_seconds=video_info.get("durationSeconds"),
                 first_seen_at=first_seen,
                 metadata={
@@ -164,7 +167,6 @@ class LineAdCrawler(BaseCrawler):
                     "ad_type": creative.get("type"),
                     "placement": ad_data.get("placement"),
                     "bid_type": ad_data.get("bidType"),
-                    "destination_url": creative.get("landingPageUrl"),
                     "call_to_action": creative.get("callToAction"),
                 },
             )
@@ -202,9 +204,9 @@ class LineAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
                     "source": "line_adcenter_scrape",
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

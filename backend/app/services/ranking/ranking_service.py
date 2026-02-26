@@ -1,16 +1,22 @@
 """Ranking service - compute product/genre rankings from time-series metrics."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
 from sqlalchemy import func, desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models.ad import Ad
 from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 
 logger = structlog.get_logger()
+
+JST = timezone(timedelta(hours=9))
+
+
+def _today_jst() -> date:
+    return datetime.now(JST).date()
 
 
 class RankingService:
@@ -23,19 +29,36 @@ class RankingService:
         genre: Optional[str] = None,
     ) -> list[ProductRanking]:
         """Compute rankings for a given period."""
-        today = date.today()
+        yesterday = _today_jst() - timedelta(days=1)
 
         if period == "daily":
-            start = today - timedelta(days=1)
-            end = today
+            start = yesterday
+            end = yesterday
         elif period == "weekly":
-            start = today - timedelta(days=7)
-            end = today
+            start = yesterday - timedelta(days=6)
+            end = yesterday
         else:  # monthly
-            start = today - timedelta(days=30)
-            end = today
+            start = yesterday - timedelta(days=29)
+            end = yesterday
 
-        # Aggregate metrics per ad
+        # Subquery: find latest metric_date per ad within range
+        latest_date_sq = (
+            session.query(
+                AdDailyMetrics.ad_id,
+                func.max(AdDailyMetrics.metric_date).label("latest_date"),
+            )
+            .filter(
+                AdDailyMetrics.metric_date >= start,
+                AdDailyMetrics.metric_date <= end,
+            )
+            .group_by(AdDailyMetrics.ad_id)
+            .subquery()
+        )
+
+        # Alias to fetch cumulative values from latest-date row only
+        LatestMetric = aliased(AdDailyMetrics)
+
+        # Aggregate metrics per ad, joining latest-date row for cumulative values
         query = (
             session.query(
                 AdDailyMetrics.ad_id,
@@ -45,8 +68,17 @@ class RankingService:
                 func.max(AdDailyMetrics.platform).label("platform"),
                 func.sum(AdDailyMetrics.view_count_increase).label("total_view_increase"),
                 func.sum(AdDailyMetrics.estimated_spend_increase).label("total_spend_increase"),
-                func.max(AdDailyMetrics.view_count).label("cumulative_views"),
-                func.max(AdDailyMetrics.estimated_spend).label("cumulative_spend"),
+                func.max(LatestMetric.view_count).label("cumulative_views"),
+                func.max(LatestMetric.estimated_spend).label("cumulative_spend"),
+            )
+            .join(
+                latest_date_sq,
+                AdDailyMetrics.ad_id == latest_date_sq.c.ad_id,
+            )
+            .join(
+                LatestMetric,
+                (LatestMetric.ad_id == latest_date_sq.c.ad_id)
+                & (LatestMetric.metric_date == latest_date_sq.c.latest_date),
             )
             .filter(
                 AdDailyMetrics.metric_date >= start,
@@ -71,21 +103,51 @@ class RankingService:
         for pr in prev:
             prev_rankings[pr.ad_id] = pr.rank_position
 
+        # Compute dynamic thresholds for relative hit detection
+        spend_values = sorted(
+            [(r.total_spend_increase or 0) for r in results],
+            reverse=True,
+        )
+        p85_idx = max(0, int(len(spend_values) * 0.15) - 1) if spend_values else 0
+        spend_threshold = spend_values[p85_idx] if spend_values else 0
+        max_spend = spend_values[0] if spend_values else 1
+
+        days_in_period = (end - start).days or 1
+        view_rates = [
+            (r.total_view_increase or 0) / days_in_period for r in results
+        ]
+        max_daily_views = max(view_rates) if view_rates else 1
+        max_daily_views = max(max_daily_views, 1)  # avoid division by zero
+
         # Build new rankings
         rankings = []
         for rank, row in enumerate(results, 1):
             prev_rank = prev_rankings.get(row.ad_id)
             rank_change = (prev_rank - rank) if prev_rank else None
 
-            # Hit detection: high velocity + rank in top 20
             total_view_increase = row.total_view_increase or 0
             total_spend_increase = row.total_spend_increase or 0
-            is_hit = rank <= 20 and total_spend_increase > 100000
-            hit_score = min(100, (total_spend_increase / 10000) * (1 / max(rank, 1)) * 10) if total_spend_increase else 0
 
-            # Trend score: based on growth velocity
-            days_in_period = (end - start).days or 1
-            trend_score = min(100, (total_view_increase / days_in_period) / 100)
+            # Hit detection: relative percentile-based
+            # Top 20 rank + spend above 85th percentile + non-zero spend
+            is_hit = (
+                rank <= 20
+                and total_spend_increase > spend_threshold
+                and total_spend_increase > 0
+            )
+
+            # Hit score: weighted by spend relative to max, adjusted by rank
+            if total_spend_increase > 0 and max_spend > 0:
+                hit_score = min(
+                    100,
+                    (total_spend_increase / max_spend) * 100 * (1 / rank ** 0.3),
+                )
+            else:
+                hit_score = 0
+
+            # Trend score: daily view velocity relative to best performer
+            daily_views = total_view_increase / days_in_period
+            trend_score = min(100, (daily_views / max_daily_views) * 100)
 
             ranking = ProductRanking(
                 period=period,
@@ -110,6 +172,41 @@ class RankingService:
             rankings.append(ranking)
 
         return rankings
+
+    def compute_all_rankings(self, session: Session) -> dict:
+        """Compute rankings for all periods (daily, weekly, monthly).
+
+        Deletes old rankings for the same period_start before inserting new ones.
+        Returns summary of rankings created per period.
+        """
+        summary = {}
+        for period in ["daily", "weekly", "monthly"]:
+            try:
+                rankings = self.compute_rankings(session, period=period)
+
+                if rankings:
+                    # Delete existing rankings for the same period + period_start
+                    period_start = rankings[0].period_start
+                    session.query(ProductRanking).filter(
+                        ProductRanking.period == period,
+                        ProductRanking.period_start == period_start,
+                    ).delete()
+                    session.flush()
+
+                    for r in rankings:
+                        session.add(r)
+
+                summary[period] = len(rankings)
+                logger.info(
+                    "rankings_computed",
+                    period=period,
+                    count=len(rankings),
+                )
+            except Exception as e:
+                logger.error("ranking_period_failed", period=period, error=str(e))
+                summary[period] = 0
+
+        return summary
 
     def get_rankings(
         self,
@@ -189,9 +286,9 @@ class RankingService:
         period: str = "weekly",
     ) -> dict:
         """Get detailed analytics for a specific advertiser."""
-        today = date.today()
+        yesterday = _today_jst() - timedelta(days=1)
         days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 7)
-        start = today - timedelta(days=days)
+        start = yesterday - timedelta(days=days - 1)
 
         # Get all ads for this advertiser
         metrics = session.query(
@@ -205,6 +302,7 @@ class RankingService:
         ).filter(
             AdDailyMetrics.advertiser_name.ilike(f"%{advertiser_name}%"),
             AdDailyMetrics.metric_date >= start,
+            AdDailyMetrics.metric_date <= yesterday,
         ).group_by(AdDailyMetrics.ad_id).order_by(desc("total_spend")).all()
 
         # Genre distribution

@@ -50,3 +50,4 @@ class CampaignAd(Base):
 
     # Relationships
     campaign: Mapped["Campaign"] = relationship(back_populates="ads")
+    ad: Mapped["Ad"] = relationship(lazy="joined")  # type: ignore[name-defined]

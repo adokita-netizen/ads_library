@@ -110,10 +110,10 @@ class YouTubeAdCrawler(BaseCrawler):
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 first_seen_at=first_seen,
                 metadata={
                     "source": "google_ads_transparency",
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

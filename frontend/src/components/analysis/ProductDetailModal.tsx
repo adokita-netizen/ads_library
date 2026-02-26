@@ -35,6 +35,18 @@ interface AnalysisData {
   structure_type?: string;
   transcription?: string;
   scenes?: Array<Record<string, unknown>>;
+  improvement_suggestions?: Array<{
+    category: string;
+    suggestion: string;
+    priority: string;
+    expected_ctr_lift?: string;
+    expected_cvr_lift?: string;
+  }>;
+  feature_importance?: Array<{
+    feature: string;
+    importance: number;
+    value: string;
+  }>;
 }
 
 interface LPAnalysisData {
@@ -548,6 +560,84 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                             )}
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Improvement Suggestions */}
+                  {analysis.improvement_suggestions && analysis.improvement_suggestions.length > 0 && (
+                    <div className="card">
+                      <h3 className="text-[13px] font-bold text-gray-900 mb-3">改善ポイント</h3>
+                      <div className="space-y-2">
+                        {analysis.improvement_suggestions.map((item, idx) => {
+                          const priorityStyle = item.priority === "high"
+                            ? "bg-red-100 text-red-700"
+                            : item.priority === "medium"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-gray-100 text-gray-600";
+                          const priorityLabel = item.priority === "high" ? "高" : item.priority === "medium" ? "中" : "低";
+                          const categoryMap: Record<string, string> = {
+                            hook: "フック", cta: "CTA", visual: "ビジュアル", copy: "コピー",
+                            targeting: "ターゲティング", structure: "構成", audio: "音声", pacing: "テンポ",
+                          };
+                          return (
+                            <div key={idx} className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50">
+                              <span className={`badge text-[9px] shrink-0 mt-0.5 ${priorityStyle}`}>{priorityLabel}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="badge text-[9px] bg-blue-50 text-blue-600">
+                                    {categoryMap[item.category] || item.category}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-gray-700 leading-relaxed">{item.suggestion}</p>
+                                {(item.expected_ctr_lift || item.expected_cvr_lift) && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {item.expected_ctr_lift && (
+                                      <span className="text-[10px] text-emerald-600">CTR {item.expected_ctr_lift}</span>
+                                    )}
+                                    {item.expected_cvr_lift && (
+                                      <span className="text-[10px] text-emerald-600">CVR {item.expected_cvr_lift}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feature Importance */}
+                  {analysis.feature_importance && analysis.feature_importance.length > 0 && (
+                    <div className="card">
+                      <h3 className="text-[13px] font-bold text-gray-900 mb-3">パフォーマンス要因</h3>
+                      <div className="space-y-2">
+                        {analysis.feature_importance.map((item, idx) => {
+                          const featureMap: Record<string, string> = {
+                            hook_quality: "フック品質", cta_strength: "CTA強度", visual_appeal: "ビジュアル訴求",
+                            copy_effectiveness: "コピー効果", audio_quality: "音声品質", pacing: "テンポ",
+                            brand_recognition: "ブランド認知", targeting_precision: "ターゲティング精度",
+                            duration: "動画長", text_overlay: "テキストオーバーレイ",
+                            face_presence: "顔の有無", product_display: "商品表示",
+                            ugc_style: "UGCスタイル", subtitles: "字幕",
+                          };
+                          const barWidth = Math.max(Math.min(item.importance * 100, 100), 5);
+                          return (
+                            <div key={idx} className="flex items-center gap-3">
+                              <span className="text-[11px] text-gray-600 w-28 shrink-0 truncate">
+                                {featureMap[item.feature] || item.feature}
+                              </span>
+                              <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-[#4A7DFF] rounded-full transition-all"
+                                  style={{ width: `${barWidth}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-gray-500 w-16 shrink-0 text-right">{item.value}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

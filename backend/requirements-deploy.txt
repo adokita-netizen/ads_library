@@ -1,5 +1,5 @@
 # =============================================================
-# Lightweight dependencies for deployment (Lambda / Render etc.)
+# AWS Lambda デプロイ用
 # Excludes heavy ML/CV/Audio libs that need >512MB RAM
 # =============================================================
 

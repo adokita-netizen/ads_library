@@ -55,20 +55,27 @@ async def crawl_lp(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Submit a landing page URL for crawling and analysis."""
-    result = dispatch_task(
-        "crawl_and_analyze_lp",
-        url=request.url,
-        ad_id=request.ad_id,
-        genre=request.genre,
-        product_name=request.product_name,
-        advertiser_name=request.advertiser_name,
-        auto_analyze=request.auto_analyze,
-    )
-    return LPTaskResponse(
-        task_id=result.id,
-        status="queued",
-        message=f"LP分析タスクをキューに追加しました: {request.url}",
-    )
+    try:
+        result = dispatch_task(
+            "crawl_and_analyze_lp",
+            url=request.url,
+            ad_id=request.ad_id,
+            genre=request.genre,
+            product_name=request.product_name,
+            advertiser_name=request.advertiser_name,
+            auto_analyze=request.auto_analyze,
+        )
+        return LPTaskResponse(
+            task_id=result.id,
+            status="queued",
+            message=f"LP分析タスクをキューに追加しました: {request.url}",
+        )
+    except Exception as e:
+        logger.error("crawl_lp_dispatch_failed", url=request.url, error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"LP分析タスクの開始に失敗しました: {str(e)}",
+        )
 
 
 @router.post("/batch-crawl", response_model=LPTaskResponse)
@@ -77,17 +84,75 @@ async def batch_crawl_lps(
     current_user: dict = Depends(get_current_user_sync),
 ):
     """Submit multiple LP URLs for batch crawling."""
-    result = dispatch_task(
-        "batch_crawl_lps",
-        urls=request.urls,
-        genre=request.genre,
-        auto_analyze=request.auto_analyze,
-    )
-    return LPTaskResponse(
-        task_id=result.id,
-        status="queued",
-        message=f"{len(request.urls)}件のLP分析タスクをキューに追加しました",
-    )
+    try:
+        result = dispatch_task(
+            "batch_crawl_lps",
+            urls=request.urls,
+            genre=request.genre,
+            auto_analyze=request.auto_analyze,
+        )
+        return LPTaskResponse(
+            task_id=result.id,
+            status="queued",
+            message=f"{len(request.urls)}件のLP分析タスクをキューに追加しました",
+        )
+    except Exception as e:
+        logger.error("batch_crawl_dispatch_failed", url_count=len(request.urls), error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"バッチLP分析タスクの開始に失敗しました: {str(e)}",
+        )
+
+
+@router.get("/health/data-integrity")
+async def lp_data_integrity():
+    """Check data integrity of landing pages."""
+    from datetime import datetime, timezone, timedelta
+
+    with sync_session_scope() as session:
+        total = session.query(LandingPage).count()
+
+        # FAILED LPs
+        failed_count = session.query(LandingPage).filter(
+            LandingPage.status == LPStatusEnum.FAILED,
+        ).count()
+
+        # COMPLETED but no analysis data
+        completed_no_analysis = session.query(LandingPage).filter(
+            LandingPage.status == LPStatusEnum.COMPLETED,
+        ).outerjoin(LPAnalysis, LPAnalysis.landing_page_id == LandingPage.id).filter(
+            LPAnalysis.id.is_(None),
+        ).count()
+
+        # Stuck in CRAWLING/ANALYZING for > 30 minutes
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+        stuck_count = session.query(LandingPage).filter(
+            LandingPage.status.in_([LPStatusEnum.CRAWLING, LPStatusEnum.ANALYZING]),
+            LandingPage.updated_at < cutoff,
+        ).count()
+
+        # Content truncated (close to 50000 chars)
+        from sqlalchemy import func as sqla_func
+        truncated_count = session.query(LandingPage).filter(
+            LandingPage.full_text_content.isnot(None),
+            sqla_func.length(LandingPage.full_text_content) >= 49000,
+        ).count()
+
+        # Health score
+        if total == 0:
+            health_score = 100.0
+        else:
+            issue_count = failed_count + completed_no_analysis + stuck_count
+            health_score = round(max(0, (1 - issue_count / total)) * 100, 1)
+
+        return {
+            "total_lps": total,
+            "failed_count": failed_count,
+            "completed_no_analysis": completed_no_analysis,
+            "stuck_count": stuck_count,
+            "truncated_content_count": truncated_count,
+            "health_score": health_score,
+        }
 
 
 @router.get("/list", response_model=LPListResponse)
@@ -255,7 +320,14 @@ async def get_competitor_insight(
             })
 
         ci = CompetitorIntelligence()
-        insight = await ci.generate_genre_insight(request.genre, lp_analyses)
+        try:
+            insight = await ci.generate_genre_insight(request.genre, lp_analyses)
+        except Exception as e:
+            logger.error("competitor_insight_failed", genre=request.genre, error=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail=f"競合インサイトの生成に失敗しました: {str(e)}",
+            )
 
         return GenreInsightResponse(
             genre=insight.genre,

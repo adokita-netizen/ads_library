@@ -36,6 +36,13 @@ class CrawledAd:
     first_seen_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
     category: Optional[str] = None
+    destination_url: Optional[str] = None
+    spend: Optional[float] = None
+    impressions: Optional[int] = None
+    reach: Optional[int] = None
+    cpc: Optional[float] = None
+    cpm: Optional[float] = None
+    frequency: Optional[float] = None
     tags: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 

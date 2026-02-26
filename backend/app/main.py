@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.endpoints import ads, auth, analytics, creative, predictions, lp_analysis, rankings, notifications, competitive_intel
+from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing
 from app.api.endpoints import settings as settings_endpoints
 from app.core.config import get_settings
 
@@ -56,7 +56,15 @@ async def lifespan(app: FastAPI):
         import app.models.user  # noqa: F401
         import app.models.landing_page  # noqa: F401
         import app.models.api_key  # noqa: F401
+        import app.models.crawl_job  # noqa: F401
+        import app.models.campaign  # noqa: F401
+        import app.models.meta_ad_account  # noqa: F401
+        import app.models.meta_campaign  # noqa: F401
+        import app.models.ab_test  # noqa: F401
+        import app.models.optimization  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
+        from app.core.database import _run_migrations
+        _run_migrations(sync_engine)
         logger.info("database_tables_ensured")
     except Exception as e:
         logger.warning("database_init_skipped", error=str(e))
@@ -145,8 +153,8 @@ async def timing_middleware(request: Request, call_next):
 # CORS middleware — configure via CORS_ORIGINS env var (default "*" for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=("*" not in settings.cors_origins_list),
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -163,6 +171,7 @@ if settings.enable_metrics:
 API_PREFIX = settings.api_v1_prefix
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(ads.router, prefix=API_PREFIX)
+app.include_router(campaigns.router, prefix=API_PREFIX)
 app.include_router(creative.router, prefix=API_PREFIX)
 app.include_router(predictions.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
@@ -170,6 +179,7 @@ app.include_router(lp_analysis.router, prefix=API_PREFIX)
 app.include_router(rankings.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(competitive_intel.router, prefix=API_PREFIX)
+app.include_router(meta_marketing.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 
 

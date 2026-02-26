@@ -1,6 +1,7 @@
 """Ad crawling Celery tasks."""
 
 import asyncio
+import uuid
 
 import structlog
 
@@ -41,6 +42,27 @@ def crawl_ads_task(
         task_id=self.request.id,
     )
 
+    # Create or update CrawlJob for progress tracking
+    job_id = self.request.id or str(uuid.uuid4())
+    progress_session = SyncSessionLocal()
+    try:
+        from app.models.crawl_job import CrawlJob, CrawlJobStatusEnum
+        crawl_job = CrawlJob(
+            job_id=job_id,
+            status=CrawlJobStatusEnum.RUNNING,
+            query=query,
+            platforms=platforms,
+            total_platforms=len(platforms),
+            completed_platforms=0,
+            total_ads_found=0,
+        )
+        progress_session.add(crawl_job)
+        progress_session.commit()
+    except Exception as pex:
+        logger.warning("crawl_job_create_failed", error=str(pex))
+    finally:
+        progress_session.close()
+
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -66,6 +88,40 @@ def crawl_ads_task(
 
                     platform_enum = _map_platform(platform)
 
+                    # Warn on ads with no media or title
+                    has_media = bool(crawled_ad.image_urls or crawled_ad.video_url or crawled_ad.snapshot_url)
+                    if not crawled_ad.title and not has_media:
+                        logger.warning(
+                            "ad_missing_title_and_media",
+                            platform=platform,
+                            external_id=crawled_ad.external_id,
+                            advertiser=crawled_ad.advertiser_name,
+                        )
+
+                    # Determine media extraction status:
+                    # Skip extraction if crawler already provided direct media URLs
+                    has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
+                    if has_direct_media:
+                        extraction_status = "skipped"
+                    elif crawled_ad.snapshot_url:
+                        extraction_status = "pending"
+                    else:
+                        extraction_status = "skipped"
+
+                    # Extract destination_url from CrawledAd field or metadata
+                    dest_url = crawled_ad.destination_url
+                    if not dest_url:
+                        dest_url = (crawled_ad.metadata or {}).get("destination_url")
+
+                    # Map category string to enum (best effort)
+                    ad_category = None
+                    if crawled_ad.category:
+                        from app.models.ad import AdCategoryEnum
+                        try:
+                            ad_category = AdCategoryEnum(crawled_ad.category)
+                        except ValueError:
+                            ad_category = AdCategoryEnum.OTHER
+
                     ad = Ad(
                         external_id=crawled_ad.external_id,
                         title=crawled_ad.title,
@@ -74,14 +130,24 @@ def crawl_ads_task(
                         creative_type=crawled_ad.creative_type,
                         video_url=crawled_ad.video_url,
                         snapshot_url=crawled_ad.snapshot_url,
+                        thumbnail_url=crawled_ad.thumbnail_url,
                         image_url=crawled_ad.image_urls[0] if crawled_ad.image_urls else None,
-                        media_extraction_status="pending" if crawled_ad.snapshot_url else "skipped",
+                        image_s3_keys={"urls": crawled_ad.image_urls} if len(crawled_ad.image_urls) > 1 else None,
+                        destination_url=dest_url,
+                        category=ad_category,
+                        media_extraction_status=extraction_status,
                         advertiser_name=crawled_ad.advertiser_name,
                         advertiser_url=crawled_ad.advertiser_url,
                         brand_name=crawled_ad.brand_name,
                         duration_seconds=crawled_ad.duration_seconds,
                         view_count=crawled_ad.view_count,
                         like_count=crawled_ad.like_count,
+                        spend=crawled_ad.spend,
+                        impressions=crawled_ad.impressions,
+                        reach=crawled_ad.reach,
+                        cpc=crawled_ad.cpc,
+                        cpm=crawled_ad.cpm,
+                        frequency=crawled_ad.frequency,
                         first_seen_at=crawled_ad.first_seen_at,
                         last_seen_at=crawled_ad.last_seen_at,
                         tags=crawled_ad.tags,
@@ -93,7 +159,7 @@ def crawl_ads_task(
 
             session.commit()
 
-            # Dispatch media extraction for ads with snapshot_url
+            # Dispatch media extraction for ads that need it
             from app.tasks.dispatcher import dispatch_task
             ads_with_snapshot = session.query(Ad).filter(
                 Ad.media_extraction_status == "pending",
@@ -104,6 +170,18 @@ def crawl_ads_task(
                     dispatch_task("extract_media", ad_id=ad_to_extract.id)
                 except Exception as e:
                     logger.warning("media_extraction_dispatch_failed", ad_id=ad_to_extract.id, error=str(e))
+
+            # Dispatch thumbnail download for ads that have thumbnail_url but skipped extraction
+            ads_needing_thumb = session.query(Ad).filter(
+                Ad.media_extraction_status == "skipped",
+                Ad.thumbnail_url.isnot(None),
+                Ad.thumbnail_s3_key.is_(None),
+            ).order_by(Ad.created_at.desc()).limit(saved_count).all()
+            for ad_thumb in ads_needing_thumb:
+                try:
+                    dispatch_task("download_thumbnail", ad_id=ad_thumb.id)
+                except Exception as e:
+                    logger.warning("thumbnail_dispatch_failed", ad_id=ad_thumb.id, error=str(e))
 
             # Auto-analyze if requested
             if auto_analyze:
@@ -119,13 +197,43 @@ def crawl_ads_task(
                 session.commit()
 
             logger.info("crawl_task_completed", query=query, saved_count=saved_count)
-            return {"status": "completed", "saved_count": saved_count}
+
+            # Update CrawlJob to COMPLETED
+            pses = SyncSessionLocal()
+            try:
+                from app.models.crawl_job import CrawlJob, CrawlJobStatusEnum
+                cj = pses.query(CrawlJob).filter(CrawlJob.job_id == job_id).first()
+                if cj:
+                    cj.status = CrawlJobStatusEnum.COMPLETED
+                    cj.completed_platforms = len(platforms)
+                    cj.total_ads_found = saved_count
+                    cj.current_platform = None
+                    pses.commit()
+            except Exception:
+                pass
+            finally:
+                pses.close()
+
+            return {"status": "completed", "saved_count": saved_count, "job_id": job_id}
 
         finally:
             session.close()
 
     except Exception as e:
         logger.error("crawl_task_failed", query=query, error=str(e))
+        # Update CrawlJob to FAILED
+        fses = SyncSessionLocal()
+        try:
+            from app.models.crawl_job import CrawlJob, CrawlJobStatusEnum
+            cj = fses.query(CrawlJob).filter(CrawlJob.job_id == job_id).first()
+            if cj:
+                cj.status = CrawlJobStatusEnum.FAILED
+                cj.error_message = str(e)[:500]
+                fses.commit()
+        except Exception:
+            pass
+        finally:
+            fses.close()
         raise self.retry(exc=e)
 
 

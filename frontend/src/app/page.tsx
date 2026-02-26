@@ -12,10 +12,12 @@ import TeamSpaceView from "@/components/workspace/TeamSpaceView";
 import MyListView from "@/components/workspace/MyListView";
 import StoreView from "@/components/workspace/StoreView";
 import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
+import CampaignGalleryView from "@/components/workspace/CampaignGalleryView";
+import MetaAdsView from "@/components/meta-ads/MetaAdsView";
 import APIKeysSettings from "@/components/settings/APIKeysSettings";
 import DatabaseSettings from "@/components/settings/DatabaseSettings";
 
-type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store" | "settings";
+type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "settings";
 
 /** Connectivity banner — auto-hides after successful check, dismissible on error */
 function ConnectivityBanner() {
@@ -29,7 +31,7 @@ function ConnectivityBanner() {
     const checkHealth = async () => {
       // Step 1: Check health endpoint
       try {
-        const res = await fetch("/api/health");
+        const res = await fetch("/health");
         const data = await res.json();
         if (data.status === "healthy" || data.database === "ok") {
           setStatus("ok");
@@ -155,8 +157,12 @@ export default function Home() {
         return <CreativeStudio />;
       case "competitive":
         return <CompetitiveIntelView />;
+      case "meta-ads":
+        return <MetaAdsView />;
       case "team":
         return <TeamSpaceView />;
+      case "campaign":
+        return <CampaignGalleryView onAdSelect={handleAdSelect} />;
       case "mylist":
         return <MyListView />;
       case "store":

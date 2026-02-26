@@ -43,12 +43,12 @@ class TestNormalizeDatabaseUrl:
         assert _normalize_database_url(url, driver="asyncpg") == url
         assert _normalize_database_url(url, driver="sync") == url
 
-    def test_supabase_style_url(self):
-        """Supabase provides postgres:// URLs that need conversion."""
-        url = "postgres://postgres.abcxyz:password@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
+    def test_postgres_prefix_url(self):
+        """postgres:// URLs (common in managed services) need conversion."""
+        url = "postgres://vaap:password@vaap-db.abcxyz.ap-northeast-1.rds.amazonaws.com:5432/vaap_db"
         result = _normalize_database_url(url, driver="asyncpg")
         assert result.startswith("postgresql+asyncpg://")
-        assert "pooler.supabase.com" in result
+        assert "rds.amazonaws.com" in result
 
 
 class TestSettingsDerivation:
@@ -126,15 +126,12 @@ class TestDatabaseDiagnostics:
         err_str = str(error).lower()
         if "password authentication failed" in err_str:
             msg = "接続エラー: パスワード認証に失敗しました。"
-            if ":6543" in url or "pooler" in url.lower():
-                msg += "Supabaseダッシュボードでパスワードを確認してください。Pooler (ポート6543) を使用する場合、ユーザー名は 'postgres.{project-ref}' 形式が必要です。"
-            else:
-                msg += "Supabaseダッシュボードでパスワードを確認してください。"
+            msg += "DATABASE_URLのパスワードを確認してください。"
             return msg
         if "could not connect" in err_str or "connection refused" in err_str:
             return "接続エラー: データベースサーバーに接続できません。DATABASE_URLを確認してください。"
         if "does not exist" in err_str:
-            return "接続エラー: データベースが存在しません。Supabaseでプロジェクトが作成されているか確認してください。"
+            return "接続エラー: データベースが存在しません。データベースが存在するか確認してください。"
         if "timeout" in err_str:
             return "接続エラー: データベースサーバーへの接続がタイムアウトしました。"
         return f"接続エラー: {str(error)}"
@@ -144,10 +141,10 @@ class TestDatabaseDiagnostics:
         msg = self._diagnose_error(exc, "postgres://host:5432/db")
         assert "パスワード認証" in msg
 
-    def test_password_auth_with_pooler(self):
+    def test_password_auth_with_rds(self):
         exc = Exception("password authentication failed")
-        msg = self._diagnose_error(exc, "postgres://user@pooler.supabase.com:6543/db")
-        assert "Pooler" in msg or "ポート6543" in msg
+        msg = self._diagnose_error(exc, "postgres://vaap@vaap-db.ap-northeast-1.rds.amazonaws.com:5432/vaap_db")
+        assert "パスワードを確認" in msg
 
     def test_connection_refused(self):
         exc = Exception("could not connect to server: Connection refused")

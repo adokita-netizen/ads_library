@@ -14,7 +14,7 @@ _config_logger = logging.getLogger(__name__)
 
 
 def _normalize_database_url(url: str, driver: str = "asyncpg") -> str:
-    """Normalize database URL for different providers (Supabase, Render, etc.).
+    """Normalize database URL for different providers (PostgreSQL各種プロバイダー).
 
     Handles:
     - postgres:// -> postgresql+asyncpg:// (or postgresql://)
@@ -61,8 +61,7 @@ class Settings(BaseSettings):
         return self.secret_key not in _INSECURE_SECRET_KEYS and len(self.secret_key) >= 32
 
     # Database — accepts DATABASE_URL in any format (postgres://, postgresql://)
-    # Supabase, Render, Railway all provide DATABASE_URL automatically.
-    # In Lambda, DB_SECRET_ARN + DB_USERNAME/ENDPOINT/NAME are used instead.
+    # DATABASE_URLで指定。Lambda環境ではDB_SECRET_ARN使用。
     database_url: str = "postgresql+asyncpg://vaap:vaap_password@localhost:5432/vaap_db"
     database_url_sync: str = ""
 
@@ -72,11 +71,11 @@ class Settings(BaseSettings):
     db_endpoint: str = ""
     db_name: str = ""
 
-    # Database pool — smaller defaults for free-tier hosting
+    # Database pool — Lambda / コンテナ環境向け
     db_pool_size: int = 5
     db_max_overflow: int = 3
 
-    # Redis — accepts Upstash redis:// or rediss:// (TLS) URLs
+    # Redis — redis:// or rediss:// (TLS) URLs
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"

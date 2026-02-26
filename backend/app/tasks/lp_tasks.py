@@ -46,6 +46,25 @@ def crawl_and_analyze_lp_task(
 
         if not crawled:
             logger.error("lp_crawl_failed", url=url)
+            # Update DB status to FAILED so the user can see the failure
+            import hashlib
+            url_hash = hashlib.sha256(url.encode()).hexdigest()
+            existing_lp = session.query(LandingPage).filter(
+                LandingPage.url_hash == url_hash
+            ).first()
+            if existing_lp:
+                existing_lp.status = LPStatusEnum.FAILED
+                existing_lp.error_message = "クロールに失敗しました。URLが無効またはアクセスできません。"
+                session.commit()
+            else:
+                failed_lp = LandingPage(
+                    url=url,
+                    url_hash=url_hash,
+                    status=LPStatusEnum.FAILED,
+                    error_message="クロールに失敗しました。URLが無効またはアクセスできません。",
+                )
+                session.add(failed_lp)
+                session.commit()
             return {"status": "failed", "error": "Crawl failed"}
 
         # Check for existing LP with same URL hash
@@ -108,7 +127,15 @@ def crawl_and_analyze_lp_task(
             lp.price_text = prices[0]["matched_text"]
 
         lp.total_sections = len(sections)
-        lp.full_text_content = crawler.extract_text_content(crawled.html_content)[:50000]
+        raw_text = crawler.extract_text_content(crawled.html_content)
+        if len(raw_text) > 50000:
+            logger.warning(
+                "lp_content_truncated",
+                url=url,
+                original_length=len(raw_text),
+                truncated_to=50000,
+            )
+        lp.full_text_content = raw_text[:50000]
 
         session.commit()
         session.refresh(lp)
@@ -224,7 +251,8 @@ def crawl_and_analyze_lp_task(
 
             except Exception as e:
                 logger.error("lp_analysis_failed", lp_id=lp.id, error=str(e))
-                lp.status = LPStatusEnum.COMPLETED  # Crawl succeeded, analysis failed
+                lp.status = LPStatusEnum.FAILED
+                lp.error_message = f"分析エラー: {str(e)[:500]}"
                 session.commit()
         else:
             lp.status = LPStatusEnum.COMPLETED
@@ -347,6 +375,18 @@ def analyze_own_lp_content_task(
     except Exception as e:
         logger.error("own_lp_analysis_failed", lp_id=lp_id, error=str(e))
         session.rollback()
+        if self.request.retries >= self.max_retries:
+            # Max retries reached — mark LP as FAILED
+            try:
+                fail_session = SyncSessionLocal()
+                fail_lp = fail_session.query(LandingPage).filter(LandingPage.id == lp_id).first()
+                if fail_lp:
+                    fail_lp.status = LPStatusEnum.FAILED
+                    fail_lp.error_message = f"分析が最大リトライ回数に達して失敗しました: {str(e)[:500]}"
+                    fail_session.commit()
+                fail_session.close()
+            except Exception:
+                pass
         raise self.retry(exc=e)
     finally:
         session.close()

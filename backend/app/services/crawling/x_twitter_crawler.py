@@ -167,7 +167,9 @@ class XTwitterAdCrawler(BaseCrawler):
                 advertiser_url=f"https://x.com/{ad_data['screen_name']}" if ad_data.get("screen_name") else None,
                 video_url=video_url,
                 thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 view_count=ad_data.get("impression_count"),
+                impressions=ad_data.get("impression_count"),
                 like_count=ad_data.get("like_count"),
                 first_seen_at=first_seen,
                 metadata={
@@ -181,7 +183,6 @@ class XTwitterAdCrawler(BaseCrawler):
                         "replies": ad_data.get("reply_count"),
                         "clicks": ad_data.get("click_count"),
                     },
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )
@@ -200,6 +201,9 @@ class XTwitterAdCrawler(BaseCrawler):
             video_el = card.select_one("video source")
             video_url = video_el.get("src") if video_el else None
 
+            img_el = card.select_one("img.media, img.card-image, img")
+            thumbnail_url = img_el.get("src") if img_el else None
+
             # Extract destination URL from scraped card
             link_el = card.select_one("a[data-card-url], a.card-link, a[href]:not([href*='x.com']):not([href*='twitter.com'])")
             destination_url = None
@@ -215,9 +219,10 @@ class XTwitterAdCrawler(BaseCrawler):
                 description=desc_el.get_text(strip=True) if desc_el else None,
                 advertiser_name=advertiser_el.get_text(strip=True) if advertiser_el else None,
                 video_url=video_url,
+                thumbnail_url=thumbnail_url,
+                destination_url=destination_url,
                 metadata={
                     "source": "x_transparency_scrape",
-                    "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
             )

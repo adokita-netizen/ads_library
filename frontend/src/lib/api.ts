@@ -78,7 +78,7 @@ export async function fetchApi<T = unknown>(
     try {
       const res = await fetch(url, init);
 
-      // Retry on transient server errors (502/503/504 from Render cold start etc.)
+      // Retry on transient server errors (502/503/504 from Lambda cold start etc.)
       if (isRetryable(res.status) && attempt < MAX_RETRIES) {
         await sleep(RETRY_DELAY_MS * (attempt + 1));
         continue;
@@ -129,7 +129,7 @@ api.interceptors.response.use(
     const config = error.config;
     const status = error.response?.status;
 
-    // Auto-retry on 502/503/504 (Render cold start, etc.)
+    // Auto-retry on 502/503/504 (サーバー起動待ち)
     if (config && isRetryable(status) && (config._retryCount || 0) < MAX_RETRIES) {
       config._retryCount = (config._retryCount || 0) + 1;
       await sleep(RETRY_DELAY_MS * config._retryCount);
@@ -164,6 +164,17 @@ export const adsApi = {
   analyze: (id: number) => api.post(`/ads/${id}/analyze`),
   getAnalysis: (id: number) => api.get(`/ads/${id}/analysis`),
   crawl: (data: Record<string, unknown>) => api.post("/ads/crawl", data),
+  crawlStatus: (jobId: string) => fetchApi<{
+    job_id: string;
+    status: string;
+    progress_percent: number;
+    total_platforms: number;
+    completed_platforms: number;
+    current_platform: string | null;
+    total_ads_found: number;
+    error_message: string | null;
+    platforms: string[] | null;
+  }>(`/ads/crawl/${jobId}/status`),
   delete: (id: number) => api.delete(`/ads/${id}`),
 };
 
@@ -338,6 +349,116 @@ export const competitiveApi = {
     api.get(`/competitive/fingerprint/lp/${lpId}`),
   getOfferClusters: (params?: { genre?: string; limit?: number }) =>
     api.get("/competitive/fingerprint/clusters", { params }),
+};
+
+// Campaigns API
+export const campaignsApi = {
+  list: () => api.get("/campaigns"),
+  create: (data: { name: string; description?: string }) =>
+    api.post("/campaigns", data),
+  getDetail: (id: number) => api.get(`/campaigns/${id}`),
+  update: (id: number, data: { name?: string; description?: string }) =>
+    api.put(`/campaigns/${id}`, data),
+  delete: (id: number) => api.delete(`/campaigns/${id}`),
+  addAd: (campaignId: number, data: { ad_id: number; notes?: string }) =>
+    api.post(`/campaigns/${campaignId}/ads`, data),
+  removeAd: (campaignId: number, adId: number) =>
+    api.delete(`/campaigns/${campaignId}/ads/${adId}`),
+};
+
+// Meta Marketing API
+export const metaMarketingApi = {
+  // Token
+  tokenStatus: () => api.get("/meta-marketing/token-status"),
+
+  // Accounts
+  availableAccounts: () => api.get("/meta-marketing/available-accounts"),
+  connectAccount: (data: { account_id: string; account_name?: string; business_name?: string; currency?: string; timezone_name?: string }) =>
+    api.post("/meta-marketing/accounts/connect", data),
+  listAccounts: () => api.get("/meta-marketing/accounts"),
+  disconnectAccount: (accountId: string) =>
+    api.delete(`/meta-marketing/accounts/${accountId}`),
+
+  // Campaigns (Phase 2)
+  listCampaigns: (params?: { account_id?: string; status?: string; page?: number; page_size?: number }) =>
+    api.get("/meta-marketing/campaigns", { params }),
+  listAdSets: (params?: { account_id?: string; campaign_meta_id?: string; page?: number; page_size?: number }) =>
+    api.get("/meta-marketing/ad-sets", { params }),
+  listAds: (params?: { account_id?: string; ad_set_meta_id?: string; page?: number; page_size?: number }) =>
+    api.get("/meta-marketing/ads", { params }),
+  getInsights: (params: { account_id: string; entity_type?: string; entity_id?: string; date_from?: string; date_to?: string; level?: string }) =>
+    api.get("/meta-marketing/insights", { params }),
+  triggerSync: (accountId: string, data?: { insights_days?: number }) =>
+    api.post(`/meta-marketing/accounts/${accountId}/sync`, data),
+
+  // Campaign Management (Phase 3)
+  createCampaign: (data: Record<string, unknown>) =>
+    api.post("/meta-marketing/campaigns", data),
+  updateCampaignStatus: (campaignMetaId: string, data: { status: string }) =>
+    api.put(`/meta-marketing/campaigns/${campaignMetaId}/status`, data),
+  createAdSet: (data: Record<string, unknown>) =>
+    api.post("/meta-marketing/ad-sets", data),
+  updateAdSetStatus: (adSetMetaId: string, data: { status: string }) =>
+    api.put(`/meta-marketing/ad-sets/${adSetMetaId}/status`, data),
+  createAd: (data: Record<string, unknown>) =>
+    api.post("/meta-marketing/ads", data),
+  updateAdStatus: (adMetaId: string, data: { status: string }) =>
+    api.put(`/meta-marketing/ads/${adMetaId}/status`, data),
+  createCreative: (data: Record<string, unknown>) =>
+    api.post("/meta-marketing/creatives", data),
+  uploadImage: (accountId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post(`/meta-marketing/accounts/${accountId}/image-upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  // Creative Analysis (Phase 4)
+  analyzeAd: (metaAdId: string) =>
+    api.post(`/meta-marketing/ads/${metaAdId}/analyze`),
+  getCompetitorComparison: (metaAdId: string, params?: { category?: string }) =>
+    api.get(`/meta-marketing/ads/${metaAdId}/competitor-comparison`, { params }),
+  getCreativeInsights: (accountId: string) =>
+    api.get(`/meta-marketing/accounts/${accountId}/creative-insights`),
+
+  // A/B Testing (Phase 5)
+  listExperiments: (params?: { account_id?: string; status?: string }) =>
+    api.get("/meta-marketing/ab-tests", { params }),
+  createExperiment: (data: Record<string, unknown>) =>
+    api.post("/meta-marketing/ab-tests", data),
+  getExperiment: (experimentId: number) =>
+    api.get(`/meta-marketing/ab-tests/${experimentId}`),
+  deployExperiment: (experimentId: number) =>
+    api.post(`/meta-marketing/ab-tests/${experimentId}/deploy`),
+  updateExperimentMetrics: (experimentId: number) =>
+    api.post(`/meta-marketing/ab-tests/${experimentId}/update-metrics`),
+  completeExperiment: (experimentId: number) =>
+    api.post(`/meta-marketing/ab-tests/${experimentId}/complete`),
+
+  // Optimization (Phase 6)
+  listRecommendations: (params?: { account_id?: string; status?: string; severity?: string }) =>
+    api.get("/meta-marketing/recommendations", { params }),
+  acceptRecommendation: (recommendationId: number) =>
+    api.post(`/meta-marketing/recommendations/${recommendationId}/accept`),
+  rejectRecommendation: (recommendationId: number) =>
+    api.post(`/meta-marketing/recommendations/${recommendationId}/reject`),
+  applyRecommendation: (recommendationId: number) =>
+    api.post(`/meta-marketing/recommendations/${recommendationId}/apply`),
+  getBudgetAllocation: (campaignMetaId: string) =>
+    api.get(`/meta-marketing/campaigns/${campaignMetaId}/budget-allocation`),
+  getCreativeHealth: (accountId: string) =>
+    api.get(`/meta-marketing/accounts/${accountId}/creative-health`),
+
+  // Smart Insights Engine
+  getPerformanceSummary: (accountId: string, params?: { days?: number }) =>
+    api.get(`/meta-marketing/accounts/${accountId}/performance-summary`, { params }),
+  getDailyTrends: (accountId: string, params?: { days?: number; entity_type?: string }) =>
+    api.get(`/meta-marketing/accounts/${accountId}/daily-trends`, { params }),
+  getCreativePerformance: (accountId: string, params?: { days?: number; sort_by?: string }) =>
+    api.get(`/meta-marketing/accounts/${accountId}/creative-performance`, { params }),
+  getSmartInsights: (accountId: string) =>
+    api.get(`/meta-marketing/accounts/${accountId}/smart-insights`),
 };
 
 // Settings API
