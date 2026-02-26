@@ -17,71 +17,72 @@ import DatabaseSettings from "@/components/settings/DatabaseSettings";
 
 type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "team" | "mylist" | "store" | "settings";
 
-/** Connectivity banner — auto-hides after successful check, dismissible on error */
+/** Connectivity banner — wakes up Render backend, auto-hides on success */
 function ConnectivityBanner() {
-  const [status, setStatus] = useState<"checking" | "ok" | "error">("checking");
+  const [status, setStatus] = useState<"waking" | "ok" | "error">("waking");
   const [detail, setDetail] = useState("");
   const [dataTest, setDataTest] = useState<"pending" | "ok" | "error">("pending");
   const [dataDetail, setDataDetail] = useState("");
   const [dismissed, setDismissed] = useState(false);
+  const [dots, setDots] = useState("");
 
+  // Animated dots for waking state
   useEffect(() => {
-    const checkHealth = async () => {
-      // Step 1: Check health endpoint
-      try {
-        const res = await fetch("/api/health");
-        const data = await res.json();
-        if (data.status === "healthy" || data.database === "ok") {
-          setStatus("ok");
-        } else if (data.in_memory_mode) {
-          // Backend is running but in memory mode — still usable
-          setStatus("ok");
-        } else if (data.backend === "ok") {
-          setStatus("ok");
-        } else {
-          setStatus("error");
-          setDetail(`Backend: ${data.backend_error || data.database_error || "unreachable"}`);
-          return;
-        }
-      } catch (err) {
+    if (status !== "waking") return;
+    const interval = setInterval(() => setDots((d) => (d.length >= 3 ? "" : d + ".")), 500);
+    return () => clearInterval(interval);
+  }, [status]);
+
+  const runCheck = async () => {
+    setStatus("waking");
+    setDataTest("pending");
+    setDismissed(false);
+
+    // Step 1: Health check (handles Render cold start retry server-side)
+    try {
+      const res = await fetch("/api/health");
+      const data = await res.json();
+      if (data.backend === "ok") {
+        setStatus("ok");
+      } else {
         setStatus("error");
-        setDetail(`Next.js API: ${String(err)}`);
+        setDetail(data.backend_error || "バックエンドに接続できません");
         return;
       }
+    } catch (err) {
+      setStatus("error");
+      setDetail(`API接続エラー: ${String(err)}`);
+      return;
+    }
 
-      // Step 2: Check data endpoint (this is what the table actually uses)
-      try {
-        const res = await fetch("/api/v1/rankings/products?period=weekly&page_size=1");
-        const text = await res.text();
-        if (!res.ok) {
-          setDataTest("error");
-          setDataDetail(`HTTP ${res.status}: ${text.substring(0, 200)}`);
-          return;
-        }
-        const data = JSON.parse(text);
-        const count = data?.items?.length ?? data?.total ?? 0;
-        if (count > 0) {
-          setDataTest("ok");
-        } else {
-          setDataTest("error");
-          setDataDetail("API応答はOKですが、データが0件です");
-        }
-      } catch (err) {
+    // Step 2: Data connectivity check (backend is now warm)
+    try {
+      const res = await fetch("/api/v1/rankings/products?period=weekly&page_size=1");
+      if (!res.ok) {
         setDataTest("error");
-        setDataDetail(`Data fetch: ${String(err)}`);
+        setDataDetail(`HTTP ${res.status}`);
+        return;
       }
-    };
-    checkHealth();
+      // No data is OK — just means DB is empty, not an error
+      setDataTest("ok");
+    } catch (err) {
+      setDataTest("error");
+      setDataDetail(`データ取得: ${String(err)}`);
+    }
+  };
+
+  useEffect(() => {
+    runCheck();
   }, []);
 
-  // Dismissed by user or everything works — hide banner
   if (dismissed) return null;
   if (status === "ok" && dataTest === "ok") return null;
 
-  if (status === "checking") {
+  if (status === "waking") {
     return (
-      <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 text-xs text-blue-700">
-        API接続を確認中...
+      <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-700 flex items-center gap-2">
+        <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        <span>バックエンドサーバーを起動中です{dots}（無料プランのため初回アクセス時に30-60秒かかります）</span>
       </div>
     );
   }
@@ -90,10 +91,10 @@ function ConnectivityBanner() {
     return (
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700 flex items-center justify-between">
         <span>
-          バックエンドサーバーに接続できません。オフラインモードで動作中です（APIキーはローカルに保存されます）。
+          バックエンドサーバーに接続できません: {detail}
         </span>
         <span className="flex items-center gap-2 ml-3 shrink-0">
-          <button className="underline font-medium" onClick={() => { setStatus("checking"); setDismissed(false); window.location.reload(); }}>
+          <button className="underline font-medium" onClick={runCheck}>
             再接続
           </button>
           <button className="underline" onClick={() => setDismissed(true)}>
@@ -104,20 +105,18 @@ function ConnectivityBanner() {
     );
   }
 
-  // Health OK but data failed
   if (dataTest === "error") {
     return (
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700 flex items-center justify-between">
         <span>API接続OK / データ取得エラー: {dataDetail}</span>
         <span className="flex items-center gap-2 ml-3 shrink-0">
-          <button className="underline font-medium" onClick={() => window.location.reload()}>再読み込み</button>
+          <button className="underline font-medium" onClick={runCheck}>再接続</button>
           <button className="underline" onClick={() => setDismissed(true)}>閉じる</button>
         </span>
       </div>
     );
   }
 
-  // Data test still pending
   if (dataTest === "pending") {
     return (
       <div className="bg-blue-50 border-b border-blue-200 px-4 py-1.5 text-xs text-blue-700">

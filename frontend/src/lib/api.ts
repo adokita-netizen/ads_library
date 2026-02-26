@@ -15,8 +15,8 @@ const api = axios.create({
 
 // ─── Retry helper ───
 
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1_500;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2_000;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
 function isRetryable(status: number): boolean {
