@@ -209,7 +209,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
             "fields": (
                 "id,ad_creation_time,ad_delivery_start_time,ad_delivery_stop_time,"
                 "ad_creative_bodies,ad_creative_link_titles,ad_creative_link_descriptions,"
-                "ad_creative_link_captions,languages,"
+                "ad_creative_link_captions,ad_creative_link_thumbnails,languages,"
                 "page_id,page_name,publisher_platforms,estimated_audience_size,"
                 "impressions,spend,currency,demographic_distribution,"
                 "delivery_by_region,ad_snapshot_url"
@@ -473,8 +473,12 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
             impressions = ad_data.get("impressions", {})
             impressions_lower = None
-            if isinstance(impressions, dict) and impressions.get("lower_bound"):
-                impressions_lower = int(impressions["lower_bound"])
+            impressions_upper = None
+            if isinstance(impressions, dict):
+                if impressions.get("lower_bound"):
+                    impressions_lower = int(impressions["lower_bound"])
+                if impressions.get("upper_bound"):
+                    impressions_upper = int(impressions["upper_bound"])
 
             platforms = ad_data.get("publisher_platforms", [])
             platform = "facebook"
@@ -522,11 +526,31 @@ class MetaAdLibraryCrawler(BaseCrawler):
             # Extract spend bounds from API response
             spend_data = ad_data.get("spend", {})
             spend_lower = None
-            if isinstance(spend_data, dict) and spend_data.get("lower_bound"):
-                try:
-                    spend_lower = float(spend_data["lower_bound"])
-                except (ValueError, TypeError):
-                    pass
+            spend_upper = None
+            if isinstance(spend_data, dict):
+                if spend_data.get("lower_bound"):
+                    try:
+                        spend_lower = float(spend_data["lower_bound"])
+                    except (ValueError, TypeError):
+                        pass
+                if spend_data.get("upper_bound"):
+                    try:
+                        spend_upper = float(spend_data["upper_bound"])
+                    except (ValueError, TypeError):
+                        pass
+
+            # Use midpoint when both bounds are available
+            impressions_midpoint = impressions_lower
+            if impressions_lower is not None and impressions_upper is not None:
+                impressions_midpoint = (impressions_lower + impressions_upper) // 2
+
+            spend_midpoint = spend_lower
+            if spend_lower is not None and spend_upper is not None:
+                spend_midpoint = (spend_lower + spend_upper) / 2
+
+            # Extract thumbnail from ad_creative_link_thumbnails
+            thumbnails = ad_data.get("ad_creative_link_thumbnails", [])
+            thumbnail_url = thumbnails[0] if thumbnails else None
 
             return CrawledAd(
                 external_id=ad_id,
@@ -535,11 +559,12 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 description=bodies[0] if bodies else None,
                 advertiser_name=ad_data.get("page_name"),
                 snapshot_url=ad_data.get("ad_snapshot_url"),
+                thumbnail_url=thumbnail_url,
                 creative_type="unknown",
                 destination_url=destination_url,
-                view_count=impressions_lower,
-                impressions=impressions_lower,
-                spend=spend_lower,
+                view_count=impressions_midpoint,
+                impressions=impressions_midpoint,
+                spend=spend_midpoint,
                 first_seen_at=first_seen,
                 last_seen_at=last_seen,
                 metadata={
@@ -552,7 +577,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     "demographic_distribution": ad_data.get("demographic_distribution"),
                     "delivery_by_region": ad_data.get("delivery_by_region"),
                     "impressions_lower": impressions_lower,
+                    "impressions_upper": impressions_upper,
                     "spend_lower": spend_lower,
+                    "spend_upper": spend_upper,
                     "languages": ad_data.get("languages"),
                     "link_descriptions": link_descriptions or None,
                     "destination_url": destination_url,

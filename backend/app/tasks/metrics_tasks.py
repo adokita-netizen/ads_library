@@ -185,30 +185,37 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
             continue
 
         # Determine current view count from ad or metadata
+        # Priority: real API data > metadata > estimation
         metadata = ad.ad_metadata or {}
-        view_count = (
-            ad.view_count
-            or metadata.get("impressions_lower")
-            or ad.estimated_impressions
-            or 0
-        )
 
-        # If view_count is still 0 but ad exists (e.g. browser-scraped),
-        # estimate a baseline from spend data or assign a minimum so the
-        # ad still appears in rankings with non-zero values.
-        spend_lower = metadata.get("spend_lower")
-        if view_count == 0 and spend_lower and spend_lower > 0:
-            # Reverse-estimate views from spend using platform avg CPM
-            from app.services.competitive.spend_estimator import PLATFORM_CPM_DEFAULTS
-            plat_key = (
-                ad.platform.value if hasattr(ad.platform, "value") else str(ad.platform)
-            ).lower()
-            cpm = PLATFORM_CPM_DEFAULTS.get(plat_key, {}).get("avg", 400)
-            view_count = int(spend_lower / cpm * 1000)
+        # Check if we have real data from the API (view_count is not None means
+        # the API returned actual impressions data — respect it even if 0)
+        has_real_views = ad.view_count is not None
+        if has_real_views:
+            view_count = ad.view_count
+        else:
+            view_count = (
+                metadata.get("impressions_lower")
+                or ad.estimated_impressions
+                or 0
+            )
 
-        if view_count == 0:
-            # Estimate realistic view count from available signals
-            view_count = _estimate_views_from_signals(ad, metadata, target_date)
+            # If view_count is still 0 but ad exists (e.g. browser-scraped),
+            # estimate a baseline from spend data or assign a minimum so the
+            # ad still appears in rankings with non-zero values.
+            spend_lower = metadata.get("spend_lower")
+            if view_count == 0 and spend_lower and spend_lower > 0:
+                # Reverse-estimate views from spend using platform avg CPM
+                from app.services.competitive.spend_estimator import PLATFORM_CPM_DEFAULTS
+                plat_key = (
+                    ad.platform.value if hasattr(ad.platform, "value") else str(ad.platform)
+                ).lower()
+                cpm = PLATFORM_CPM_DEFAULTS.get(plat_key, {}).get("avg", 400)
+                view_count = int(spend_lower / cpm * 1000)
+
+            if view_count == 0:
+                # Estimate realistic view count from available signals
+                view_count = _estimate_views_from_signals(ad, metadata, target_date)
 
         # Get previous day's metrics for calculating increase
         prev_metrics = (
@@ -227,7 +234,7 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
             # First metric record: treat current view_count as the initial increase
             view_count_increase = view_count
 
-        # Estimate spend using SpendEstimator
+        # Determine spend: real data takes priority over CPM estimation
         platform_str = (
             ad.platform.value if hasattr(ad.platform, "value") else str(ad.platform)
         )
@@ -235,7 +242,20 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
 
         estimated_spend = 0.0
         estimated_spend_increase = 0.0
-        if view_count_increase > 0:
+        has_real_spend = (ad.spend is not None and ad.spend > 0) or (
+            metadata.get("spend_lower") is not None and metadata.get("spend_lower", 0) > 0
+        )
+
+        if has_real_spend:
+            # Use real spend data from the API
+            real_spend = ad.spend if (ad.spend is not None and ad.spend > 0) else metadata.get("spend_lower", 0)
+            estimated_spend = real_spend
+            if prev_metrics:
+                estimated_spend_increase = max(0.0, real_spend - prev_metrics.estimated_spend)
+            else:
+                estimated_spend_increase = real_spend
+        elif view_count_increase > 0:
+            # No real spend data — fall back to CPM estimation
             try:
                 estimate = estimator.estimate_spend(
                     session,
@@ -251,11 +271,11 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
                     "spend_estimation_failed", ad_id=ad.id, error=str(e)
                 )
 
-        # Cumulative spend = previous cumulative + today's increase
-        if prev_metrics:
-            estimated_spend = prev_metrics.estimated_spend + estimated_spend_increase
-        else:
-            estimated_spend = estimated_spend_increase
+            # Cumulative spend = previous cumulative + today's increase
+            if prev_metrics:
+                estimated_spend = prev_metrics.estimated_spend + estimated_spend_increase
+            else:
+                estimated_spend = estimated_spend_increase
 
         # Determine product_name: prefer clean brand/advertiser over ad copy
         product_name = _derive_product_name(ad)

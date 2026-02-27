@@ -25,6 +25,12 @@ interface HitAd {
   duration_seconds: number;
   image_url: string;
   snapshot_url: string;
+  destination_url: string;
+  destination_type: string;
+  like_count: number;
+  published_date: string;
+  management_id: string;
+  ad_url: string;
 }
 
 interface GenreSummary {
@@ -222,7 +228,11 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                     <th>ヒットスコア</th>
                     <th className="text-right">トレンド</th>
                     <th className="text-right">消化増加額</th>
+                    <th className="text-right">累計消化額</th>
                     <th className="text-right">再生増加数</th>
+                    <th className="text-right">累計再生数</th>
+                    <th className="text-right">いいね</th>
+                    <th>掲載開始</th>
                     <th className="w-12 text-center">変動</th>
                   </tr>
                 </thead>
@@ -306,9 +316,27 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                         <td className="text-right">
                           <span className="text-[13px] font-semibold text-gray-900">{formatYen(ad.spend_increase || 0)}</span>
                         </td>
+                        {/* Cumulative Spend */}
+                        <td className="text-right">
+                          <span className="text-[12px] text-gray-500">{formatYen(ad.cumulative_spend || 0)}</span>
+                        </td>
                         {/* View Increase */}
                         <td className="text-right">
                           <span className="text-[13px] font-medium text-gray-700">{formatNumber(ad.view_increase || 0)}</span>
+                        </td>
+                        {/* Cumulative Views */}
+                        <td className="text-right">
+                          <span className="text-[12px] text-gray-500">{formatNumber(ad.cumulative_views || 0)}</span>
+                        </td>
+                        {/* Like Count */}
+                        <td className="text-right">
+                          <span className="text-[12px] text-gray-600">{formatNumber(ad.like_count || 0)}</span>
+                        </td>
+                        {/* Published Date */}
+                        <td>
+                          <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                            {ad.published_date ? new Date(ad.published_date).toLocaleDateString("ja-JP") : "-"}
+                          </span>
                         </td>
                         {/* Rank Change */}
                         <td className="text-center">

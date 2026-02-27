@@ -449,6 +449,7 @@ def get_hit_ads(
         for h in hits:
             ad = ads_map.get(h.ad_id)
             thumbnail = _resolve_thumbnail_url(ad) if ad else ""
+            metadata = (ad.ad_metadata or {}) if ad else {}
             items.append({
                 "rank": h.rank_position,
                 "ad_id": h.ad_id,
@@ -467,8 +468,17 @@ def get_hit_ads(
                 "previous_rank": h.previous_rank,
                 "thumbnail": thumbnail,
                 "duration_seconds": ad.duration_seconds if ad else 0,
+                "management_id": (ad.external_id or f"AD-{h.ad_id}") if ad else f"AD-{h.ad_id}",
+                "ad_url": (ad.video_url or "") if ad else "",
                 "image_url": ad.image_url if ad else "",
                 "snapshot_url": ad.snapshot_url if ad else "",
+                "destination_url": metadata.get("destination_url", ""),
+                "destination_type": metadata.get("destination_type", ""),
+                "like_count": ad.like_count if ad else 0,
+                "published_date": (
+                    ad.first_seen_at.isoformat() if ad and ad.first_seen_at else
+                    ad.created_at.isoformat() if ad and ad.created_at else ""
+                ),
             })
 
         return {
