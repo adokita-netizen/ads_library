@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,6 +24,71 @@ router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
 
 # Meta platform groups "facebook" and "instagram" under a single umbrella.
 META_PLATFORMS = ["facebook", "instagram"]
+
+
+def _resolve_thumbnail_url(ad: Ad) -> str:
+    """Resolve a display-ready thumbnail URL for an Ad.
+
+    Priority: presigned S3 URL > thumbnail_url > image_url > snapshot_url > ""
+    Mirrors the pattern in ads.py list_ads (lines 86-96).
+    """
+    if ad.thumbnail_s3_key:
+        try:
+            from app.core.storage import get_storage_client
+            storage = get_storage_client()
+            return storage.get_presigned_url(ad.thumbnail_s3_key)
+        except Exception:
+            pass
+    if ad.thumbnail_url:
+        return ad.thumbnail_url
+    if ad.image_url:
+        return ad.image_url
+    if ad.snapshot_url:
+        return ad.snapshot_url
+    return ""
+
+
+_SPONSOR_RE = re.compile(r"^(.+?)\s*スポンサー[:：]\s*", re.UNICODE)
+
+
+def _derive_product_name(ad: Ad) -> str:
+    """Derive a clean, short product/brand name for display."""
+    if ad.brand_name:
+        return ad.brand_name.strip()
+
+    adv = (ad.advertiser_name or "").strip()
+    if adv:
+        m = _SPONSOR_RE.match(adv)
+        if m:
+            after = adv[m.end():].strip()
+            adv = after or m.group(1).strip()
+
+    title = (ad.title or "").strip()
+    if title and len(title) <= 40 and "\n" not in title:
+        if adv and adv.lower() != title.lower():
+            return adv
+        return title
+
+    if adv:
+        return adv
+
+    if ad.description:
+        first_line = ad.description.split("\n")[0].strip()
+        if first_line:
+            return first_line[:40]
+
+    return "不明"
+
+
+def _clean_advertiser(name: str | None) -> str:
+    """Strip 'Xスポンサー: Y' prefix from advertiser names for display."""
+    if not name:
+        return ""
+    m = _SPONSOR_RE.match(name)
+    if m:
+        after = name[m.end():].strip()
+        return after or m.group(1).strip()
+    return name
 
 
 def _resolve_platform_filter(query, column, platform: str | None):
@@ -181,7 +247,7 @@ def get_product_rankings(
             for ad in ads:
                 metadata = ad.ad_metadata or {}
                 ads_map[ad.id] = {
-                    "thumbnail": ad.thumbnail_s3_key or "",
+                    "thumbnail": _resolve_thumbnail_url(ad),
                     "duration_seconds": ad.duration_seconds or 0,
                     "management_id": ad.external_id or f"AD-{ad.id}",
                     "ad_url": ad.video_url or "",
@@ -204,7 +270,7 @@ def get_product_rankings(
                 "rank_change": r.rank_change,
                 "ad_id": r.ad_id,
                 "product_name": r.product_name,
-                "advertiser_name": r.advertiser_name,
+                "advertiser_name": _clean_advertiser(r.advertiser_name),
                 "genre": r.genre,
                 "platform": r.platform,
                 "view_increase": r.total_view_increase,
@@ -322,8 +388,8 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "previous_rank": None,
             "rank_change": None,
             "ad_id": ad.id,
-            "product_name": ad.title or ad.brand_name or ad.advertiser_name or "不明",
-            "advertiser_name": ad.advertiser_name or "",
+            "product_name": _derive_product_name(ad),
+            "advertiser_name": _clean_advertiser(ad.advertiser_name),
             "genre": str(ad.category.value) if ad.category else "",
             "platform": str(ad.platform.value) if ad.platform else "",
             "view_increase": view_increase,
@@ -334,7 +400,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "hit_score": hit_score,
             "trend_score": trend_score,
             "is_demo": is_demo,
-            "thumbnail": ad.thumbnail_s3_key or "",
+            "thumbnail": _resolve_thumbnail_url(ad),
             "duration_seconds": ad.duration_seconds or 0,
             "management_id": ad.external_id or f"AD-{ad.id}",
             "ad_url": ad.video_url or "",
@@ -369,24 +435,42 @@ def get_hit_ads(
         svc = RankingService()
         hits = svc.get_hit_ads(session, genre=genre, limit=limit)
 
+        # Batch-fetch Ad details for thumbnails and extra info
+        ad_ids = [h.ad_id for h in hits]
+        ads_map: dict[int, Ad] = {}
+        if ad_ids:
+            ads = session.query(Ad).filter(Ad.id.in_(ad_ids)).all()
+            ads_map = {ad.id: ad for ad in ads}
+
+        items = []
+        for h in hits:
+            ad = ads_map.get(h.ad_id)
+            thumbnail = _resolve_thumbnail_url(ad) if ad else ""
+            items.append({
+                "rank": h.rank_position,
+                "ad_id": h.ad_id,
+                "product_name": h.product_name,
+                "advertiser_name": _clean_advertiser(h.advertiser_name),
+                "genre": h.genre,
+                "platform": h.platform,
+                "view_increase": h.total_view_increase,
+                "spend_increase": round(h.total_spend_increase),
+                "cumulative_views": h.cumulative_views,
+                "cumulative_spend": round(h.cumulative_spend),
+                "is_hit": h.is_hit,
+                "hit_score": h.hit_score,
+                "trend_score": h.trend_score,
+                "rank_change": h.rank_change,
+                "previous_rank": h.previous_rank,
+                "thumbnail": thumbnail,
+                "duration_seconds": ad.duration_seconds if ad else 0,
+                "image_url": ad.image_url if ad else "",
+                "snapshot_url": ad.snapshot_url if ad else "",
+            })
+
         return {
-            "total": len(hits),
-            "items": [
-                {
-                    "rank": h.rank_position,
-                    "ad_id": h.ad_id,
-                    "product_name": h.product_name,
-                    "advertiser_name": h.advertiser_name,
-                    "genre": h.genre,
-                    "platform": h.platform,
-                    "view_increase": h.total_view_increase,
-                    "spend_increase": round(h.total_spend_increase),
-                    "hit_score": h.hit_score,
-                    "trend_score": h.trend_score,
-                    "rank_change": h.rank_change,
-                }
-                for h in hits
-            ],
+            "total": len(items),
+            "items": items,
         }
 
 

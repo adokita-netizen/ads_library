@@ -209,6 +209,50 @@ async def ad_data_integrity(
     }
 
 
+@router.post("/thumbnails/fetch-all")
+def fetch_all_thumbnails(
+    use_playwright: bool = True,
+    batch_size: int = Query(10, ge=1, le=50),
+):
+    """Batch-fetch thumbnails for all ads missing thumbnail_url.
+
+    3-stage fallback per ad:
+    1. Build snapshot_url from external_id if missing
+    2. Meta Graph API ad_snapshot_url (authenticated URL)
+    3. MediaExtractor (HTTP+BS4 → Playwright)
+    """
+    import concurrent.futures
+
+    # Load Meta access_token from DB
+    meta_token = None
+    try:
+        from app.api.endpoints.settings import load_api_keys_from_db
+        keys = load_api_keys_from_db()
+        meta_keys = keys.get("meta", keys.get("facebook", {}))
+        meta_token = meta_keys.get("access_token")
+    except Exception as e:
+        logger.warning("meta_token_load_failed", error=str(e))
+
+    from app.services.thumbnail_fetcher import ThumbnailFetcher
+
+    def _run():
+        fetcher = ThumbnailFetcher(
+            meta_access_token=meta_token,
+            use_playwright=use_playwright,
+        )
+        session = SyncSessionLocal()
+        try:
+            return fetcher.fetch_all(session, batch_size=batch_size)
+        finally:
+            session.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_run)
+        stats = future.result(timeout=600)
+
+    return stats
+
+
 @router.get("/{ad_id}", response_model=AdResponse)
 async def get_ad(
     ad_id: int,
@@ -646,6 +690,24 @@ def _inline_crawl(
         except Exception as dispatch_err:
             _logger = structlog.get_logger()
             _logger.warning("media_extraction_dispatch_failed", error=str(dispatch_err))
+
+        # Dispatch thumbnail download for ads that have thumbnail_url but skipped extraction
+        try:
+            from app.tasks.dispatcher import dispatch_task as _dispatch
+            ads_needing_thumb = session.query(Ad).filter(
+                Ad.media_extraction_status == "skipped",
+                Ad.thumbnail_url.isnot(None),
+                Ad.thumbnail_s3_key.is_(None),
+            ).order_by(Ad.created_at.desc()).limit(saved).all()
+            for ad_thumb in ads_needing_thumb:
+                try:
+                    _dispatch("download_thumbnail", ad_id=ad_thumb.id)
+                except Exception as e:
+                    _logger = structlog.get_logger()
+                    _logger.warning("thumbnail_dispatch_failed", ad_id=ad_thumb.id, error=str(e))
+        except Exception as dispatch_err:
+            _logger = structlog.get_logger()
+            _logger.warning("thumbnail_download_dispatch_failed", error=str(dispatch_err))
 
     except Exception:
         session.rollback()

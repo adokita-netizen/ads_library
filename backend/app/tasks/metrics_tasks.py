@@ -9,6 +9,8 @@ from datetime import date, datetime, timedelta, timezone
 import structlog
 from sqlalchemy.orm import Session
 
+import re
+
 from app.models.ad import Ad
 from app.models.ad_metrics import AdDailyMetrics
 
@@ -27,6 +29,53 @@ except ImportError:
 logger = structlog.get_logger()
 
 JST = timezone(timedelta(hours=9))
+
+
+_SPONSOR_RE = re.compile(r"^(.+?)\s*スポンサー[:：]\s*", re.UNICODE)
+
+
+def _derive_product_name(ad: Ad) -> str:
+    """Derive a clean, short product/brand name for display.
+
+    Priority:
+      1. brand_name (always clean when present)
+      2. advertiser_name (clean up "スポンサー:" prefix)
+      3. title — only if short (≤40 chars, looks like a name, not ad copy)
+      4. First line of description (truncated)
+      5. "不明"
+    """
+    # 1. brand_name
+    if ad.brand_name:
+        return ad.brand_name.strip()
+
+    # 2. advertiser_name — strip "Xスポンサー: Y" → "Y"
+    adv = (ad.advertiser_name or "").strip()
+    if adv:
+        m = _SPONSOR_RE.match(adv)
+        if m:
+            # "コスメ、メイク スポンサー: Medicube Japan" → "Medicube Japan"
+            after = adv[m.end():].strip()
+            adv = after or m.group(1).strip()
+
+    # 3. title — use only if it's short and looks like a name
+    title = (ad.title or "").strip()
+    if title and len(title) <= 40 and "\n" not in title:
+        # If we also have advertiser, prefer advertiser but append title context
+        if adv and adv.lower() != title.lower():
+            return adv
+        return title
+
+    # 4. advertiser_name is the safest fallback
+    if adv:
+        return adv
+
+    # 5. description first line
+    if ad.description:
+        first_line = ad.description.split("\n")[0].strip()
+        if first_line:
+            return first_line[:40]
+
+    return "不明"
 
 
 def _category_to_genre(category) -> str | None:
@@ -206,12 +255,8 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
         else:
             estimated_spend = estimated_spend_increase
 
-        # Determine product_name from ad fields
-        # For browser-scraped ads, title is often None; use description prefix
-        product_name = ad.title or ad.brand_name or ad.advertiser_name
-        if not product_name and ad.description:
-            product_name = ad.description[:50].split("\n")[0]
-        product_name = product_name or "不明"
+        # Determine product_name: prefer clean brand/advertiser over ad copy
+        product_name = _derive_product_name(ad)
 
         metrics = AdDailyMetrics(
             ad_id=ad.id,

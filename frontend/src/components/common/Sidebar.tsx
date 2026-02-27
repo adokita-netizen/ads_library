@@ -17,6 +17,7 @@ const navSections = [
     items: [
       { id: "lp-analysis", label: "LP分析・USP設計", icon: "document" },
       { id: "competitive", label: "競合インテリジェンス", icon: "shield", badge: "NEW" },
+      { id: "hit-ads", label: "ヒット広告分析", icon: "fire", badge: "NEW" },
       { id: "ai-expert", label: "AI専門家", icon: "sparkle" },
       { id: "creative", label: "クリエイティブ生成", icon: "wand" },
     ],
@@ -81,6 +82,12 @@ const icons: Record<string, JSX.Element> = {
   bookmark: (
     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+    </svg>
+  ),
+  fire: (
+    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1.001A3.75 3.75 0 0012 18z" />
     </svg>
   ),
   shield: (

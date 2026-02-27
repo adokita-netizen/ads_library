@@ -14,10 +14,11 @@ import StoreView from "@/components/workspace/StoreView";
 import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
 import CampaignGalleryView from "@/components/workspace/CampaignGalleryView";
 import MetaAdsView from "@/components/meta-ads/MetaAdsView";
+import HitAdAnalysisView from "@/components/dashboard/HitAdAnalysisView";
 import APIKeysSettings from "@/components/settings/APIKeysSettings";
 import DatabaseSettings from "@/components/settings/DatabaseSettings";
 
-type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "settings";
+type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "settings";
 
 /** Connectivity banner — auto-hides after successful check, dismissible on error */
 function ConnectivityBanner() {
@@ -157,6 +158,8 @@ export default function Home() {
         return <CreativeStudio />;
       case "competitive":
         return <CompetitiveIntelView />;
+      case "hit-ads":
+        return <HitAdAnalysisView onAdSelect={handleAdSelect} />;
       case "meta-ads":
         return <MetaAdsView />;
       case "team":

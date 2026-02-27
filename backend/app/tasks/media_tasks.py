@@ -34,9 +34,15 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
             return {"status": "error", "message": "Ad not found"}
 
         if not ad.snapshot_url:
-            ad.media_extraction_status = "skipped"
-            session.commit()
-            return {"status": "skipped", "message": "No snapshot_url"}
+            # Try to construct snapshot_url from external_id (Facebook Ad Library)
+            if ad.external_id:
+                ad.snapshot_url = f"https://www.facebook.com/ads/library/?id={ad.external_id}"
+                session.commit()
+                logger.info("snapshot_url_constructed", ad_id=ad_id, external_id=ad.external_id)
+            else:
+                ad.media_extraction_status = "skipped"
+                session.commit()
+                return {"status": "skipped", "message": "No snapshot_url or external_id"}
 
         ad.media_extraction_status = "pending"
         session.commit()
@@ -76,6 +82,14 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     logger.info("image_uploaded_to_storage", ad_id=ad_id, s3_key=s3_key)
             except Exception as e:
                 logger.warning("image_upload_failed", ad_id=ad_id, error=str(e))
+
+        # Auto-set thumbnail_url from extracted images when missing
+        if not ad.thumbnail_url and extracted.image_urls:
+            ad.thumbnail_url = extracted.image_urls[0]
+
+        # Reuse image_s3_key as thumbnail if no dedicated thumbnail exists
+        if not ad.thumbnail_s3_key and ad.image_s3_key:
+            ad.thumbnail_s3_key = ad.image_s3_key
 
         # Store carousel image URLs if multiple
         if len(extracted.image_urls) > 1:
