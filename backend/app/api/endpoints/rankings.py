@@ -187,9 +187,12 @@ def compute_rankings_now():
     from app.tasks.metrics_tasks import collect_metrics_for_ads
 
     with sync_session_scope() as session:
-        # Step 1: Collect daily metrics for all ads
+        # Step 1: Collect daily metrics for recent days (backfill if missing)
         today = _today_jst()
-        metrics_created = collect_metrics_for_ads(session, target_date=today)
+        metrics_created = 0
+        for days_ago in range(7, -1, -1):  # 7 days ago → today
+            d = today - timedelta(days=days_ago)
+            metrics_created += collect_metrics_for_ads(session, target_date=d)
         session.commit()
 
         # Step 2: Compute rankings for all periods
