@@ -116,7 +116,9 @@ def _estimate_views_from_signals(ad, metadata: dict, target_date: date) -> int:
     # Days the ad has been active
     days_active = 1
     if ad.first_seen_at:
-        delta = (datetime.combine(target_date, datetime.min.time()) - ad.first_seen_at).days
+        target_dt = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
+        first_seen = ad.first_seen_at if ad.first_seen_at.tzinfo else ad.first_seen_at.replace(tzinfo=timezone.utc)
+        delta = (target_dt - first_seen).days
         days_active = max(1, delta)
 
     # Platform count (multi-platform = wider reach)
