@@ -97,3 +97,4 @@ frontend_final.png
 tmp/
 temp/
 *.tmp
+backend/vaap_local.db.bak_*

@@ -611,7 +611,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 ),
             )
             page = await context.new_page()
-            await page.goto(url, wait_until="networkidle", timeout=60000)
+            await page.goto(url, wait_until="load", timeout=90000)
 
             # Wait for initial ad cards to render
             await page.wait_for_timeout(5000)
@@ -1084,7 +1084,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                             ),
                         )
                         page = await context.new_page()
-                        await page.goto(page_url, wait_until="networkidle", timeout=30000)
+                        await page.goto(page_url, wait_until="load", timeout=60000)
                         await page.wait_for_timeout(3000)
 
                         # Extract creative images and card data from the target card
