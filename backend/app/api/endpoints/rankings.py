@@ -2136,7 +2136,7 @@ def get_dashboard_summary():
                     top_creative = ct
 
         # Fresh ads (last 7 days)
-        fresh_cutoff = datetime.utcnow() - timedelta(days=7)
+        fresh_cutoff = datetime.now(tz=timezone.utc) - timedelta(days=7)
         fresh_count = session.query(func.count(Ad.id)).filter(
             Ad.created_at >= fresh_cutoff
         ).scalar() or 0
@@ -3023,7 +3023,7 @@ def get_crawl_status(
     """
     from app.models.crawl_job import CrawlJob
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
     with sync_session_scope() as session:
         jobs = (
@@ -3266,7 +3266,7 @@ def get_fresh_ads(
     Supports pagination and optional platform/creative_type filters.
     """
     with sync_session_scope() as session:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
 
         query = session.query(Ad).filter(Ad.created_at >= cutoff)
 
@@ -4510,7 +4510,7 @@ def generate_report(body: _ReportBody):
         if body.date_range:
             days_map = {"7d": 7, "30d": 30, "90d": 90, "180d": 180}
             days = days_map.get(body.date_range, 30)
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
             query = query.filter(Ad.created_at >= cutoff)
 
         ads = query.all()
@@ -5040,7 +5040,7 @@ def get_alerts():
     """
     with sync_session_scope() as session:
         alerts = []
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff_24h = now - timedelta(hours=24)
 
         # 1. New high-score ads in last 24h
@@ -5194,7 +5194,7 @@ def get_activity(
     """
     from app.models.crawl_job import CrawlJob
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
     activities = []
 
     with sync_session_scope() as session:
@@ -6193,7 +6193,7 @@ def list_competitors(
             hook_counter: dict[str, int] = {}
             cta_counter: dict[str, int] = {}
             recent_ad_count = 0
-            cutoff_30d = datetime.utcnow() - timedelta(days=30)
+            cutoff_30d = datetime.now(tz=timezone.utc) - timedelta(days=30)
 
             for ad in adv_ads:
                 meta = ad.ad_metadata or {}
@@ -6989,7 +6989,7 @@ def api_health_check():
 
     def _fresh_ads_check():
         with sync_session_scope() as session:
-            cutoff = datetime.utcnow() - timedelta(days=7)
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(days=7)
             cnt = session.query(func.count(Ad.id)).filter(Ad.created_at >= cutoff).scalar() or 0
             return {"total_ads": cnt}
 
@@ -7359,7 +7359,7 @@ def weekly_digest():
     Summarizes: new ads this week, hit rate changes, new patterns detected.
     """
     with sync_session_scope() as session:
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=7)
         new_ads = session.query(Ad).filter(Ad.created_at >= cutoff).all()
         all_ads = session.query(Ad).all()
 
@@ -7378,7 +7378,7 @@ def weekly_digest():
                     new_hooks[str(h)] = new_hooks.get(str(h), 0) + 1
 
         return {
-            "period": f"{(datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            "period": f"{(datetime.now(tz=timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
             "new_ads": new_count,
             "new_hits": new_hits,
             "new_hit_rate": round(new_hits / new_count, 3) if new_count > 0 else 0,
@@ -7816,7 +7816,7 @@ def get_pro_ranking(
             days_map = {"1d": 1, "7d": 7, "30d": 30, "90d": 90}
             days = days_map.get(period)
             if days:
-                cutoff = datetime.utcnow() - timedelta(days=days)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
                 query = query.filter(Ad.created_at >= cutoff)
 
         # Text search
@@ -9623,7 +9623,7 @@ def get_report_summary(
     """
     print(f"[C21] Report summary: days={days}, genre={genre}, platform={platform}")
     with sync_session_scope() as session:
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff = now - timedelta(days=days)
 
         query = session.query(Ad).filter(Ad.created_at >= cutoff)
@@ -9876,7 +9876,7 @@ def get_dashboard_kpi():
                 "data_freshness": None,
             }
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff_7d = now - timedelta(days=7)
 
         scores = []
@@ -10484,7 +10484,7 @@ def get_trend_forecast(
     """
     print(f"[C22] Trend forecast: genre={genre}, metric={metric}")
     with sync_session_scope() as session:
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         # Look back 12 weeks
         lookback = now - timedelta(weeks=12)
 
@@ -10722,7 +10722,7 @@ def export_full_report(
     """
     print(f"[C23] Export report: format={format}, genre={genre}, days={days}")
     with sync_session_scope() as session:
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff = now - timedelta(days=days)
 
         query = session.query(Ad).filter(Ad.created_at >= cutoff)
@@ -11092,7 +11092,7 @@ def get_data_freshness():
                 },
             }
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff_24h = now - timedelta(hours=24)
         cutoff_7d = now - timedelta(days=7)
 
@@ -11470,7 +11470,7 @@ def get_recommendations_engine(
 
         elif based_on == "recent":
             # Find trending ads in recent period (last 7 days)
-            now = datetime.utcnow()
+            now = datetime.now(tz=timezone.utc)
             cutoff = now - timedelta(days=7)
 
             recent_ads = []
@@ -11646,7 +11646,7 @@ def get_ad_timeline(
         if genre:
             quality_ads = [a for a in quality_ads if _resolve_genre_label(a) == genre]
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         cutoff = now - timedelta(days=days)
 
         timeline = []
@@ -12295,7 +12295,7 @@ def get_search_analytics():
         keyword_counts: dict[str, int] = {}
         recent_genres: dict[str, int] = {}
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         week_ago = now - timedelta(days=7)
 
         for ad in quality_ads:
@@ -13173,8 +13173,8 @@ def get_analytics_overview():
             genre_set.add(_resolve_genre_label(ad))
             total_spend += float((ad.ad_metadata or {}).get("cumulative_spend") or 0)
 
-        cutoff_7d = datetime.utcnow() - timedelta(days=7)
-        cutoff_14d = datetime.utcnow() - timedelta(days=14)
+        cutoff_7d = datetime.now(tz=timezone.utc) - timedelta(days=7)
+        cutoff_14d = datetime.now(tz=timezone.utc) - timedelta(days=14)
         this_week = sum(1 for a in ads if a.created_at and a.created_at >= cutoff_7d)
         last_week = sum(1 for a in ads if a.created_at and cutoff_14d <= a.created_at < cutoff_7d)
         growth = round((this_week - last_week) / max(last_week, 1) * 100, 1)
@@ -13336,7 +13336,7 @@ def get_competitive_landscape(genre: Optional[str] = None):
 
         total = len(ads) or 1
         adv_stats = []
-        cutoff_30d = datetime.utcnow() - timedelta(days=30)
+        cutoff_30d = datetime.now(tz=timezone.utc) - timedelta(days=30)
 
         for name, adv_ads in adv_map.items():
             cnt = len(adv_ads)
@@ -13504,9 +13504,9 @@ def poll_updates(
             try:
                 cutoff = datetime.fromisoformat(since.replace("Z", "+00:00").replace("+00:00", ""))
             except ValueError:
-                cutoff = datetime.utcnow() - timedelta(hours=1)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=1)
         else:
-            cutoff = datetime.utcnow() - timedelta(hours=1)
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=1)
 
         requested = set(types.split(","))
         updates = []
@@ -13537,7 +13537,7 @@ def poll_updates(
                         pass
 
         if "alerts" in requested:
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            week_ago = datetime.now(tz=timezone.utc) - timedelta(days=7)
             for ad in session.query(Ad).filter(Ad.created_at >= week_ago).all():
                 score = float((ad.ad_metadata or {}).get("latest_hit_score") or 0)
                 if score >= 70:
@@ -13905,7 +13905,7 @@ def get_team_activity():
     from app.models.crawl_job import CrawlJob
 
     activities = []
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
 
     with sync_session_scope() as session:
         # Recent ads added
@@ -13983,7 +13983,7 @@ def get_genre_distribution(
             days_map = {"7d": 7, "30d": 30, "90d": 90}
             days = days_map.get(period)
             if days:
-                cutoff = datetime.utcnow() - timedelta(days=days)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
                 query = query.filter(Ad.created_at >= cutoff)
 
         all_ads = query.limit(10000).all()
@@ -13997,12 +13997,12 @@ def get_genre_distribution(
             genre_map.setdefault(fg, []).append(ad)
 
         # Compute 30-day-ago counts for trend detection
-        cutoff_30d = datetime.utcnow() - timedelta(days=30)
+        cutoff_30d = datetime.now(tz=timezone.utc) - timedelta(days=30)
         genre_old_counts: dict[str, int] = {}
         for fg, ads_list in genre_map.items():
             old_count = sum(
                 1 for a in ads_list
-                if (a.created_at or datetime.utcnow()) < cutoff_30d
+                if (a.created_at or datetime.now(tz=timezone.utc)) < cutoff_30d
             )
             genre_old_counts[fg] = old_count
 
@@ -14092,7 +14092,7 @@ def get_genre_details(
             days_map = {"7d": 7, "30d": 30, "90d": 90}
             days = days_map.get(period)
             if days:
-                cutoff = datetime.utcnow() - timedelta(days=days)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
                 query = query.filter(Ad.created_at >= cutoff)
 
         all_ads = query.limit(10000).all()
@@ -14208,7 +14208,7 @@ def compare_genres(
             days_map = {"7d": 7, "30d": 30, "90d": 90}
             days = days_map.get(period)
             if days:
-                cutoff = datetime.utcnow() - timedelta(days=days)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
                 query = query.filter(Ad.created_at >= cutoff)
 
         all_ads = query.limit(10000).all()
@@ -14294,7 +14294,7 @@ def get_genre_trends(
         all_ads = query.limit(10000).all()
 
         # Determine time buckets
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         if period == "monthly":
             # Last 6 months
             buckets = []
@@ -14481,7 +14481,7 @@ def search_facets(
             days_map = {"7d": 7, "30d": 30, "90d": 90}
             days = days_map.get(period)
             if days:
-                cutoff = datetime.utcnow() - timedelta(days=days)
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
                 query = query.filter(Ad.created_at >= cutoff)
 
         # Text search

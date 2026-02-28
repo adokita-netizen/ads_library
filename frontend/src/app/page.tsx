@@ -45,7 +45,7 @@ function ConnectivityBanner() {
     const checkHealth = async () => {
       // Step 1: Check health endpoint
       try {
-        const res = await fetch("/health");
+        const res = await fetch("/api/health");
         const data = await res.json();
         if (data.status === "healthy" || data.database === "ok") {
           setStatus("ok");
