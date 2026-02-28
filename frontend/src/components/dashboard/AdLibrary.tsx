@@ -173,9 +173,9 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
             >
               {/* Thumbnail */}
               <div className="mb-3 h-40 rounded-lg bg-gray-100 overflow-hidden">
-                {(ad.thumbnail_url || ad.image_url || ad.snapshot_url) ? (
+                {(ad.thumbnail_url || ad.image_url) ? (
                   <img
-                    src={ad.thumbnail_url || ad.image_url || ad.snapshot_url}
+                    src={ad.thumbnail_url || ad.image_url}
                     alt={ad.title || "Ad thumbnail"}
                     className="h-full w-full object-cover"
                     onError={(e) => {
@@ -216,6 +216,11 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
               <p className="mt-1 text-sm text-gray-500">
                 {ad.advertiser_name || "Unknown Advertiser"}
               </p>
+              {ad.description && (
+                <p className="mt-1.5 text-xs text-gray-400 line-clamp-2">
+                  {ad.description}
+                </p>
+              )}
 
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <span

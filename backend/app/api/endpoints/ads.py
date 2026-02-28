@@ -276,6 +276,23 @@ async def get_ad(
         resp.thumbnail_url = ad.thumbnail_url
     if not resp.thumbnail_url and ad.image_url:
         resp.thumbnail_url = ad.image_url
+
+    # Fetch cumulative metrics from AdDailyMetrics
+    try:
+        from app.models.ad_metrics import AdDailyMetrics
+        metrics_result = await db.execute(
+            select(
+                func.max(AdDailyMetrics.view_count).label("cumulative_views"),
+                func.max(AdDailyMetrics.estimated_spend).label("cumulative_spend"),
+            ).where(AdDailyMetrics.ad_id == ad_id)
+        )
+        row = metrics_result.one_or_none()
+        if row:
+            resp.cumulative_views = row.cumulative_views or resp.view_count or 0
+            resp.cumulative_spend = round(row.cumulative_spend or resp.spend or 0)
+    except Exception:
+        pass
+
     return resp
 
 
@@ -822,6 +839,170 @@ async def trigger_media_extraction(
         "status": "started",
         "message": "メディア抽出を開始しました",
     }
+
+
+@router.post("/enrich-metrics")
+def enrich_metrics_batch(
+    limit: int = Query(50, ge=1, le=200),
+    use_playwright: bool = True,
+):
+    """Batch-enrich ads missing metrics (impressions/spend) by visiting
+    individual Ad Library pages via Playwright.
+
+    This is for commercial ads where the Meta API doesn't return spend/impressions.
+    """
+    import asyncio
+    import concurrent.futures
+
+    from app.services.crawling.meta_crawler import (
+        MetaAdLibraryCrawler,
+        _estimate_ad_metrics,
+    )
+
+    # Load Meta access_token
+    meta_token = None
+    try:
+        from app.api.endpoints.settings import load_api_keys_from_db
+        keys = load_api_keys_from_db()
+        meta_keys = keys.get("meta", keys.get("facebook", {}))
+        meta_token = meta_keys.get("access_token")
+    except Exception:
+        pass
+    if not meta_token:
+        meta_token = settings.meta_access_token
+
+    session = SyncSessionLocal()
+    try:
+        # Find ads missing metrics
+        from sqlalchemy import or_
+        ads_to_enrich = (
+            session.query(Ad)
+            .filter(
+                or_(
+                    Ad.impressions.is_(None),
+                    Ad.spend.is_(None),
+                ),
+                Ad.external_id.isnot(None),
+                Ad.platform.in_(["FACEBOOK", "INSTAGRAM", "facebook", "instagram"]),
+            )
+            .order_by(Ad.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not ads_to_enrich:
+            return {"status": "completed", "message": "補完が必要な広告はありません", "enriched": 0}
+
+        # Build CrawledAd objects for enrichment
+        from app.services.crawling.base_crawler import CrawledAd
+        crawled_ads = []
+        ad_id_map = {}  # external_id → Ad model
+        for ad in ads_to_enrich:
+            crawled = CrawledAd(
+                external_id=ad.external_id,
+                platform=str(ad.platform.value) if hasattr(ad.platform, "value") else str(ad.platform),
+                title=ad.title,
+                description=ad.description,
+                advertiser_name=ad.advertiser_name,
+                thumbnail_url=ad.thumbnail_url,
+                image_urls=[ad.image_url] if ad.image_url else [],
+                snapshot_url=ad.snapshot_url,
+                impressions=ad.impressions,
+                spend=ad.spend,
+                view_count=ad.view_count,
+                metadata=ad.ad_metadata or {},
+            )
+            crawled_ads.append(crawled)
+            ad_id_map[ad.external_id] = ad
+
+        # Phase 1: Playwright-based thumbnail enrichment (only for ads with bad thumbnails)
+        needs_thumb = [
+            c for c in crawled_ads
+            if not c.thumbnail_url
+            or "s200x200" in (c.thumbnail_url or "")
+            or "favicons" in (c.thumbnail_url or "")
+        ]
+
+        if needs_thumb and use_playwright:
+            crawler = MetaAdLibraryCrawler(access_token=meta_token)
+
+            def _run():
+                return asyncio.run(
+                    crawler._enrich_thumbnails_via_playwright(needs_thumb)
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_run)
+                future.result(timeout=600)
+
+        # Phase 2: Estimate metrics for all ads missing impressions/spend
+        for crawled in crawled_ads:
+            if crawled.impressions is None and crawled.spend is None:
+                _estimate_ad_metrics(crawled)
+
+        # Update database with enriched data
+        from sqlalchemy.orm.attributes import flag_modified
+
+        enriched_count = 0
+        for crawled in crawled_ads:
+            ad = ad_id_map.get(crawled.external_id)
+            if not ad:
+                continue
+
+            changed = False
+            if crawled.impressions is not None and ad.impressions is None:
+                ad.impressions = crawled.impressions
+                ad.view_count = crawled.view_count
+                changed = True
+                logger.info("enrich_impressions_saved", ad_id=ad.id, impressions=crawled.impressions)
+            if crawled.spend is not None and ad.spend is None:
+                ad.spend = crawled.spend
+                changed = True
+                logger.info("enrich_spend_saved", ad_id=ad.id, spend=crawled.spend)
+            if crawled.thumbnail_url and (
+                not ad.thumbnail_url
+                or "s200x200" in (ad.thumbnail_url or "")
+                or "favicons" in (ad.thumbnail_url or "")
+            ):
+                ad.thumbnail_url = crawled.thumbnail_url
+                if not ad.image_url:
+                    ad.image_url = crawled.thumbnail_url
+                changed = True
+                logger.info("enrich_thumbnail_saved", ad_id=ad.id)
+
+            # Merge metadata (use new dict to ensure SQLAlchemy detects change)
+            enrichment_keys = (
+                "page_enriched", "detected_platforms",
+                "metrics_estimated", "estimated_days_running",
+                "estimated_daily_impressions", "estimated_cpm_jpy",
+            )
+            if any(k in crawled.metadata for k in enrichment_keys):
+                meta = dict(ad.ad_metadata or {})
+                for key in enrichment_keys:
+                    if key in crawled.metadata:
+                        meta[key] = crawled.metadata[key]
+                ad.ad_metadata = meta
+                flag_modified(ad, "ad_metadata")
+                changed = True
+
+            if changed:
+                enriched_count += 1
+
+        session.commit()
+
+        return {
+            "status": "completed",
+            "total_candidates": len(ads_to_enrich),
+            "enriched": enriched_count,
+            "message": f"{enriched_count}件の広告のメトリクス・サムネイルを補完しました",
+        }
+
+    except Exception as e:
+        session.rollback()
+        logger.error("batch_enrich_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"エンリッチメント失敗: {str(e)}")
+    finally:
+        session.close()
 
 
 @router.delete("/{ad_id}")

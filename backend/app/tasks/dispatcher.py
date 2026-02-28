@@ -27,6 +27,7 @@ LIGHT_TASKS = frozenset({
     "analyze_own_lp_content",
     "batch_crawl_lps",
     "download_thumbnail",
+    "enrich_ad_creative",
 })
 
 # Map task names to their Celery task paths (for celery backend)
@@ -36,6 +37,7 @@ _CELERY_TASK_MAP = {
     "crawl_and_analyze_lp": "app.tasks.lp_tasks.crawl_and_analyze_lp_task",
     "extract_media": "app.tasks.media_tasks.extract_media_task",
     "download_thumbnail": "app.tasks.media_tasks.download_thumbnail_task",
+    "enrich_ad_creative": "app.tasks.media_tasks.enrich_ad_creative_task",
     "analyze_own_lp_content": "app.tasks.lp_tasks.analyze_own_lp_content_task",
     "batch_crawl_lps": "app.tasks.lp_tasks.batch_crawl_lps_task",
     "compute_rankings": "app.tasks.ranking_tasks.compute_rankings_task",

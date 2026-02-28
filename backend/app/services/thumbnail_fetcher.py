@@ -1,17 +1,23 @@
 """Thumbnail fetcher service: batch-fetch thumbnails for ads missing them.
 
-3-stage fallback strategy:
+Multi-stage fallback strategy:
 1. Build snapshot_url from external_id if missing
-2. Try Meta Graph API ad_snapshot_url (authenticated URL → higher OGP success rate)
+2. Try Meta Graph API ad_snapshot_url (authenticated URL)
 3. Use MediaExtractor to extract thumbnail from snapshot URL (HTTP+BS4 → Playwright)
+4. Page profile picture (public Facebook API)
+5. Destination URL og:image (LP landing page)
+6. ads_archive API search by advertiser name → page_id → profile picture
+7. Google Favicon as last resort
 """
 
 import asyncio
 import time
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import structlog
+from bs4 import BeautifulSoup
 
 from app.models.ad import Ad
 from app.services.media_extraction import MediaExtractor
@@ -94,10 +100,6 @@ class ThumbnailFetcher:
         if ad.snapshot_url and ad.snapshot_url != api_snapshot_url:
             urls_to_try.append(ad.snapshot_url)
 
-        if not urls_to_try:
-            logger.info("thumbnail_no_url", ad_id=ad.id)
-            return "failed"
-
         for target_url in urls_to_try:
             extracted = self._extract_thumbnail(target_url)
             if extracted and extracted.image_urls:
@@ -106,12 +108,53 @@ class ThumbnailFetcher:
                 ad.media_extraction_status = "completed"
                 if not ad.creative_type or ad.creative_type == "unknown":
                     ad.creative_type = extracted.creative_type
+                # Also save extracted text if missing
+                if extracted.ad_text and not ad.description:
+                    ad.description = extracted.ad_text
+                if extracted.ad_title and not ad.title:
+                    ad.title = extracted.ad_title
                 logger.info(
                     "thumbnail_extracted",
                     ad_id=ad.id,
                     url=ad.thumbnail_url[:80] if ad.thumbnail_url else "",
                 )
                 return "success"
+
+        # Step 4: Fallback to page profile picture
+        page_pic = self._get_page_profile_picture(ad)
+        if page_pic:
+            ad.thumbnail_url = page_pic
+            ad.image_url = ad.image_url or page_pic
+            ad.media_extraction_status = "enriched"
+            logger.info("thumbnail_from_page_picture", ad_id=ad.id)
+            return "success"
+
+        # Step 5: Destination URL og:image (LP landing page)
+        og_image = self._get_destination_og_image(ad)
+        if og_image:
+            ad.thumbnail_url = og_image
+            ad.image_url = ad.image_url or og_image
+            ad.media_extraction_status = "enriched"
+            logger.info("thumbnail_from_og_image", ad_id=ad.id)
+            return "success"
+
+        # Step 6: ads_archive API search by advertiser name → page profile pic
+        api_pic = self._search_advertiser_page_pic(ad)
+        if api_pic:
+            ad.thumbnail_url = api_pic
+            ad.image_url = ad.image_url or api_pic
+            ad.media_extraction_status = "enriched"
+            logger.info("thumbnail_from_api_search", ad_id=ad.id)
+            return "success"
+
+        # Step 7: Google Favicon as last resort
+        favicon = self._get_favicon(ad)
+        if favicon:
+            ad.thumbnail_url = favicon
+            ad.image_url = ad.image_url or favicon
+            ad.media_extraction_status = "enriched"
+            logger.info("thumbnail_from_favicon", ad_id=ad.id)
+            return "success"
 
         ad.media_extraction_status = "failed"
         return "failed"
@@ -158,3 +201,114 @@ class ThumbnailFetcher:
                 error=str(e),
             )
             return None
+
+    def _get_destination_og_image(self, ad: "Ad") -> Optional[str]:
+        """Extract og:image from the ad's destination URL (landing page)."""
+        metadata = ad.ad_metadata or {}
+        dest_url = ad.destination_url or metadata.get("destination_url")
+        if not dest_url or not dest_url.startswith("http"):
+            return None
+
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            with httpx.Client(timeout=8.0, follow_redirects=True, headers=headers) as client:
+                resp = client.get(dest_url)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "html.parser")
+                    og_img = soup.find("meta", property="og:image")
+                    if og_img and og_img.get("content"):
+                        img_url = og_img["content"]
+                        if img_url.startswith("http"):
+                            return img_url
+        except Exception as e:
+            logger.debug("og_image_failed", ad_id=ad.id, error=str(e)[:60])
+        return None
+
+    def _search_advertiser_page_pic(self, ad: "Ad") -> Optional[str]:
+        """Search ads_archive by advertiser name → get page_id → profile picture."""
+        if not self.meta_access_token or not ad.advertiser_name:
+            return None
+
+        search_name = ad.advertiser_name.split(" スポンサー")[0].strip()
+        api_url = "https://graph.facebook.com/v25.0/ads_archive"
+        params = {
+            "search_terms": search_name,
+            "ad_reached_countries": '["JP"]',
+            "fields": "id,page_id,page_name",
+            "limit": 5,
+            "access_token": self.meta_access_token,
+        }
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(api_url, params=params)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json().get("data", [])
+                if not data:
+                    return None
+
+                # Prefer exact ad match, otherwise use first result
+                page_id = None
+                for item in data:
+                    if item.get("id") == ad.external_id:
+                        page_id = item.get("page_id")
+                        break
+                if not page_id:
+                    page_id = data[0].get("page_id")
+
+                if page_id:
+                    pic_url = f"https://graph.facebook.com/{page_id}/picture?type=large&redirect=false"
+                    pic_resp = client.get(pic_url)
+                    if pic_resp.status_code == 200:
+                        return pic_resp.json().get("data", {}).get("url")
+        except Exception as e:
+            logger.debug("api_search_failed", ad_id=ad.id, error=str(e)[:60])
+        return None
+
+    def _get_favicon(self, ad: "Ad") -> Optional[str]:
+        """Get Google Favicon for the ad's destination domain as last resort."""
+        metadata = ad.ad_metadata or {}
+        dest_url = ad.destination_url or metadata.get("destination_url", "")
+        display_url = metadata.get("display_url", "")
+        if display_url and not display_url.startswith("http"):
+            display_url = "https://" + display_url
+
+        for url in [dest_url, display_url]:
+            if not url or not url.startswith("http"):
+                continue
+            try:
+                domain = urlparse(url).netloc
+                if domain:
+                    return f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            except Exception:
+                pass
+        return None
+
+    def _get_page_profile_picture(self, ad: "Ad") -> Optional[str]:
+        """Get the Facebook page's profile picture as thumbnail fallback.
+
+        Works without special permissions — public endpoint.
+        """
+        metadata = ad.ad_metadata or {}
+        page_id = metadata.get("page_id")
+        if not page_id:
+            return None
+
+        # Facebook's public page picture endpoint — do NOT attach access_token
+        # (some tokens cause 403 on this endpoint; public access works fine)
+        url = f"https://graph.facebook.com/{page_id}/picture?type=large&redirect=false"
+
+        try:
+            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                data = response.json()
+                pic_url = data.get("data", {}).get("url")
+                if pic_url:
+                    logger.info("page_profile_picture", ad_id=ad.id, page_id=page_id)
+                    return pic_url
+        except Exception as e:
+            logger.warning("page_picture_failed", ad_id=ad.id, page_id=page_id, error=str(e))
+
+        return None

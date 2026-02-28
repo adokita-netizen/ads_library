@@ -24,6 +24,7 @@ def _get_task_map() -> dict:
         analyze_own_lp_content_task,
         batch_crawl_lps_task,
     )
+    from app.tasks.media_tasks import enrich_ad_creative_task, extract_media_task
     from app.tasks.generation_tasks import generate_script_task, generate_copy_task
     from app.tasks.ranking_tasks import compute_rankings_task
     from app.tasks.alert_tasks import detect_alerts_task
@@ -38,6 +39,8 @@ def _get_task_map() -> dict:
         "detect_alerts": detect_alerts_task,
         "generate_script": generate_script_task,
         "generate_copy": generate_copy_task,
+        "enrich_ad_creative": enrich_ad_creative_task,
+        "extract_media": extract_media_task,
     }
 
 

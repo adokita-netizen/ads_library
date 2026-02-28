@@ -43,6 +43,8 @@ class AdResponse(BaseModel):
     view_count: Optional[int] = None
     spend: Optional[float] = None
     impressions: Optional[int] = None
+    cumulative_views: Optional[int] = None
+    cumulative_spend: Optional[float] = None
     reach: Optional[int] = None
     cpc: Optional[float] = None
     cpm: Optional[float] = None

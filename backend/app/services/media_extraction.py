@@ -22,6 +22,8 @@ class ExtractedMedia:
     image_urls: list[str] = field(default_factory=list)
     video_urls: list[str] = field(default_factory=list)
     thumbnail_url: Optional[str] = None
+    ad_text: Optional[str] = None  # extracted ad body text
+    ad_title: Optional[str] = None  # extracted ad title
 
 
 class MediaExtractor:
@@ -189,5 +191,28 @@ class MediaExtractor:
         # Set thumbnail from og:image if not set
         if not result.thumbnail_url and result.image_urls:
             result.thumbnail_url = result.image_urls[0]
+
+        # ── Text extraction ──────────────────────────────────────
+        # 1. og:description → ad body text
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            result.ad_text = og_desc["content"].strip()
+
+        # 2. og:title → ad title
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            result.ad_title = og_title["content"].strip()
+
+        # 3. Fallback: extract visible body text if OG tags missing
+        if not result.ad_text:
+            body = soup.find("body")
+            if body:
+                # Remove non-content elements
+                for tag in body.find_all(["script", "style", "nav", "header", "footer", "noscript"]):
+                    tag.decompose()
+                visible_text = body.get_text(separator="\n", strip=True)
+                # Take first meaningful chunk (up to 2000 chars)
+                if visible_text and len(visible_text) > 20:
+                    result.ad_text = visible_text[:2000]
 
         return result

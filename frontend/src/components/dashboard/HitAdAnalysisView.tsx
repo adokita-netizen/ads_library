@@ -31,6 +31,8 @@ interface HitAd {
   published_date: string;
   management_id: string;
   ad_url: string;
+  description: string;
+  title: string;
 }
 
 interface GenreSummary {
@@ -238,7 +240,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 </thead>
                 <tbody>
                   {hitAds.map((ad) => {
-                    const thumbSrc = ad.thumbnail || ad.image_url || ad.snapshot_url || "";
+                    const thumbSrc = ad.thumbnail || ad.image_url || "";
                     const pLabel = platformLabels[ad.platform] || ad.platform;
                     const pColor = platformColors[ad.platform] || "bg-gray-400";
                     return (
@@ -268,7 +270,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                             </div>
                           )}
                         </td>
-                        {/* Product Name + HIT badge */}
+                        {/* Product Name + HIT badge + description */}
                         <td>
                           <div className="flex items-center gap-1.5">
                             <span className="text-[13px] font-medium text-gray-900 truncate max-w-[200px]">
@@ -280,6 +282,11 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                               </span>
                             )}
                           </div>
+                          {ad.description && (
+                            <p className="text-[10px] text-gray-400 truncate max-w-[240px] mt-0.5" title={ad.description}>
+                              {ad.description}
+                            </p>
+                          )}
                         </td>
                         {/* Advertiser */}
                         <td>

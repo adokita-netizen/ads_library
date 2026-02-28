@@ -159,7 +159,9 @@ def crawl_ads_task(
 
             session.commit()
 
-            # Dispatch media extraction for ads that need it
+            # Dispatch lightweight enrichment for ads that need it
+            # enrich_ad_creative (LIGHT → Lambda) tries HTTP+BS4 first,
+            # then escalates to extract_media (HEAVY → ECS+Playwright) on failure.
             from app.tasks.dispatcher import dispatch_task
             ads_with_snapshot = session.query(Ad).filter(
                 Ad.media_extraction_status == "pending",
@@ -167,9 +169,14 @@ def crawl_ads_task(
             ).order_by(Ad.created_at.desc()).limit(saved_count).all()
             for ad_to_extract in ads_with_snapshot:
                 try:
-                    dispatch_task("extract_media", ad_id=ad_to_extract.id)
+                    dispatch_task("enrich_ad_creative", ad_id=ad_to_extract.id)
                 except Exception as e:
-                    logger.warning("media_extraction_dispatch_failed", ad_id=ad_to_extract.id, error=str(e))
+                    logger.warning(
+                        "enrich_dispatch_failed_trying_inline",
+                        ad_id=ad_to_extract.id, error=str(e),
+                    )
+                    # Inline fallback: try HTTP+BS4 enrichment directly
+                    _inline_enrich(ad_to_extract, session)
 
             # Dispatch thumbnail download for ads that have thumbnail_url but skipped extraction
             ads_needing_thumb = session.query(Ad).filter(
@@ -327,6 +334,110 @@ async def _crawl_platforms(
         return results
     finally:
         await manager.close_all()
+
+
+def _inline_enrich(ad: Ad, session) -> None:
+    """Inline HTTP+BS4 enrichment fallback when task dispatch fails.
+
+    Extracts og:image, og:title, og:description, and also parses
+    <img>/<video> elements from render_ad HTML for better thumbnails.
+    """
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+
+        url = ad.snapshot_url
+        if not url:
+            return
+
+        with httpx.Client(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/121.0.0.0 Safari/537.36"
+                )
+            },
+        ) as client:
+            response = client.get(url)
+            response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Extract og:image
+        og_image = soup.find("meta", property="og:image")
+        if og_image and og_image.get("content"):
+            img_url = og_image["content"]
+            if img_url.startswith("http"):
+                if not ad.image_url:
+                    ad.image_url = img_url
+                if not ad.thumbnail_url:
+                    ad.thumbnail_url = img_url
+
+        # Extract og:description
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content") and not ad.description:
+            ad.description = og_desc["content"].strip()
+
+        # Extract og:title
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content") and not ad.title:
+            ad.title = og_title["content"].strip()
+
+        # Also parse <img> elements from render_ad HTML for better thumbnails
+        # render_ad pages often have the actual ad creative as large <img> elements
+        if not ad.thumbnail_url or "s200x200" in (ad.thumbnail_url or ""):
+            best_img = None
+            best_area = 0
+            for img_el in soup.find_all("img"):
+                src = img_el.get("src") or img_el.get("data-src") or ""
+                if not src.startswith("http"):
+                    continue
+                # Skip tracking pixels, icons, emojis
+                if any(skip in src.lower() for skip in [
+                    "pixel", "tracking", "1x1", "favicon", "emoji", "rsrc.php",
+                ]):
+                    continue
+                # Skip small images
+                w = int(img_el.get("width", "0") or "0")
+                h = int(img_el.get("height", "0") or "0")
+                if w > 0 and w < 80:
+                    continue
+                if h > 0 and h < 80:
+                    continue
+                area = w * h if w > 0 and h > 0 else 10000  # default area for unsized
+                if area > best_area:
+                    best_area = area
+                    best_img = src
+
+            if best_img:
+                ad.thumbnail_url = best_img
+                if not ad.image_url:
+                    ad.image_url = best_img
+
+        # Check for video poster
+        for video_el in soup.find_all("video"):
+            poster = video_el.get("poster")
+            if poster and poster.startswith("http"):
+                if not ad.thumbnail_url:
+                    ad.thumbnail_url = poster
+                if not ad.creative_type or ad.creative_type == "unknown":
+                    ad.creative_type = "video"
+                break
+
+        ad.media_extraction_status = "enriched"
+        session.commit()
+        logger.info("inline_enrich_completed", ad_id=ad.id)
+
+    except Exception as e:
+        logger.warning("inline_enrich_failed", ad_id=ad.id, error=str(e))
+        ad.media_extraction_status = "pending"
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
 
 
 def _map_platform(platform: str) -> AdPlatformEnum:

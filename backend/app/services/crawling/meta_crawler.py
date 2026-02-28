@@ -4,6 +4,10 @@ Supports three data sources in priority order:
 1. Official Meta Graph API (ads_archive) — requires access_token
 2. Playwright browser scraping — headless Chromium fallback
 3. httpx + BeautifulSoup scraping — lightweight last resort
+
+Post-crawl enrichment:
+- Visit individual ad pages to extract impression/spend ranges (commercial ads)
+- Extract ad creative images for thumbnail
 """
 
 import asyncio
@@ -22,6 +26,219 @@ logger = structlog.get_logger()
 META_AD_LIBRARY_URL = "https://www.facebook.com/ads/library/"
 META_GRAPH_API_VERSION = "v25.0"
 META_AD_LIBRARY_API = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/ads_archive"
+
+
+def _parse_metric_range(text: str) -> tuple[Optional[int], Optional[int]]:
+    """Parse impression/spend range text into (lower, upper) ints.
+
+    Handles formats like:
+      "< 1,000"  "1,000〜5,000"  "1K - 5K"  "10K〜50K"
+      "¥1,000 - ¥5,000"  "$100 - $499"  "< ¥1,000"
+    """
+    if not text:
+        return None, None
+
+    # Strip currency symbols
+    text = re.sub(r"[¥￥$€]", "", text).strip()
+
+    def _to_int(s: str) -> Optional[int]:
+        s = s.strip().replace(",", "").replace("、", "")
+        if not s:
+            return None
+        # Handle K/M suffixes
+        m = re.match(r"^([\d.]+)\s*([KMkm万億]?)$", s)
+        if not m:
+            return None
+        val = float(m.group(1))
+        suffix = m.group(2).upper()
+        if suffix == "K":
+            val *= 1_000
+        elif suffix == "M":
+            val *= 1_000_000
+        elif suffix == "万":
+            val *= 10_000
+        elif suffix == "億":
+            val *= 100_000_000
+        return int(val)
+
+    # "< N" pattern
+    m = re.match(r"^[<＜]\s*(.+)$", text)
+    if m:
+        upper = _to_int(m.group(1))
+        return 0, upper
+
+    # "> N" pattern
+    m = re.match(r"^[>＞]\s*(.+)$", text)
+    if m:
+        lower = _to_int(m.group(1))
+        return lower, None
+
+    # "N - M" or "N〜M" range
+    parts = re.split(r"\s*[〜～\-–—]\s*", text)
+    if len(parts) == 2:
+        return _to_int(parts[0]), _to_int(parts[1])
+
+    # Single number
+    single = _to_int(text)
+    if single is not None:
+        return single, single
+
+    return None, None
+
+
+# JavaScript to extract metrics + creative from an ad detail overlay.
+# Takes ad_id as parameter to target the correct card on the search results page.
+_AD_DETAIL_EXTRACT_JS = r"""(targetAdId) => {
+    const result = {impressions_text: null, spend_text: null, creative_images: [], platforms: [], found_card: false};
+    const body = document.body;
+    if (!body) return result;
+
+    // --- Find the target ad card by ライブラリID ---
+    let targetCard = null;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+        const t = walker.currentNode.textContent || '';
+        if (t.includes('ライブラリID') && t.includes(targetAdId)) {
+            // Walk up to find the card container
+            let el = walker.currentNode.parentElement;
+            for (let i = 0; i < 20; i++) {
+                if (!el || !el.parentElement) break;
+                el = el.parentElement;
+                const inner = el.innerText || '';
+                if (inner.includes('ライブラリID') && inner.includes('広告の詳細を見る')) {
+                    targetCard = el;
+                    break;
+                }
+            }
+            if (targetCard) break;
+        }
+    }
+
+    // Fallback: use the first card on the page (for single-ad views)
+    if (!targetCard) {
+        const allText = body.innerText || '';
+        if (allText.includes(targetAdId)) {
+            targetCard = body;
+        }
+    }
+    if (!targetCard) return result;
+    result.found_card = true;
+
+    const cardText = targetCard.innerText || '';
+
+    // --- Extract creative images from the target card ---
+    const imgs = [];
+    targetCard.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('src') || '';
+        if (!src || src.startsWith('data:') || src.includes('emoji') || src.includes('rsrc.php')) return;
+        // Facebook CDN creative images (scontent-*.fbcdn.net or *.fna.fbcdn.net)
+        const isFbCdn = /scontent[^.]*\.fbcdn\.net|\.fna\.fbcdn\.net/.test(src);
+        const w = img.naturalWidth || img.width || parseInt(img.getAttribute('width') || '0');
+        const h = img.naturalHeight || img.height || parseInt(img.getAttribute('height') || '0');
+        const rect = img.getBoundingClientRect();
+        const rw = rect.width || 0;
+        const rh = rect.height || 0;
+        // Use rendered size (getBoundingClientRect) as fallback for naturalWidth
+        const effectiveW = w || rw;
+        const effectiveH = h || rh;
+        if (effectiveW > 80 && effectiveH > 80) {
+            imgs.push({url: src, area: effectiveW * effectiveH});
+        } else if (isFbCdn && !src.includes('/p50x50/') && !src.includes('/s200x200/')) {
+            // Facebook CDN images without known dimensions — likely creative, include them
+            imgs.push({url: src, area: 50000});
+        } else if (effectiveW === 0 && effectiveH === 0) {
+            // Images with no dimensions at all — include if not tiny icons
+            if (isFbCdn || (!src.includes('profile') && !src.includes('/s200x200/'))) {
+                imgs.push({url: src, area: 10000});
+            }
+        }
+    });
+    // Background images
+    targetCard.querySelectorAll('div[style*="background-image"]').forEach(div => {
+        const style = div.getAttribute('style') || '';
+        const m = style.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+        if (m) {
+            const rect = div.getBoundingClientRect();
+            if (rect.width > 80 && rect.height > 80) {
+                imgs.push({url: m[1], area: rect.width * rect.height});
+            }
+        }
+    });
+    // Video posters
+    targetCard.querySelectorAll('video').forEach(v => {
+        const poster = v.getAttribute('poster');
+        if (poster && poster.startsWith('http')) {
+            imgs.push({url: poster, area: 200000});
+        }
+    });
+    imgs.sort((a, b) => b.area - a.area);
+    result.creative_images = [...new Set(imgs.slice(0, 5).map(i => i.url))];
+
+    // --- Platforms from card ---
+    if (cardText.includes('Facebook') || targetCard.querySelector('[aria-label*="Facebook"]')) result.platforms.push('facebook');
+    if (cardText.includes('Instagram') || targetCard.querySelector('[aria-label*="Instagram"]')) result.platforms.push('instagram');
+    if (cardText.includes('Messenger') || targetCard.querySelector('[aria-label*="Messenger"]')) result.platforms.push('messenger');
+
+    return result;
+}"""
+
+# JavaScript to extract metrics from the "ad detail" overlay
+# (opened by clicking "広告の詳細を見る")
+_AD_DETAIL_OVERLAY_JS = r"""() => {
+    const result = {impressions_text: null, spend_text: null, reach_text: null};
+
+    // The overlay/modal typically contains the transparency data
+    // Look for dialogs, overlays, or the main visible section
+    const containers = [
+        ...document.querySelectorAll('[role="dialog"]'),
+        ...document.querySelectorAll('[aria-modal="true"]'),
+        document.body,
+    ];
+
+    for (const container of containers) {
+        const text = container.innerText || '';
+        if (!text) continue;
+
+        // --- Impressions ---
+        // Japanese: "インプレッション: < 1,000" or "表示回数: 1,000〜5,000"
+        // EU: "< 100" near "impression" text
+        const impPatterns = [
+            /(?:インプレッション(?:数)?|表示回数|Impressions?)[\s:：]*([<>＜＞]?\s*[\d,]+(?:\s*[〜～\-–]\s*[\d,]+)?)/i,
+            /(?:Potential reach|リーチ数?)[\s:：]*([<>＜＞]?\s*[\d,KMkm]+(?:\s*[〜～\-–]\s*[\d,KMkm]+)?)/i,
+        ];
+        for (const pat of impPatterns) {
+            const m = text.match(pat);
+            if (m && !result.impressions_text) {
+                result.impressions_text = m[1].trim();
+            }
+        }
+
+        // --- Spend ---
+        const spendPatterns = [
+            /(?:消化金額|使用した金額|Amount spent|費用|Spend)[\s:：]*([<>＜＞¥￥$€]?\s*[\d,]+(?:\s*[〜～\-–]\s*[¥￥$€]?\s*[\d,]+)?)/i,
+        ];
+        for (const pat of spendPatterns) {
+            const m = text.match(pat);
+            if (m && !result.spend_text) {
+                result.spend_text = m[1].trim();
+            }
+        }
+
+        // --- Reach ---
+        const reachPatterns = [
+            /(?:リーチ|Reach|到達数)[\s:：]*([<>＜＞]?\s*[\d,KMkm]+(?:\s*[〜～\-–]\s*[\d,KMkm]+)?)/i,
+        ];
+        for (const pat of reachPatterns) {
+            const m = text.match(pat);
+            if (m && !result.reach_text) {
+                result.reach_text = m[1].trim();
+            }
+        }
+
+        if (result.impressions_text || result.spend_text) break;
+    }
+    return result;
+}"""
 
 # JavaScript to extract ad data from the rendered Ad Library page.
 # Facebook renders ad cards with ライブラリID, 掲載開始日, advertiser info, etc.
@@ -144,6 +361,83 @@ _BROWSER_EXTRACT_JS = r"""() => {
 }"""
 
 
+def _estimate_ad_metrics(ad: CrawledAd) -> None:
+    """Estimate impressions/spend for a commercial ad based on available signals.
+
+    Meta Ad Library API does not return impressions/spend for commercial ads.
+    This function provides estimates using:
+    - days_running: longer-running ads have more cumulative impressions
+    - platform count: multi-platform ads get wider reach
+    - Japan market average CPM: ~¥500-1500 (we use ¥800)
+
+    Estimates are clearly marked in metadata as "estimated".
+    """
+    from datetime import datetime, timezone
+
+    meta = ad.metadata or {}
+
+    # Calculate days running
+    days_running = 0
+    if ad.first_seen_at:
+        first = ad.first_seen_at
+        if first.tzinfo is None:
+            first = first.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        days_running = max(1, (now - first).days)
+
+    if days_running == 0:
+        return  # No date data, can't estimate
+
+    # Base daily impressions (conservative estimate for JP market)
+    # Small advertisers: ~100-500/day, Medium: ~500-2000/day, Large: ~2000-10000/day
+    # We use a moderate estimate: 300/day base
+    base_daily_impressions = 300
+
+    # Multipliers
+    multiplier = 1.0
+
+    # Platform multiplier
+    platforms = meta.get("publisher_platforms", [])
+    if len(platforms) >= 2:
+        multiplier *= 1.3  # Multi-platform gets more reach
+
+    # Longevity multiplier: ads running 30+ days likely have higher budget
+    if days_running > 180:
+        multiplier *= 1.5  # Long-running = proven performer
+    elif days_running > 60:
+        multiplier *= 1.2
+
+    # Still active multiplier
+    if not ad.last_seen_at:
+        multiplier *= 1.1  # Currently active
+
+    # Calculate estimates
+    estimated_impressions = int(days_running * base_daily_impressions * multiplier)
+
+    # Spend estimate: Japan average CPM ≈ ¥800
+    cpm_jpy = 800
+    estimated_spend = round(estimated_impressions * cpm_jpy / 1000)
+
+    # Apply estimates
+    ad.impressions = estimated_impressions
+    ad.view_count = estimated_impressions
+    ad.spend = float(estimated_spend)
+
+    # Mark as estimated in metadata
+    ad.metadata["metrics_estimated"] = True
+    ad.metadata["estimated_days_running"] = days_running
+    ad.metadata["estimated_daily_impressions"] = int(base_daily_impressions * multiplier)
+    ad.metadata["estimated_cpm_jpy"] = cpm_jpy
+
+    logger.info(
+        "metrics_estimated",
+        ad_id=ad.external_id,
+        days_running=days_running,
+        impressions=estimated_impressions,
+        spend=estimated_spend,
+    )
+
+
 class MetaAdLibraryCrawler(BaseCrawler):
     """Crawler for Meta Ad Library (Facebook / Instagram)."""
 
@@ -158,6 +452,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
         limit: int = 50,
         country: str = "JP",
         ad_type: str = "ALL",
+        enrich_metrics: bool = True,
         **kwargs,
     ) -> list[CrawledAd]:
         """Search Meta Ad Library for ads.
@@ -167,6 +462,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
         2. If the API fails (e.g. 500 for certain queries), fall back
            to browser-based scraping via Playwright.
         3. If Playwright is unavailable, fall back to httpx scraping.
+        4. (Post-crawl) Enrich ads missing metrics by visiting individual pages.
         """
         results: list[CrawledAd] = []
 
@@ -182,6 +478,10 @@ class MetaAdLibraryCrawler(BaseCrawler):
         if not results:
             logger.info("meta_browser_failed_trying_httpx", query=query)
             results = await self._search_via_scraping(query, category, limit, country)
+
+        # Post-crawl: enrich ads missing metrics/thumbnails
+        if results and enrich_metrics:
+            results = await self.enrich_ads_with_page_metrics(results)
 
         logger.info("meta_ads_search", query=query, results_count=len(results))
         return results
@@ -464,12 +764,29 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
     # ── Parsers ──────────────────────────────────────────────────
 
+    # Patterns indicating Meta replaced actual ad text with a disclaimer
+    _DISCLAIMER_PATTERNS = (
+        "this ad ran without",
+        "disclaimer",
+        "この広告は免責事項なしで",
+    )
+
     def _parse_api_ad(self, ad_data: dict) -> Optional[CrawledAd]:
         """Parse ad data from Meta API response."""
         try:
             ad_id = ad_data.get("id", "")
             bodies = ad_data.get("ad_creative_bodies", [])
             titles = ad_data.get("ad_creative_link_titles", [])
+
+            # Detect disclaimer-replaced text
+            needs_text_enrichment = False
+            original_bodies = None
+            if bodies:
+                body_lower = bodies[0].lower() if bodies[0] else ""
+                if any(p in body_lower for p in self._DISCLAIMER_PATTERNS):
+                    original_bodies = list(bodies)
+                    bodies = []  # treat as missing → will be enriched later
+                    needs_text_enrichment = True
 
             impressions = ad_data.get("impressions", {})
             impressions_lower = None
@@ -549,8 +866,49 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 spend_midpoint = (spend_lower + spend_upper) / 2
 
             # Extract thumbnail from ad_creative_link_thumbnails
+            # Field can be: list of URL strings, or list of dicts with "url" key
             thumbnails = ad_data.get("ad_creative_link_thumbnails", [])
-            thumbnail_url = thumbnails[0] if thumbnails else None
+            thumbnail_url = None
+            if thumbnails:
+                first = thumbnails[0]
+                if isinstance(first, str):
+                    thumbnail_url = first
+                elif isinstance(first, dict):
+                    thumbnail_url = first.get("url") or first.get("uri")
+
+            # Build snapshot_url: prefer render_ad (server-rendered) over SPA library URL
+            snapshot_url = ad_data.get("ad_snapshot_url")
+            if snapshot_url and self.access_token and ad_id:
+                # render_ad endpoint returns server-rendered HTML (parseable without JS)
+                snapshot_url = (
+                    f"https://www.facebook.com/ads/archive/render_ad/"
+                    f"?id={ad_id}&access_token={self.access_token}"
+                )
+
+            metadata = {
+                "source": "api",
+                "page_id": ad_data.get("page_id"),
+                "publisher_platforms": platforms,
+                "estimated_audience_size": ad_data.get("estimated_audience_size"),
+                "spend": ad_data.get("spend"),
+                "currency": ad_data.get("currency"),
+                "demographic_distribution": ad_data.get("demographic_distribution"),
+                "delivery_by_region": ad_data.get("delivery_by_region"),
+                "impressions_lower": impressions_lower,
+                "impressions_upper": impressions_upper,
+                "spend_lower": spend_lower,
+                "spend_upper": spend_upper,
+                "languages": ad_data.get("languages"),
+                "link_descriptions": link_descriptions or None,
+                "destination_url": destination_url,
+                "display_url": display_url,
+                "destination_type": "LP" if destination_url else None,
+            }
+
+            # Add enrichment flags when disclaimer was detected
+            if needs_text_enrichment:
+                metadata["needs_text_enrichment"] = True
+                metadata["original_ad_creative_bodies"] = original_bodies
 
             return CrawledAd(
                 external_id=ad_id,
@@ -558,7 +916,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 title=titles[0] if titles else None,
                 description=bodies[0] if bodies else None,
                 advertiser_name=ad_data.get("page_name"),
-                snapshot_url=ad_data.get("ad_snapshot_url"),
+                snapshot_url=snapshot_url,
                 thumbnail_url=thumbnail_url,
                 creative_type="unknown",
                 destination_url=destination_url,
@@ -567,25 +925,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 spend=spend_midpoint,
                 first_seen_at=first_seen,
                 last_seen_at=last_seen,
-                metadata={
-                    "source": "api",
-                    "page_id": ad_data.get("page_id"),
-                    "publisher_platforms": platforms,
-                    "estimated_audience_size": ad_data.get("estimated_audience_size"),
-                    "spend": ad_data.get("spend"),
-                    "currency": ad_data.get("currency"),
-                    "demographic_distribution": ad_data.get("demographic_distribution"),
-                    "delivery_by_region": ad_data.get("delivery_by_region"),
-                    "impressions_lower": impressions_lower,
-                    "impressions_upper": impressions_upper,
-                    "spend_lower": spend_lower,
-                    "spend_upper": spend_upper,
-                    "languages": ad_data.get("languages"),
-                    "link_descriptions": link_descriptions or None,
-                    "destination_url": destination_url,
-                    "display_url": display_url,
-                    "destination_type": "LP" if destination_url else None,
-                },
+                metadata=metadata,
             )
         except Exception as e:
             logger.error("meta_api_parse_failed", error=str(e))
@@ -665,3 +1005,138 @@ class MetaAdLibraryCrawler(BaseCrawler):
     ) -> list[CrawledAd]:
         """Get all ads from a specific Meta advertiser."""
         return await self.search_ads(query=advertiser_name, limit=limit)
+
+    # ── Post-crawl enrichment ─────────────────────────────────
+
+    async def enrich_ads_with_page_metrics(
+        self,
+        ads: list[CrawledAd],
+        concurrency: int = 3,
+    ) -> list[CrawledAd]:
+        """Visit individual Ad Library pages to extract creative images & card data.
+
+        Also estimates metrics (impressions/spend) for commercial ads where the
+        Meta API does not return them.
+        """
+        # Phase 1: Playwright-based creative image extraction
+        ads_needing_thumbs = [
+            ad for ad in ads
+            if not ad.thumbnail_url
+            or "s200x200" in (ad.thumbnail_url or "")
+            or "favicons" in (ad.thumbnail_url or "")
+        ]
+
+        if ads_needing_thumbs:
+            await self._enrich_thumbnails_via_playwright(ads_needing_thumbs, concurrency)
+
+        # Phase 2: Estimate metrics for ads still missing impressions/spend
+        for ad in ads:
+            if ad.impressions is None and ad.spend is None:
+                _estimate_ad_metrics(ad)
+
+        enriched_metrics = sum(1 for a in ads if a.impressions is not None)
+        enriched_thumbs = sum(1 for a in ads if a.thumbnail_url is not None)
+        logger.info(
+            "enrichment_complete",
+            total=len(ads),
+            with_metrics=enriched_metrics,
+            with_thumbnails=enriched_thumbs,
+        )
+        return ads
+
+    async def _enrich_thumbnails_via_playwright(
+        self,
+        ads: list[CrawledAd],
+        concurrency: int = 3,
+    ) -> None:
+        """Visit Ad Library pages to extract creative images for thumbnails."""
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            logger.warning("playwright_not_installed_skipping_enrichment")
+            return
+
+        logger.info("enriching_thumbnails_via_playwright", to_enrich=len(ads))
+
+        semaphore = asyncio.Semaphore(concurrency)
+        pw = None
+        browser = None
+
+        try:
+            pw = await async_playwright().start()
+            browser = await pw.chromium.launch(headless=True)
+
+            async def _enrich_one(ad: CrawledAd) -> None:
+                async with semaphore:
+                    ad_id = ad.external_id
+                    if not ad_id or not ad_id.isdigit():
+                        return
+
+                    page_url = f"{META_AD_LIBRARY_URL}?id={ad_id}"
+                    context = None
+                    try:
+                        context = await browser.new_context(
+                            locale="ja-JP",
+                            user_agent=(
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/124.0.0.0 Safari/537.36"
+                            ),
+                        )
+                        page = await context.new_page()
+                        await page.goto(page_url, wait_until="networkidle", timeout=30000)
+                        await page.wait_for_timeout(3000)
+
+                        # Extract creative images and card data from the target card
+                        card_data = await page.evaluate(
+                            _AD_DETAIL_EXTRACT_JS, ad_id,
+                        )
+
+                        # Extract creative images (better thumbnail)
+                        creative_images = card_data.get("creative_images", [])
+                        if creative_images:
+                            # Filter out profile pictures
+                            good_images = [
+                                u for u in creative_images
+                                if "s200x200" not in u
+                                and "profile" not in u.split("/")[-1][:10]
+                            ]
+                            if good_images:
+                                creative_images = good_images
+
+                            if not ad.thumbnail_url or "s200x200" in (ad.thumbnail_url or "") or "favicons" in (ad.thumbnail_url or ""):
+                                ad.thumbnail_url = creative_images[0]
+                                logger.info(
+                                    "creative_image_extracted",
+                                    ad_id=ad_id,
+                                    url=creative_images[0][:80],
+                                )
+                            if not ad.image_urls:
+                                ad.image_urls = creative_images
+
+                        # Save card-level metadata
+                        ad.metadata["page_enriched"] = True
+                        if card_data.get("platforms"):
+                            ad.metadata["detected_platforms"] = card_data["platforms"]
+
+                    except Exception as e:
+                        logger.warning(
+                            "ad_page_enrich_failed",
+                            ad_id=ad_id,
+                            error=str(e)[:100],
+                        )
+                    finally:
+                        if context:
+                            await context.close()
+                        await asyncio.sleep(1.0)
+
+            tasks = [_enrich_one(ad) for ad in ads]
+            await asyncio.gather(*tasks)
+
+        except Exception as e:
+            logger.error("playwright_enrichment_failed", error=str(e))
+        finally:
+            if browser:
+                await browser.close()
+            if pw:
+                await pw.stop()

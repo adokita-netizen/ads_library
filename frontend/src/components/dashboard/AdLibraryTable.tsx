@@ -38,6 +38,7 @@ interface MockAd {
   platform: string;
   managementId: string;
   productName: string;
+  description: string;
   genre: string;
   destinationType: string;
   playIncrease: number;
@@ -103,6 +104,7 @@ function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<s
       platform: platformRaw || "youtube",
       managementId: (item.management_id as string) || `AD-${adId}`,
       productName: (item.product_name as string) || (item.title as string) || "不明",
+      description: (item.description as string) || "",
       genre: (item.genre as string) || (item.category as string) || "",
       destinationType: (item.destination_type as string) || "",
       playIncrease: (item.view_increase as number) || 0,
@@ -428,9 +430,9 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 {/* Thumbnail */}
                 <td>
                   <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
-                    {(ad.thumbnail || ad.imageUrl || ad.snapshotUrl) ? (
+                    {(ad.thumbnail || ad.imageUrl) ? (
                       <img
-                        src={ad.thumbnail || ad.imageUrl || ad.snapshotUrl}
+                        src={ad.thumbnail || ad.imageUrl}
                         alt=""
                         className="absolute inset-0 w-full h-full object-cover"
                         loading="lazy"
@@ -443,7 +445,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                     ) : null}
                     <div
                       className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
-                      style={{ display: (ad.thumbnail || ad.imageUrl || ad.snapshotUrl) ? "none" : "flex" }}
+                      style={{ display: (ad.thumbnail || ad.imageUrl) ? "none" : "flex" }}
                     >
                       {/* Creative type icon */}
                       {ad.creativeType === "image" ? (
@@ -476,9 +478,14 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 {/* Management ID */}
                 <td className="text-[11px] text-gray-400 font-mono">{ad.managementId}</td>
 
-                {/* Product Name */}
+                {/* Product Name + Description */}
                 <td>
                   <span className="text-[13px] font-medium text-gray-900">{ad.productName}</span>
+                  {ad.description && (
+                    <p className="text-[10px] text-gray-400 truncate max-w-[220px] mt-0.5" title={ad.description}>
+                      {ad.description}
+                    </p>
+                  )}
                 </td>
 
                 {/* Genre */}

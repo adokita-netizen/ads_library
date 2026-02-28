@@ -43,8 +43,7 @@ def _resolve_thumbnail_url(ad: Ad) -> str:
         return ad.thumbnail_url
     if ad.image_url:
         return ad.image_url
-    if ad.snapshot_url:
-        return ad.snapshot_url
+    # snapshot_url is an HTML page (not an image), so don't use it as thumbnail
     return ""
 
 
@@ -258,6 +257,8 @@ def get_product_rankings(
                     "snapshot_url": ad.snapshot_url or "",
                     "destination_url": metadata.get("destination_url", ""),
                     "destination_type": metadata.get("destination_type", ""),
+                    "description": ad.description or "",
+                    "title": ad.title or "",
                     "published_date": (
                         ad.first_seen_at.isoformat() if ad.first_seen_at else
                         ad.created_at.isoformat() if ad.created_at else ""
@@ -292,6 +293,8 @@ def get_product_rankings(
                 "snapshot_url": ad_info.get("snapshot_url", ""),
                 "destination_url": ad_info.get("destination_url", ""),
                 "destination_type": ad_info.get("destination_type", ""),
+                "description": ad_info.get("description", ""),
+                "title": ad_info.get("title", ""),
                 "published_date": ad_info.get("published_date", ""),
             })
 
@@ -411,6 +414,8 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "snapshot_url": ad.snapshot_url or "",
             "destination_url": metadata.get("destination_url", ""),
             "destination_type": metadata.get("destination_type", ""),
+            "description": ad.description or "",
+            "title": ad.title or "",
             "published_date": (
                 ad.first_seen_at.isoformat() if ad.first_seen_at else
                 ad.created_at.isoformat() if ad.created_at else ""
@@ -474,6 +479,8 @@ def get_hit_ads(
                 "snapshot_url": ad.snapshot_url if ad else "",
                 "destination_url": metadata.get("destination_url", ""),
                 "destination_type": metadata.get("destination_type", ""),
+                "description": (ad.description or "") if ad else "",
+                "title": (ad.title or "") if ad else "",
                 "like_count": ad.like_count if ad else 0,
                 "published_date": (
                     ad.first_seen_at.isoformat() if ad and ad.first_seen_at else
