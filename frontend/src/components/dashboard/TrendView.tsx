@@ -19,13 +19,40 @@ interface TrendItem {
   trendScore: number;
 }
 
+interface EarlyHitItem {
+  ad_id: number;
+  title?: string;
+  advertiser_name?: string;
+  platform?: string;
+  genre?: string;
+  momentum_score: number;
+  hit_probability: number;
+  growth_phase: string;
+  days_active?: number;
+  predicted_peak_spend?: number;
+  velocity?: {
+    view_1d: number;
+    view_7d: number;
+    spend_1d: number;
+    spend_7d: number;
+  };
+}
 
 const categoryOptions = genreOptions as { value: TrendCategory; label: string }[];
+
+const growthPhaseLabel: Record<string, { label: string; color: string }> = {
+  launch: { label: "ローンチ", color: "bg-blue-100 text-blue-700" },
+  growth: { label: "成長中", color: "bg-emerald-100 text-emerald-700" },
+  peak: { label: "ピーク", color: "bg-red-100 text-red-700" },
+  plateau: { label: "横ばい", color: "bg-amber-100 text-amber-700" },
+  decline: { label: "減少", color: "bg-gray-100 text-gray-500" },
+};
 
 export default function TrendView() {
   const [period, setPeriod] = useState<TrendPeriod>("daily");
   const [category, setCategory] = useState<TrendCategory>("all");
   const [trends, setTrends] = useState<TrendItem[]>([]);
+  const [earlyHits, setEarlyHits] = useState<EarlyHitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,27 +64,39 @@ export default function TrendView() {
       if (period) params.period = period;
       if (category !== "all") params.genre = category;
 
-      const data = await fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params });
-      const items = data?.items || data?.rankings || data?.results;
-      if (Array.isArray(items) && items.length > 0) {
-        const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
-          rank: (item.rank as number) || idx + 1,
-          productName: (item.product_name as string) || "不明",
-          platform: ((item.platform as string) || "").toLowerCase() || "youtube",
-          genre: (item.genre as string) || "",
-          change: (item.rank_change as number) || 0,
-          spendEstimate: (item.spend_increase as number) || 0,
-          playCount: (item.view_increase as number) || 0,
-          trendScore: (item.trend_score as number) || 0,
-        }));
-        setTrends(mapped);
-      } else {
-        setTrends([]);
+      const [rankData, earlyData] = await Promise.allSettled([
+        fetchApi<{ items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }>("/rankings/products", { params }),
+        fetchApi<{ items?: EarlyHitItem[]; candidates?: EarlyHitItem[] }>("/competitive/trends/early-hits", { params: { max_days_active: "14", min_momentum: "30" } }),
+      ]);
+
+      if (rankData.status === "fulfilled") {
+        const data = rankData.value;
+        const items = data?.items || data?.rankings || data?.results;
+        if (Array.isArray(items) && items.length > 0) {
+          const mapped: TrendItem[] = items.map((item: Record<string, unknown>, idx: number) => ({
+            rank: (item.rank as number) || idx + 1,
+            productName: (item.product_name as string) || "不明",
+            platform: ((item.platform as string) || "").toLowerCase() || "youtube",
+            genre: (item.genre as string) || "",
+            change: (item.rank_change as number) || 0,
+            spendEstimate: (item.spend_increase as number) || 0,
+            playCount: (item.view_increase as number) || 0,
+            trendScore: (item.trend_score as number) || 0,
+          }));
+          setTrends(mapped);
+        } else {
+          setTrends([]);
+        }
+      }
+
+      if (earlyData.status === "fulfilled") {
+        const data = earlyData.value;
+        const items = data?.items || data?.candidates || [];
+        setEarlyHits(Array.isArray(items) ? items.slice(0, 6) : []);
       }
     } catch (err) {
       console.error("Failed to fetch trends:", err);
       setError("データ取得に失敗しました。バックエンドが起動中の可能性があります。");
-      // Keep previous data on error
     } finally {
       setLoading(false);
     }
@@ -130,6 +169,75 @@ export default function TrendView() {
           </p>
         </div>
       </div>
+
+      {/* Emerging Trend Radar */}
+      {earlyHits.length > 0 && (
+        <div className="px-5 py-3 bg-[#f8f9fc] border-b border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4 text-[#4A7DFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+            </svg>
+            <h3 className="text-[13px] font-bold text-gray-900">注目の急上昇広告</h3>
+            <span className="text-[10px] text-gray-400">直近14日以内に急成長している広告を自動検出</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {earlyHits.map((hit) => {
+              const phase = growthPhaseLabel[hit.growth_phase] || growthPhaseLabel.launch;
+              return (
+                <div key={hit.ad_id} className="card px-4 py-3 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-gray-900 truncate" title={hit.title || ""}>
+                        {hit.title || "不明な広告"}
+                      </p>
+                      <p className="text-[10px] text-gray-400 truncate">{hit.advertiser_name || "-"}</p>
+                    </div>
+                    <span className={`badge text-[9px] shrink-0 ml-2 ${phase.color}`}>{phase.label}</span>
+                  </div>
+
+                  {/* Momentum meter */}
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-gray-400">モメンタム</span>
+                      <span className={`text-[11px] font-bold ${
+                        hit.momentum_score >= 80 ? "text-emerald-600" : hit.momentum_score >= 60 ? "text-[#4A7DFF]" : "text-amber-500"
+                      }`}>{Math.round(hit.momentum_score)}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          hit.momentum_score >= 80 ? "bg-emerald-500" : hit.momentum_score >= 60 ? "bg-[#4A7DFF]" : "bg-amber-400"
+                        }`}
+                        style={{ width: `${Math.min(hit.momentum_score, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="flex items-center justify-between text-[10px]">
+                    <div className="flex items-center gap-2">
+                      {hit.platform && (
+                        <span className={`platform-icon ${platformColors[hit.platform] || ""} text-[8px]`}>
+                          {platformLabels[hit.platform] || hit.platform}
+                        </span>
+                      )}
+                      {hit.days_active != null && (
+                        <span className="text-gray-400">{hit.days_active}日目</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400">HIT確率</span>
+                      <span className={`font-bold ${hit.hit_probability >= 70 ? "text-red-500" : hit.hit_probability >= 40 ? "text-amber-500" : "text-gray-500"}`}>
+                        {Math.round(hit.hit_probability)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Error Banner */}
       {error && (

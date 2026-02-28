@@ -53,8 +53,29 @@ export default function DashboardView() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+      <div className="space-y-6 p-6">
+        {/* B10: Skeleton loading */}
+        <div>
+          <div className="h-7 bg-gray-200 rounded w-48 mb-2 animate-pulse" />
+          <div className="h-4 bg-gray-100 rounded w-72 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card animate-pulse">
+              <div className="h-3.5 bg-gray-200 rounded w-20 mb-2" />
+              <div className="h-8 bg-gray-200 rounded w-24 mb-1" />
+              <div className="h-3 bg-gray-100 rounded w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="card animate-pulse">
+              <div className="h-5 bg-gray-200 rounded w-36 mb-4" />
+              <div className="h-[300px] bg-gray-100 rounded" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

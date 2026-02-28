@@ -49,6 +49,9 @@ class AdDailyMetrics(Base):
     engagement_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     ctr: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Estimation confidence: "real" / "audience_estimated" / "cpm_estimated"
+    confidence_level: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
     # Classification (denormalized for fast ranking queries)
     genre: Mapped[str | None] = mapped_column(String(100), nullable=True)
     product_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

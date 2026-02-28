@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     aws_s3_bucket: str = ""
     aws_region: str = "ap-northeast-1"
 
+    # AWS CloudFront CDN (optional, for media serving)
+    aws_cloudfront_domain: str = ""
+    aws_cloudfront_enabled: bool = False
+
     # Task backend: "celery" (local dev) or "sqs" (AWS)
     task_backend: str = "celery"
     sqs_heavy_queue_url: str = ""

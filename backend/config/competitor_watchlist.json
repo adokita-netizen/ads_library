@@ -1,0 +1,9 @@
+{
+  "_description": "Competitor watchlist for tracking new ads from specific advertisers. Add advertiser names to the 'watchlist' array. When new ads from these advertisers appear, they will be flagged in ad_metadata.",
+  "watchlist": [],
+  "alert_settings": {
+    "flag_new_ads": true,
+    "metadata_key": "competitor_alert",
+    "enabled": true
+  }
+}

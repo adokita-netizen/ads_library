@@ -417,12 +417,25 @@ def _inline_enrich(ad: Ad, session) -> None:
                 if not ad.image_url:
                     ad.image_url = best_img
 
-        # Check for video poster
+        # Check for <video> elements — extract src/poster
         for video_el in soup.find_all("video"):
+            # Extract video source URL
+            src = video_el.get("src")
+            if src and src.startswith("http") and not ad.video_url:
+                ad.video_url = src
+            # Also check <source> children
+            if not ad.video_url:
+                for source_el in video_el.find_all("source"):
+                    s = source_el.get("src")
+                    if s and s.startswith("http"):
+                        ad.video_url = s
+                        break
+            # Extract poster as thumbnail
             poster = video_el.get("poster")
             if poster and poster.startswith("http"):
                 if not ad.thumbnail_url:
                     ad.thumbnail_url = poster
+            if ad.video_url or poster:
                 if not ad.creative_type or ad.creative_type == "unknown":
                     ad.creative_type = "video"
                 break

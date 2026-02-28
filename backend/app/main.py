@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing
+from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing, media
 from app.api.endpoints import settings as settings_endpoints
 from app.core.config import get_settings
 
@@ -181,6 +181,7 @@ app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(competitive_intel.router, prefix=API_PREFIX)
 app.include_router(meta_marketing.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
+app.include_router(media.router, prefix=API_PREFIX)
 
 
 @app.get("/")

@@ -41,6 +41,7 @@ class AdResponse(BaseModel):
     brand_name: Optional[str] = None
     estimated_ctr: Optional[float] = None
     view_count: Optional[int] = None
+    like_count: Optional[int] = None
     spend: Optional[float] = None
     impressions: Optional[int] = None
     cumulative_views: Optional[int] = None
@@ -52,6 +53,14 @@ class AdResponse(BaseModel):
     tags: Optional[list[str]] = None
     destination_url: Optional[str] = None
     destination_type: Optional[str] = None
+    first_seen_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    # Fields extracted from ad_metadata by model_validator
+    estimation_method: Optional[str] = None
+    days_running: Optional[int] = None
+    is_still_running: Optional[bool] = None
+    delivery_start_time: Optional[str] = None
+    ad_metadata: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 
@@ -68,8 +77,23 @@ class AdResponse(BaseModel):
             if not d.get("destination_url"):
                 d["destination_url"] = metadata.get("destination_url")
             d["destination_type"] = metadata.get("destination_type")
-            # thumbnail_url: prefer column, then try to build from thumbnail_s3_key
-            # (presigned URL generation happens in endpoint, here we just ensure the field is set)
+            # Expose ad_metadata for frontend fallback access
+            d["ad_metadata"] = metadata
+            # Extract key fields from metadata for frontend
+            d["estimation_method"] = metadata.get("estimation_method")
+            d["delivery_start_time"] = metadata.get("delivery_start_time")
+            d["is_still_running"] = metadata.get("is_still_running")
+            # Compute days_running from metadata or timestamps
+            days = metadata.get("days_running", 0)
+            if not days:
+                first = getattr(data, "first_seen_at", None)
+                if first:
+                    from datetime import timezone as _tz
+                    now = datetime.now(_tz.utc)
+                    if first.tzinfo is None:
+                        first = first.replace(tzinfo=_tz.utc)
+                    days = max(1, (now - first).days)
+            d["days_running"] = days or None
             # all_image_urls: expand from image_s3_keys JSONB
             image_s3_keys = d.get("image_s3_keys")
             if isinstance(image_s3_keys, dict):
@@ -81,6 +105,11 @@ class AdResponse(BaseModel):
                 if not data.get("destination_url"):
                     data["destination_url"] = metadata.get("destination_url")
                 data.setdefault("destination_type", metadata.get("destination_type"))
+                data.setdefault("ad_metadata", metadata)
+                data.setdefault("estimation_method", metadata.get("estimation_method"))
+                data.setdefault("delivery_start_time", metadata.get("delivery_start_time"))
+                data.setdefault("is_still_running", metadata.get("is_still_running"))
+                data.setdefault("days_running", metadata.get("days_running"))
             image_s3_keys = data.get("image_s3_keys")
             if isinstance(image_s3_keys, dict):
                 data["all_image_urls"] = image_s3_keys.get("urls", [])

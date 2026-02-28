@@ -15,10 +15,23 @@ import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView"
 import CampaignGalleryView from "@/components/workspace/CampaignGalleryView";
 import MetaAdsView from "@/components/meta-ads/MetaAdsView";
 import HitAdAnalysisView from "@/components/dashboard/HitAdAnalysisView";
+import ProRankingView from "@/components/dashboard/ProRankingView";
+import ReportsView from "@/components/dashboard/ReportsView";
+import AlertsPanel from "@/components/dashboard/AlertsPanel";
+import CollectionsView from "@/components/dashboard/CollectionsView";
+import ScenarioBuilder from "@/components/dashboard/ScenarioBuilder";
+import AdComparisonTool from "@/components/dashboard/AdComparisonTool";
+import AdvertiserProfile from "@/components/dashboard/AdvertiserProfile";
 import APIKeysSettings from "@/components/settings/APIKeysSettings";
 import DatabaseSettings from "@/components/settings/DatabaseSettings";
+import UserPreferences from "@/components/settings/UserPreferences";
+import CalendarView from "@/components/dashboard/CalendarView";
+import CreativeBriefGenerator from "@/components/dashboard/CreativeBriefGenerator";
+import AnalyticsDashboard from "@/components/dashboard/AnalyticsDashboard";
+import OnboardingTour from "@/components/common/OnboardingTour";
+import KeyboardShortcuts from "@/components/common/KeyboardShortcuts";
 
-type ViewType = "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "settings";
+type ViewType = "pro-database" | "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "analytics-dashboard";
 
 /** Connectivity banner — auto-hides after successful check, dismissible on error */
 function ConnectivityBanner() {
@@ -133,9 +146,10 @@ function ConnectivityBanner() {
 }
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>("search");
+  const [currentView, setCurrentView] = useState<ViewType>("pro-database");
   const [selectedAdId, setSelectedAdId] = useState<number | null>(null);
   const [showProductDetail, setShowProductDetail] = useState(false);
+  const [selectedAdvertiser, setSelectedAdvertiser] = useState<string>("");
 
   const handleAdSelect = (adId: number) => {
     setSelectedAdId(adId);
@@ -144,12 +158,14 @@ export default function Home() {
 
   const renderView = () => {
     switch (currentView) {
+      case "pro-database":
+        return <ProRankingView onAdSelect={handleAdSelect} />;
       case "search":
         return <AdLibraryTable onAdSelect={handleAdSelect} />;
       case "trend":
         return <TrendView />;
       case "analysis":
-        return <AdLibraryTable onAdSelect={handleAdSelect} />;
+        return <AnalyticsDashboard />;
       case "lp-analysis":
         return <LPAnalysisView />;
       case "ai-expert":
@@ -170,6 +186,12 @@ export default function Home() {
         return <MyListView />;
       case "store":
         return <StoreView />;
+      case "calendar":
+        return <CalendarView />;
+      case "creative-brief":
+        return <CreativeBriefGenerator />;
+      case "analytics-dashboard":
+        return <AnalyticsDashboard />;
       case "settings":
         return (
           <div className="flex flex-col h-full">
@@ -178,13 +200,42 @@ export default function Home() {
               <p className="text-[11px] text-gray-400 ml-3">データベース接続とシステム全体の設定を管理します</p>
             </div>
             <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4 space-y-6">
+              <UserPreferences />
               <DatabaseSettings />
               <APIKeysSettings />
             </div>
           </div>
         );
+      case "scenario":
+        return <ScenarioBuilder />;
+      case "reports":
+        return (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center px-5 py-3 border-b border-gray-200 bg-white">
+              <h2 className="text-[15px] font-bold text-gray-900">レポート</h2>
+              <p className="text-[11px] text-gray-400 ml-3">広告パフォーマンスの分析レポートとエクスポート</p>
+            </div>
+            <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4">
+              <ReportsView onAdSelect={handleAdSelect} />
+            </div>
+          </div>
+        );
+      case "alerts":
+        return <AlertsPanel fullPage onAdSelect={handleAdSelect} />;
+      case "collections":
+        return <CollectionsView fullPage onAdSelect={handleAdSelect} />;
+      case "compare":
+        return <AdComparisonTool onAdSelect={handleAdSelect} />;
+      case "advertiser-profile":
+        return (
+          <AdvertiserProfile
+            advertiserName={selectedAdvertiser || "Unknown"}
+            onAdSelect={handleAdSelect}
+            onBack={() => setCurrentView("pro-database")}
+          />
+        );
       default:
-        return <AdLibraryTable onAdSelect={handleAdSelect} />;
+        return <ProRankingView onAdSelect={handleAdSelect} />;
     }
   };
 
@@ -205,6 +256,12 @@ export default function Home() {
           onClose={() => setShowProductDetail(false)}
         />
       )}
+
+      {/* Onboarding Tour - shows on first visit */}
+      <OnboardingTour />
+
+      {/* Global Keyboard Shortcuts */}
+      <KeyboardShortcuts />
     </div>
   );
 }

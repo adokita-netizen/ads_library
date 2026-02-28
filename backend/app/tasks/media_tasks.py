@@ -132,6 +132,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
                     storage.upload_bytes(s3_key, image_data, content_type="image/jpeg")
                     ad.image_s3_key = s3_key
+                    _save_to_local_cache(image_data, "images", ad_id)
                     logger.info("image_uploaded_to_storage", ad_id=ad_id, s3_key=s3_key)
             except Exception as e:
                 logger.warning("image_upload_failed", ad_id=ad_id, error=str(e))
@@ -159,6 +160,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     thumb_key = f"thumbnails/{uuid.uuid4()}_{thumb_hash}.jpg"
                     storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
                     ad.thumbnail_s3_key = thumb_key
+                    _save_to_local_cache(thumb_data, "thumbnails", ad_id)
                     logger.info("thumbnail_uploaded_to_storage", ad_id=ad_id, s3_key=thumb_key)
             except Exception as e:
                 logger.warning("thumbnail_upload_failed", ad_id=ad_id, error=str(e))
@@ -218,6 +220,7 @@ def download_thumbnail_task(self, ad_id: int):
             thumb_key = f"thumbnails/{uuid.uuid4()}_{thumb_hash}.jpg"
             storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
             ad.thumbnail_s3_key = thumb_key
+            _save_to_local_cache(thumb_data, "thumbnails", ad_id)
             session.commit()
             logger.info("thumbnail_downloaded", ad_id=ad_id, s3_key=thumb_key)
             return {"status": "completed", "s3_key": thumb_key}
@@ -368,8 +371,10 @@ def enrich_ad_creative_task(self, ad_id: int):
                     s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
                     storage.upload_bytes(s3_key, image_data, content_type="image/jpeg")
                     ad.image_s3_key = s3_key
+                    _save_to_local_cache(image_data, "images", ad_id)
                     if not ad.thumbnail_s3_key:
                         ad.thumbnail_s3_key = s3_key
+                        _save_to_local_cache(image_data, "thumbnails", ad_id)
                     logger.info("enrich_image_uploaded", ad_id=ad_id, s3_key=s3_key)
             except Exception as e:
                 logger.warning("enrich_image_upload_failed", ad_id=ad_id, error=str(e))
@@ -425,4 +430,35 @@ def _download_sync(url: str, timeout: float = 15.0) -> bytes | None:
             return response.content
     except Exception as e:
         logger.warning("download_failed", url=url, error=str(e))
+        return None
+
+
+def _save_to_local_cache(data: bytes, media_type: str, ad_id: int) -> str | None:
+    """Save media data to local media_cache/ directory alongside S3 upload.
+
+    Args:
+        data: Raw file bytes.
+        media_type: 'thumbnails', 'images', or 'videos'.
+        ad_id: The ad ID (used as filename).
+
+    Returns:
+        Local file path if saved, None on error.
+    """
+    import os
+
+    ext_map = {"thumbnails": ".jpg", "images": ".jpg", "videos": ".mp4"}
+    ext = ext_map.get(media_type, ".bin")
+
+    cache_dir = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "media_cache", media_type)
+    )
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        path = os.path.join(cache_dir, f"{ad_id}{ext}")
+        with open(path, "wb") as f:
+            f.write(data)
+        logger.info("saved_to_local_cache", media_type=media_type, ad_id=ad_id, path=path)
+        return path
+    except Exception as e:
+        logger.warning("local_cache_save_failed", media_type=media_type, ad_id=ad_id, error=str(e))
         return None

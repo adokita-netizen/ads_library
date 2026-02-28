@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import ErrorBoundary from "./ErrorBoundary";
+import { ThemeProvider } from "./ThemeProvider";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -20,6 +21,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <ErrorBoundary>
         {children}
         <Toaster
@@ -30,6 +32,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           }}
         />
       </ErrorBoundary>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

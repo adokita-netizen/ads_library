@@ -1,0 +1,550 @@
+#!/usr/bin/env python3
+"""Fine-grained genre classification for Japanese ad market.
+
+Assigns detailed genre labels (e.g. medical_weight_loss, diet_supplement,
+beauty_clinic) to each ad based on keyword matching in title, description,
+and metadata.  Stores results in ad_metadata["fine_genre"] (Japanese) and
+ad_metadata["fine_genre_en"] (English slug for API).
+
+Usage:
+    cd C:/Users/ishit/ads_library/backend
+    python scripts/classify_fine_genre.py
+"""
+
+import os
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy.orm.attributes import flag_modified
+
+from app.core.database import SyncSessionLocal
+from app.models.ad import Ad
+
+
+# ── Fine-grained genre taxonomy (Japanese ad market) ──────────────────────
+
+# Each entry: (japanese_label, english_slug, keywords, weight)
+# Higher weight = more specific / preferred when tied
+
+FINE_GENRE_TAXONOMY: list[tuple[str, str, list[str], int]] = [
+    # ── Medical Weight Loss (most specific first) ─────────────────
+    (
+        "medical_weight_loss",
+        [
+            "GLP-1", "glp-1", "GLP1", "glp1",
+            "semaglutide", "tirzepatide",
+            "ozempic", "wegovy", "mounjaro", "zepbound",
+        ],
+        15,
+    ),
+    (
+        "diet_supplement",
+        [
+            "lactoferrin", "carnitine", "chitosan",
+            "garcinia", "forskolin", "capsaicin",
+        ],
+        12,
+    ),
+    (
+        "beauty_clinic",
+        [
+            "hyaluronic", "botox", "juvederm", "restylane",
+            "thermage", "hifu", "HIFU",
+            "blepharoplasty", "rhinoplasty",
+        ],
+        14,
+    ),
+    (
+        "skincare",
+        [
+            "retinol", "niacinamide", "ceramide",
+            "vitamin C serum", "hyaluronic acid",
+        ],
+        11,
+    ),
+    (
+        "hair_removal",
+        [
+            "IPL", "SHR", "VIO",
+            "alexandrite", "diode laser",
+        ],
+        13,
+    ),
+    (
+        "hair_growth_aga",
+        [
+            "minoxidil", "finasteride", "dutasteride",
+            "AGA", "aga", "FAGA",
+        ],
+        13,
+    ),
+    (
+        "fitness",
+        [
+            "RIZAP", "rizap", "BEYOND",
+            "Anytime Fitness",
+            "Gold's Gym", "JOYFIT",
+        ],
+        11,
+    ),
+    (
+        "yoga_pilates",
+        [
+            "LAVA", "zen place",
+            "Bikram", "ashtanga",
+        ],
+        12,
+    ),
+    (
+        "protein_supplement",
+        [
+            "BCAA", "bcaa", "HMB", "hmb",
+            "creatine", "EAA", "eaa",
+            "whey", "casein",
+        ],
+        12,
+    ),
+    (
+        "health_food",
+        [
+            "collagen peptide",
+            "probiotics", "prebiotics",
+            "chlorella", "spirulina",
+        ],
+        10,
+    ),
+    (
+        "ec_shopping",
+        [
+            "Qoo10", "qoo10", "SHEIN", "shein",
+            "ZOZOTOWN", "Rakuten",
+        ],
+        9,
+    ),
+    (
+        "app",
+        [
+            "Google Play", "App Store",
+            "iOS app", "Android app",
+        ],
+        9,
+    ),
+    (
+        "finance_investment",
+        [
+            "NISA", "nisa", "iDeCo", "ideco",
+            "FX", "ETF", "bitcoin", "Bitcoin",
+        ],
+        11,
+    ),
+    (
+        "education_school",
+        [
+            "TOEIC", "TOEFL", "IELTS",
+            "Udemy", "Coursera",
+        ],
+        10,
+    ),
+    (
+        "real_estate",
+        [
+            "SUUMO", "suumo", "LIFULL",
+            "HOME'S", "homes",
+        ],
+        10,
+    ),
+    (
+        "jobs_recruitment",
+        [
+            "Indeed", "doda", "Recruit",
+            "mynavi", "rikunabi",
+        ],
+        10,
+    ),
+]
+
+# Japanese keyword layer -- applied on top of the English taxonomy
+# Format: (english_slug, japanese_keywords, weight)
+JP_GENRE_KEYWORDS: list[tuple[str, list[str], int]] = [
+    ("medical_weight_loss", [
+        "\u533b\u7642\u75e9\u8eab",        # 医療痩身
+        "\u30de\u30f3\u30b8\u30e3\u30ed",    # マンジャロ
+        "\u30a6\u30b4\u30fc\u30d3",          # ウゴービ
+        "\u75e9\u8eab\u30af\u30ea\u30cb\u30c3\u30af",  # 痩身クリニック
+        "\u533b\u7642\u30c0\u30a4\u30a8\u30c3\u30c8",  # 医療ダイエット
+        "\u8102\u80aa\u5438\u5f15",          # 脂肪吸引
+        "\u8102\u80aa\u51b7\u5374",          # 脂肪冷却
+        "\u30af\u30fc\u30eb\u30b9\u30ab\u30eb\u30d7\u30c6\u30a3\u30f3\u30b0",  # クールスカルプティング
+        "\u30e1\u30c7\u30a3\u30ab\u30eb\u30c0\u30a4\u30a8\u30c3\u30c8",  # メディカルダイエット
+        "\u75e9\u8eab\u6ce8\u5c04",          # 痩身注射
+        "\u8102\u80aa\u6eb6\u89e3",          # 脂肪溶解
+        "\u30b5\u30af\u30bb\u30f3\u30c0",    # サクセンダ
+        "\u30ea\u30d9\u30eb\u30b5\u30b9",    # リベルサス
+        "\u30aa\u30bc\u30f3\u30d4\u30c3\u30af",  # オゼンピック
+    ], 15),
+
+    ("diet_supplement", [
+        "\u30c0\u30a4\u30a8\u30c3\u30c8\u30b5\u30d7\u30ea",  # ダイエットサプリ
+        "\u75e9\u305b\u308b\u30b5\u30d7\u30ea",  # 痩せるサプリ
+        "\u8102\u80aa\u71c3\u713c",          # 脂肪燃焼
+        "\u4ee3\u8b1d\u30a2\u30c3\u30d7",    # 代謝アップ
+        "\u30d5\u30a1\u30b9\u30c6\u30a3\u30f3\u30b0",  # ファスティング
+        "\u7f6e\u304d\u63db\u3048",          # 置き換え
+        "\u9175\u7d20\u30c0\u30a4\u30a8\u30c3\u30c8",  # 酵素ダイエット
+        "\u71c3\u713c\u7cfb",                # 燃焼系
+        "\u7cd6\u8cea\u30ab\u30c3\u30c8",    # 糖質カット
+        "\u98df\u6b32\u6291\u5236",          # 食欲抑制
+        "\u30c0\u30a4\u30a8\u30c3\u30c8\u98f2\u6599",  # ダイエット飲料
+        "\u6e1b\u91cf",                      # 減量
+        "\u4f53\u91cd",                      # 体重
+        "\u30b9\u30ea\u30e0",                # スリム
+    ], 12),
+
+    ("beauty_clinic", [
+        "\u7f8e\u5bb9\u30af\u30ea\u30cb\u30c3\u30af",  # 美容クリニック
+        "\u7f8e\u5bb9\u6574\u5f62",          # 美容整形
+        "\u30d2\u30a2\u30eb\u30ed\u30f3\u9178",  # ヒアルロン酸
+        "\u30dc\u30c8\u30c3\u30af\u30b9",    # ボトックス
+        "\u4e8c\u91cd",                      # 二重
+        "\u7f8e\u5bb9\u5916\u79d1",          # 美容外科
+        "\u30a2\u30f3\u30c1\u30a8\u30a4\u30b8\u30f3\u30b0",  # アンチエイジング
+        "\u305f\u308b\u307f",                # たるみ
+        "\u30b7\u30ef",                      # シワ
+        "\u30b7\u30df",                      # シミ
+        "\u30ec\u30fc\u30b6\u30fc\u6cbb\u7642",  # レーザー治療
+        "\u30d5\u30a7\u30a4\u30b9\u30ea\u30d5\u30c8",  # フェイスリフト
+        "\u7f8e\u5bb9\u76ae\u819a\u79d1",    # 美容皮膚科
+        "\u5c0f\u9854",                      # 小顔
+        "\u30a8\u30e9",                      # エラ
+        "\u9f3b\u6574\u5f62",                # 鼻整形
+        "\u8c4a\u80f8",                      # 豊胸
+    ], 14),
+
+    ("skincare", [
+        "\u30b9\u30ad\u30f3\u30b1\u30a2",    # スキンケア
+        "\u5316\u7ca7\u6c34",                # 化粧水
+        "\u7f8e\u5bb9\u6db2",                # 美容液
+        "\u30af\u30ec\u30f3\u30b8\u30f3\u30b0",  # クレンジング
+        "\u4fdd\u6e7f",                      # 保湿
+        "\u7f8e\u767d\u30af\u30ea\u30fc\u30e0",  # 美白クリーム
+        "\u7f8e\u767d",                      # 美白
+        "\u7f8e\u808c",                      # 美肌
+        "\u30bb\u30e9\u30e0",                # セラム
+        "\u30d5\u30a1\u30f3\u30c7",          # ファンデ
+        "\u5316\u7ca7\u54c1",                # 化粧品
+        "\u30b3\u30b9\u30e1",                # コスメ
+        "\u30e1\u30a4\u30af",                # メイク
+        "\u6d17\u9854",                      # 洗顔
+        "\u65e5\u713c\u3051\u6b62\u3081",    # 日焼け止め
+        "\u6bdb\u7a74",                      # 毛穴
+        "\u30cb\u30ad\u30d3",                # ニキビ
+        "\u808c\u8352\u308c",                # 肌荒れ
+    ], 11),
+
+    ("hair_removal", [
+        "\u8131\u6bdb",                      # 脱毛
+        "\u533b\u7642\u8131\u6bdb",          # 医療脱毛
+        "\u5149\u8131\u6bdb",                # 光脱毛
+        "\u5168\u8eab\u8131\u6bdb",          # 全身脱毛
+        "\u30ec\u30fc\u30b6\u30fc\u8131\u6bdb",  # レーザー脱毛
+        "\u30e0\u30c0\u6bdb",                # ムダ毛
+        "\u8131\u6bdb\u30b5\u30ed\u30f3",    # 脱毛サロン
+        "\u30d2\u30b2\u8131\u6bdb",          # ヒゲ脱毛
+        "\u30ef\u30ad\u8131\u6bdb",          # ワキ脱毛
+        "\u30e1\u30f3\u30ba\u8131\u6bdb",    # メンズ脱毛
+    ], 13),
+
+    ("hair_growth_aga", [
+        "\u80b2\u6bdb",                      # 育毛
+        "\u8584\u6bdb",                      # 薄毛
+        "\u767a\u6bdb",                      # 発毛
+        "\u30df\u30ce\u30ad\u30b7\u30b8\u30eb",  # ミノキシジル
+        "\u629c\u3051\u6bdb",                # 抜け毛
+        "\u982d\u76ae",                      # 頭皮
+        "\u80b2\u6bdb\u5264",                # 育毛剤
+        "\u767a\u6bdb\u5264",                # 発毛剤
+        "\u30d8\u30a2\u30b1\u30a2",          # ヘアケア
+        "\u30b7\u30e3\u30f3\u30d7\u30fc",    # シャンプー
+        "\u9aea",                            # 髪
+        "\u982d\u9aea",                      # 頭髪
+        "\u30d8\u30a2\u30ed\u30b9",          # ヘアロス
+    ], 13),
+
+    ("fitness", [
+        "\u30d5\u30a3\u30c3\u30c8\u30cd\u30b9",  # フィットネス
+        "\u30b8\u30e0",                      # ジム
+        "\u30d1\u30fc\u30bd\u30ca\u30eb",    # パーソナル
+        "\u30c8\u30ec\u30fc\u30cb\u30f3\u30b0",  # トレーニング
+        "\u30dc\u30c7\u30a3\u30e1\u30a4\u30af",  # ボディメイク
+        "\u7b4b\u30c8\u30ec",                # 筋トレ
+        "\u30c0\u30a4\u30a8\u30c3\u30c8\u30b8\u30e0",  # ダイエットジム
+        "\u30d1\u30fc\u30bd\u30ca\u30eb\u30c8\u30ec\u30fc\u30ca\u30fc",  # パーソナルトレーナー
+        "\u30b9\u30dd\u30fc\u30c4\u30b8\u30e0",  # スポーツジム
+        "\u30a8\u30af\u30b5\u30b5\u30a4\u30ba",  # エクササイズ
+    ], 11),
+
+    ("yoga_pilates", [
+        "\u30e8\u30ac",                      # ヨガ
+        "\u30d4\u30e9\u30c6\u30a3\u30b9",    # ピラティス
+        "\u30b9\u30c8\u30ec\u30c3\u30c1",    # ストレッチ
+        "\u30de\u30a4\u30f3\u30c9\u30d5\u30eb\u30cd\u30b9",  # マインドフルネス
+        "\u30db\u30c3\u30c8\u30e8\u30ac",    # ホットヨガ
+        "\u7792\u60f3",                      # 瞑想
+        "\u30ea\u30e9\u30af\u30bc\u30fc\u30b7\u30e7\u30f3",  # リラクゼーション
+    ], 12),
+
+    ("protein_supplement", [
+        "\u30d7\u30ed\u30c6\u30a4\u30f3",    # プロテイン
+        "\u7b4b\u8089\u30b5\u30d7\u30ea",    # 筋肉サプリ
+        "\u30db\u30a8\u30a4",                # ホエイ
+        "\u30bd\u30a4\u30d7\u30ed\u30c6\u30a4\u30f3",  # ソイプロテイン
+        "\u30de\u30b9\u30b2\u30a4\u30ca\u30fc",  # マスゲイナー
+    ], 12),
+
+    ("health_food", [
+        "\u5065\u5eb7\u98df\u54c1",          # 健康食品
+        "\u9752\u6c41",                      # 青汁
+        "\u30b3\u30e9\u30fc\u30b2\u30f3",    # コラーゲン
+        "\u4e73\u9178\u83cc",                # 乳酸菌
+        "\u9175\u7d20\u30c9\u30ea\u30f3\u30af",  # 酵素ドリンク
+        "\u30d3\u30bf\u30df\u30f3",          # ビタミン
+        "\u30b5\u30d7\u30ea\u30e1\u30f3\u30c8",  # サプリメント
+        "\u30b5\u30d7\u30ea",                # サプリ
+        "\u8178\u6d3b",                      # 腸活
+        "\u514d\u75ab",                      # 免疫
+        "\u6f22\u65b9",                      # 漢方
+        "\u5065\u5eb7",                      # 健康
+        "\u6804\u990a",                      # 栄養
+        "\u9244\u5206",                      # 鉄分
+        "\u4e9c\u925b",                      # 亜鉛
+        "\u30ab\u30eb\u30b7\u30a6\u30e0",    # カルシウム
+    ], 10),
+
+    ("ec_shopping", [
+        "\u901a\u8ca9",                      # 通販
+        "\u30b7\u30e7\u30c3\u30d4\u30f3\u30b0",  # ショッピング
+        "\u30bb\u30fc\u30eb",                # セール
+        "\u5272\u5f15",                      # 割引
+        "\u9001\u6599\u7121\u6599",          # 送料無料
+        "\u30af\u30fc\u30dd\u30f3",          # クーポン
+        "\u30d5\u30a1\u30c3\u30b7\u30e7\u30f3",  # ファッション
+        "\u30a2\u30d1\u30ec\u30eb",          # アパレル
+    ], 9),
+
+    ("app", [
+        "\u30a2\u30d7\u30ea",                # アプリ
+        "\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9",  # ダウンロード
+        "\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb",  # インストール
+        "\u30de\u30c3\u30c1\u30f3\u30b0",    # マッチング
+        "\u51fa\u4f1a\u3044",                # 出会い
+        "\u5a5a\u6d3b",                      # 婚活
+    ], 9),
+
+    ("finance_investment", [
+        "\u6295\u8cc7",                      # 投資
+        "\u4eee\u60f3\u901a\u8ca8",          # 仮想通貨
+        "\u30af\u30ec\u30b8\u30c3\u30c8\u30ab\u30fc\u30c9",  # クレジットカード
+        "\u30ed\u30fc\u30f3",                # ローン
+        "\u8a3c\u5238",                      # 証券
+        "\u8cc7\u7523\u904b\u7528",          # 資産運用
+        "\u91d1\u878d",                      # 金融
+        "\u4fdd\u967a",                      # 保険
+        "\u682a",                            # 株
+    ], 11),
+
+    ("education_school", [
+        "\u30b9\u30af\u30fc\u30eb",          # スクール
+        "\u8b1b\u5ea7",                      # 講座
+        "\u8cc7\u683c",                      # 資格
+        "\u30d7\u30ed\u30b0\u30e9\u30df\u30f3\u30b0",  # プログラミング
+        "\u82f1\u4f1a\u8a71",                # 英会話
+        "\u5b66\u7fd2",                      # 学習
+        "\u6559\u80b2",                      # 教育
+        "\u585e",                            # 塾
+        "\u4e88\u5099\u6821",                # 予備校
+        "\u30aa\u30f3\u30e9\u30a4\u30f3\u5b66\u7fd2",  # オンライン学習
+    ], 10),
+
+    ("real_estate", [
+        "\u4e0d\u52d5\u7523",                # 不動産
+        "\u30de\u30f3\u30b7\u30e7\u30f3",    # マンション
+        "\u8cc3\u8cb8",                      # 賃貸
+        "\u4f4f\u5b85",                      # 住宅
+        "\u7269\u4ef6",                      # 物件
+        "\u65b0\u7bc9",                      # 新築
+        "\u30ea\u30d5\u30a9\u30fc\u30e0",    # リフォーム
+    ], 10),
+
+    ("jobs_recruitment", [
+        "\u8ee2\u8077",                      # 転職
+        "\u6c42\u4eba",                      # 求人
+        "\u30d0\u30a4\u30c8",                # バイト
+        "\u5c31\u8077",                      # 就職
+        "\u63a1\u7528",                      # 採用
+        "\u6d3e\u9063",                      # 派遣
+        "\u526f\u696d",                      # 副業
+    ], 10),
+]
+
+# Japanese display labels for each slug
+GENRE_DISPLAY_JP: dict[str, str] = {
+    "medical_weight_loss": "\u533b\u7642\u75e9\u8eab",      # 医療痩身
+    "diet_supplement": "\u30c0\u30a4\u30a8\u30c3\u30c8\u30b5\u30d7\u30ea",  # ダイエットサプリ
+    "beauty_clinic": "\u7f8e\u5bb9\u30af\u30ea\u30cb\u30c3\u30af",  # 美容クリニック
+    "skincare": "\u30b9\u30ad\u30f3\u30b1\u30a2",            # スキンケア
+    "hair_removal": "\u8131\u6bdb",                          # 脱毛
+    "hair_growth_aga": "\u80b2\u6bdb\u30fbAGA",              # 育毛・AGA
+    "fitness": "\u30d5\u30a3\u30c3\u30c8\u30cd\u30b9",      # フィットネス
+    "yoga_pilates": "\u30e8\u30ac\u30fb\u30d4\u30e9\u30c6\u30a3\u30b9",  # ヨガ・ピラティス
+    "protein_supplement": "\u30d7\u30ed\u30c6\u30a4\u30f3",  # プロテイン
+    "health_food": "\u5065\u5eb7\u98df\u54c1",              # 健康食品
+    "ec_shopping": "EC\u901a\u8ca9",                        # EC通販
+    "app": "\u30a2\u30d7\u30ea",                            # アプリ
+    "finance_investment": "\u91d1\u878d\u30fb\u6295\u8cc7",  # 金融・投資
+    "education_school": "\u6559\u80b2\u30fb\u30b9\u30af\u30fc\u30eb",  # 教育・スクール
+    "real_estate": "\u4e0d\u52d5\u7523",                    # 不動産
+    "jobs_recruitment": "\u8ee2\u8077\u30fb\u6c42\u4eba",    # 転職・求人
+    "other": "\u305d\u306e\u4ed6",                          # その他
+}
+
+
+def _build_search_text(ad: Ad) -> str:
+    """Concatenate all searchable text from an ad."""
+    parts: list[str] = []
+    if ad.title:
+        parts.append(ad.title)
+    if ad.description:
+        parts.append(ad.description)
+    if ad.advertiser_name:
+        parts.append(ad.advertiser_name)
+    if ad.brand_name:
+        parts.append(ad.brand_name)
+    if ad.destination_url:
+        parts.append(ad.destination_url)
+
+    meta = ad.ad_metadata
+    if meta and isinstance(meta, dict):
+        for key in ("page_name", "byline", "disclaimer", "cta_text",
+                     "link_title", "link_description", "body",
+                     "advertiser", "page_categories"):
+            val = meta.get(key)
+            if val:
+                if isinstance(val, list):
+                    parts.append(" ".join(str(v) for v in val))
+                elif isinstance(val, str):
+                    parts.append(val)
+
+    return " ".join(parts)
+
+
+def classify_fine_genre(ad: Ad) -> tuple[str, str]:
+    """Classify an ad into a fine-grained genre.
+
+    Returns (fine_genre_en, fine_genre_jp).
+    """
+    text = _build_search_text(ad)
+    if not text.strip():
+        return "other", GENRE_DISPLAY_JP["other"]
+
+    text_lower = text.lower()
+
+    # Score each genre
+    genre_scores: dict[str, float] = {}
+
+    # Score from JP keywords (primary)
+    for slug, keywords, weight in JP_GENRE_KEYWORDS:
+        match_count = 0
+        for kw in keywords:
+            if kw.lower() in text_lower:
+                match_count += 1
+        if match_count > 0:
+            genre_scores[slug] = genre_scores.get(slug, 0) + match_count * weight
+
+    # Score from EN/brand keywords (supplementary)
+    for slug, keywords, weight in FINE_GENRE_TAXONOMY:
+        match_count = 0
+        for kw in keywords:
+            if kw.lower() in text_lower:
+                match_count += 1
+        if match_count > 0:
+            genre_scores[slug] = genre_scores.get(slug, 0) + match_count * weight
+
+    if not genre_scores:
+        return "other", GENRE_DISPLAY_JP["other"]
+
+    # Pick the highest-scoring genre
+    best_slug = max(genre_scores, key=lambda s: genre_scores[s])
+    best_jp = GENRE_DISPLAY_JP.get(best_slug, best_slug)
+
+    return best_slug, best_jp
+
+
+def main() -> None:
+    print("=" * 60)
+    print("Fine-Grained Genre Classification (Japanese Ad Market)")
+    print(f"Executed at: {datetime.now(timezone.utc).isoformat()}")
+    print("=" * 60)
+
+    session = SyncSessionLocal()
+    try:
+        ads = session.query(Ad).all()
+        total = len(ads)
+        print(f"\nTotal ads in database: {total}")
+
+        if total == 0:
+            print("No ads found. Exiting.")
+            return
+
+        genre_counter: Counter = Counter()
+        updated = 0
+
+        for ad in ads:
+            slug, jp_label = classify_fine_genre(ad)
+
+            meta = dict(ad.ad_metadata or {})
+            meta["fine_genre"] = jp_label
+            meta["fine_genre_en"] = slug
+            meta["fine_genre_classified_at"] = datetime.now(timezone.utc).isoformat()
+            ad.ad_metadata = meta
+            flag_modified(ad, "ad_metadata")
+
+            genre_counter[slug] += 1
+            updated += 1
+
+        session.commit()
+        print(f"\nClassified {updated}/{total} ads. Committed.")
+
+        # Print distribution
+        print(f"\n--- Fine Genre Distribution ---")
+        for slug, count in sorted(genre_counter.items(), key=lambda x: -x[1]):
+            jp_label = GENRE_DISPLAY_JP.get(slug, slug)
+            pct = count / total * 100
+            bar = "#" * int(pct / 2)
+            # Print only slug and count (no JP chars for Windows cp932)
+            print(f"  {slug:<25s} {count:>4d} ({pct:>5.1f}%) {bar}")
+
+        # Summary stats
+        classified = sum(c for s, c in genre_counter.items() if s != "other")
+        other_count = genre_counter.get("other", 0)
+        unique_genres = len(genre_counter)
+
+        print(f"\n--- Summary ---")
+        print(f"  Total ads:           {total}")
+        print(f"  Classified:          {classified} ({classified / total * 100:.1f}%)")
+        print(f"  'other' (unmatched): {other_count}")
+        print(f"  Unique genres found: {unique_genres}")
+        print(f"\nDone!")
+
+    except Exception as e:
+        session.rollback()
+        print(f"ERROR: {e}")
+        raise
+    finally:
+        session.close()
+
+
+if __name__ == "__main__":
+    main()

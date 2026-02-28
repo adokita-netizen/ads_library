@@ -345,11 +345,51 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
       {/* Table */}
       <div className="flex-1 overflow-auto custom-scrollbar">
+        {/* B10: Loading skeleton UI */}
         {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
-            <span className="ml-2 text-xs text-gray-400">読み込み中...</span>
-          </div>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="w-12 text-center">順位</th>
+                <th className="w-24">サムネイル</th>
+                <th>管理番号</th>
+                <th>商材名</th>
+                <th>ジャンル</th>
+                <th>遷移先タイプ</th>
+                <th className="text-right">再生増加数</th>
+                <th className="text-right min-w-[160px]">予想消化増加額</th>
+                <th className="text-right">累計再生回数</th>
+                <th className="text-right">累計予想消化額</th>
+                <th>公開日</th>
+                <th className="text-center">秒数</th>
+                <th>広告URL</th>
+                <th>遷移先</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="text-center"><div className="w-6 h-6 rounded bg-gray-200 mx-auto" /></td>
+                  <td><div className="w-20 h-12 rounded bg-gray-200" /></td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-20" /></td>
+                  <td>
+                    <div className="h-4 bg-gray-200 rounded w-32 mb-1" />
+                    <div className="h-2.5 bg-gray-100 rounded w-20" />
+                  </td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-16" /></td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-14" /></td>
+                  <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto" /></td>
+                  <td className="text-right"><div className="h-4 bg-gray-200 rounded w-20 ml-auto" /></td>
+                  <td className="text-right"><div className="h-3.5 bg-gray-100 rounded w-14 ml-auto" /></td>
+                  <td className="text-right"><div className="h-3.5 bg-gray-100 rounded w-16 ml-auto" /></td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-20" /></td>
+                  <td className="text-center"><div className="h-3.5 bg-gray-200 rounded w-10 mx-auto" /></td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-10" /></td>
+                  <td><div className="h-3.5 bg-gray-200 rounded w-12" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
         {!loading && filteredAds.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -427,22 +467,34 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                   </span>
                 </td>
 
-                {/* Thumbnail */}
+                {/* Thumbnail — B10: prefer proxy URL */}
                 <td>
                   <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
-                    {(ad.thumbnail || ad.imageUrl) ? (
+                    {(() => {
+                      const proxySrc = ad.id ? `/api/v1/media/thumbnail/${ad.id}` : (ad.thumbnail || ad.imageUrl || "");
+                      return proxySrc ? (
                       <img
-                        src={ad.thumbnail || ad.imageUrl}
+                        src={proxySrc}
                         alt=""
                         className="absolute inset-0 w-full h-full object-cover"
                         loading="lazy"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
-                          target.style.display = "none";
-                          if (target.nextElementSibling) (target.nextElementSibling as HTMLElement).style.display = "flex";
+                          // B10: Fallback chain: proxy -> thumbnail -> imageUrl -> hide
+                          if (ad.thumbnail && target.src !== ad.thumbnail) {
+                            target.src = ad.thumbnail;
+                          } else if (ad.imageUrl && target.src !== ad.imageUrl) {
+                            target.src = ad.imageUrl;
+                          } else if (ad.snapshotUrl && target.src !== ad.snapshotUrl) {
+                            target.src = ad.snapshotUrl;
+                          } else {
+                            target.style.display = "none";
+                            if (target.nextElementSibling) (target.nextElementSibling as HTMLElement).style.display = "flex";
+                          }
                         }}
                       />
-                    ) : null}
+                    ) : null;
+                    })()}
                     <div
                       className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
                       style={{ display: (ad.thumbnail || ad.imageUrl) ? "none" : "flex" }}

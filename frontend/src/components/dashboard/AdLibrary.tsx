@@ -152,10 +152,21 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
         </form>
       </div>
 
-      {/* Ad Grid */}
+      {/* Ad Grid — B10: skeleton loading */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card animate-pulse">
+              <div className="mb-3 h-40 rounded-lg bg-gray-200" />
+              <div className="h-5 bg-gray-200 rounded w-3/4 mb-2" />
+              <div className="h-3.5 bg-gray-100 rounded w-1/2 mb-1.5" />
+              <div className="h-3 bg-gray-100 rounded w-full mb-3" />
+              <div className="flex items-center gap-2">
+                <div className="h-5 bg-gray-200 rounded w-16" />
+                <div className="h-5 bg-gray-200 rounded w-14" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : ads.length === 0 ? (
         <div className="card text-center">
@@ -171,23 +182,36 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
               onClick={() => onAdSelect(ad.id)}
               className="card cursor-pointer transition-shadow hover:shadow-md"
             >
-              {/* Thumbnail */}
+              {/* Thumbnail — B10: prefer proxy URL */}
               <div className="mb-3 h-40 rounded-lg bg-gray-100 overflow-hidden">
-                {(ad.thumbnail_url || ad.image_url) ? (
+                {(() => {
+                  const proxySrc = ad.id ? `/api/v1/media/thumbnail/${ad.id}` : (ad.thumbnail_url || ad.image_url || "");
+                  return proxySrc ? (
                   <img
-                    src={ad.thumbnail_url || ad.image_url}
+                    src={proxySrc}
                     alt={ad.title || "Ad thumbnail"}
                     className="h-full w-full object-cover"
+                    loading="lazy"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                      (e.target as HTMLImageElement).parentElement!.classList.add("flex", "items-center", "justify-center");
-                      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                      svg.setAttribute("class", "h-12 w-12 text-gray-300");
-                      svg.setAttribute("fill", "none");
-                      svg.setAttribute("viewBox", "0 0 24 24");
-                      svg.setAttribute("stroke", "currentColor");
-                      svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />';
-                      (e.target as HTMLImageElement).parentElement!.appendChild(svg);
+                      const img = e.target as HTMLImageElement;
+                      // B10: Fallback chain: proxy -> thumbnail_url -> image_url -> placeholder
+                      if (ad.thumbnail_url && img.src !== ad.thumbnail_url) {
+                        img.src = ad.thumbnail_url;
+                      } else if (ad.image_url && img.src !== ad.image_url) {
+                        img.src = ad.image_url;
+                      } else {
+                        img.style.display = "none";
+                        const parent = img.parentElement;
+                        if (!parent) return;
+                        parent.classList.add("flex", "items-center", "justify-center");
+                        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                        svg.setAttribute("class", "h-12 w-12 text-gray-300");
+                        svg.setAttribute("fill", "none");
+                        svg.setAttribute("viewBox", "0 0 24 24");
+                        svg.setAttribute("stroke", "currentColor");
+                        svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />';
+                        parent.appendChild(svg);
+                      }
                     }}
                   />
                 ) : (
@@ -206,7 +230,8 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
                       />
                     </svg>
                   </div>
-                )}
+                );
+                })()}
               </div>
 
               {/* Ad Info */}
@@ -235,6 +260,14 @@ export default function AdLibrary({ onAdSelect }: AdLibraryProps) {
                   <span className="text-xs text-gray-500">
                     {Math.round(ad.duration_seconds)}s
                   </span>
+                )}
+                {ad.destination_url && (
+                  <button
+                    className="text-[10px] text-[#4A7DFF] hover:underline"
+                    onClick={(e) => { e.stopPropagation(); window.open(ad.destination_url, "_blank"); }}
+                  >
+                    LP確認 →
+                  </button>
                 )}
               </div>
               {/* Metrics row */}

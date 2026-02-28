@@ -70,6 +70,28 @@ htmlcov/
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.backup
+terraform/terraform.tfvars
+
+# Database files
+*.db
+
+# Media cache & exports
+backend/media_cache/
+backend/exports/
+backend/static/
+backend/data/
+backend/models/
+
+# Root-level data files
+ads_list.json
+ads_new.json
+crawl_test.json
+hitads.json
+products.json
+vaap_fallback.db
+
+# Screenshots
+frontend_final.png
 
 # Temp
 tmp/
