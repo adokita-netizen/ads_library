@@ -57,6 +57,18 @@ class AdCategoryEnum(str, enum.Enum):
     OTHER = "other"
 
 
+class MediaExtractionStatus(str, enum.Enum):
+    """Status of media extraction for an ad."""
+    PENDING = "pending"
+    PENDING_HEAVY = "pending_heavy"
+    DISPATCHED = "dispatched"
+    COMPLETED = "completed"
+    ENRICHED = "enriched"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    SKIPPED = "skipped"
+
+
 class Ad(Base):
     __tablename__ = "ads"
     __table_args__ = (
@@ -69,6 +81,10 @@ class Ad(Base):
         Index("idx_ads_created_desc", "created_at"),
         Index("idx_ads_platform_status", "platform", "status"),
         Index("idx_ads_creative_type", "creative_type"),
+        # CI-016: Added for common query patterns
+        Index("idx_ads_media_extraction_status", "media_extraction_status"),
+        Index("idx_ads_first_seen", "first_seen_at"),
+        Index("idx_ads_last_seen", "last_seen_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -90,6 +106,7 @@ class Ad(Base):
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_s3_keys: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # carousel multiple images
+    video_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     snapshot_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # platform preview URL
     destination_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # CTA destination URL
     media_extraction_status: Mapped[str | None] = mapped_column(String(50), nullable=True)  # pending/completed/failed/skipped
@@ -169,5 +186,6 @@ class AdFrame(Base):
     ad: Mapped["Ad"] = relationship(back_populates="frames")
 
 
-# Import here to avoid circular imports
+# SQLAlchemy requires this runtime import to register AdAnalysis with Base.metadata
+# so that the Ad.analysis relationship can resolve. Do NOT move to TYPE_CHECKING.
 from app.models.analysis import AdAnalysis  # noqa: E402

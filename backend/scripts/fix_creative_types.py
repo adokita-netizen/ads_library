@@ -15,14 +15,28 @@ Run from the backend directory:
     python scripts/fix_creative_types.py
 """
 
+import os
 import sys
 
 sys.path.insert(0, ".")
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, is_in_memory_mode
 from app.models.ad import Ad
+
+
+def _get_session() -> Session:
+    """Get a DB session, connecting to vaap_local.db if SQLite fallback is active."""
+    if not is_in_memory_mode():
+        return SyncSessionLocal()
+    db_path = os.path.join(os.path.dirname(__file__), "..", "vaap_local.db")
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"vaap_local.db not found at {db_path}")
+    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    return sessionmaker(bind=engine)()
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -59,7 +73,7 @@ def _infer_creative_type(ad: Ad) -> str:
 
 
 def main():
-    session = SyncSessionLocal()
+    session = _get_session()
     try:
         all_ads = session.query(Ad).all()
         total = len(all_ads)

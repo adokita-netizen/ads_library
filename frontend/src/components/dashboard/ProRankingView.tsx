@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { cachedFetchApi } from "@/lib/prefetch";
+import { useUrlParam } from "@/lib/useUrlParam";
 import { genreOptions } from "@/lib/constants";
 import SmartSearchBar from "./SmartSearchBar";
 import ProRankingTable from "./ProRankingTable";
@@ -88,12 +91,12 @@ interface ProRankingViewProps {
 }
 
 export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
-  // Filter state
-  const [selectedGenre, setSelectedGenre] = useState("all");
-  const [selectedPlatform, setSelectedPlatform] = useState("all");
+  // Filter state (synced to URL params)
+  const [selectedGenre, setSelectedGenre] = useUrlParam("genre", "all");
+  const [selectedPlatform, setSelectedPlatform] = useUrlParam("platform", "all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortType>("cumulative_views");
-  const [period, setPeriod] = useState<PeriodType>("weekly");
+  const [sortBy, setSortBy] = useUrlParam("sort", "cumulative_views") as [SortType, (v: string) => void];
+  const [period, setPeriod] = useUrlParam("period", "weekly") as [PeriodType, (v: string) => void];
 
   // Genre master data
   const [genreGroups, setGenreGroups] = useState<GenreGroup[]>([]);
@@ -106,6 +109,8 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
   const [showCollections, setShowCollections] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [savingCollection, setSavingCollection] = useState(false);
+  const [deletingCollection, setDeletingCollection] = useState(false);
   const collectionsRef = useRef<HTMLDivElement>(null);
 
   // View mode
@@ -119,52 +124,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
   // Hit line threshold
   const [hitLineThreshold, setHitLineThreshold] = useState<number>(10000);
 
-  // ─── Fetch genre master ───
-  useEffect(() => {
-    const fetchGenres = async () => {
-      setGenreLoading(true);
-      try {
-        const data = await fetchApi<{
-          genres?: GenreMasterItem[];
-          groups?: GenreGroup[];
-        }>("/rankings/genre-master");
-
-        if (data.groups && data.groups.length > 0) {
-          setGenreGroups(data.groups);
-          const allItems = data.groups.flatMap((g) => g.items);
-          setGenreList(allItems);
-        } else if (data.genres && data.genres.length > 0) {
-          setGenreList(data.genres);
-          // Group by parent category
-          const grouped: Record<string, GenreMasterItem[]> = {};
-          data.genres.forEach((g) => {
-            const parent = g.parent || "other";
-            if (!grouped[parent]) grouped[parent] = [];
-            grouped[parent].push(g);
-          });
-          setGenreGroups(
-            Object.entries(grouped).map(([parent, items]) => ({
-              parent,
-              items,
-            }))
-          );
-        }
-      } catch {
-        // Fall back to static genre options
-        setGenreList(
-          genreOptions.map((g) => ({
-            value: g.value,
-            label: g.label,
-          }))
-        );
-      } finally {
-        setGenreLoading(false);
-      }
-    };
-    fetchGenres();
-  }, []);
-
-  // ─── Fetch search collections ───
+  // ─── Fetch genre master + search collections in parallel ───
   const fetchCollections = useCallback(async () => {
     try {
       const data = await fetchApi<{
@@ -172,18 +132,75 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
         items?: SearchCollection[];
       }>("/rankings/search-collections");
       setCollections(data.collections || data.items || []);
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.warn("Search collections API failed", err);
     }
   }, []);
 
   useEffect(() => {
-    fetchCollections();
+    const init = async () => {
+      setGenreLoading(true);
+      const [genreResult] = await Promise.allSettled([
+        cachedFetchApi<{ genres?: GenreMasterItem[]; groups?: GenreGroup[] }>("/rankings/genre-master"),
+        fetchCollections(),
+      ]);
+
+      if (genreResult.status === "fulfilled") {
+        const data = genreResult.value;
+        if (data.groups && data.groups.length > 0) {
+          setGenreGroups(data.groups);
+          setGenreList(data.groups.flatMap((g) => g.items));
+        } else if (data.genres && data.genres.length > 0) {
+          setGenreList(data.genres);
+          const grouped: Record<string, GenreMasterItem[]> = {};
+          data.genres.forEach((g) => {
+            const parent = g.parent || "other";
+            if (!grouped[parent]) grouped[parent] = [];
+            grouped[parent].push(g);
+          });
+          setGenreGroups(
+            Object.entries(grouped).map(([parent, items]) => ({ parent, items }))
+          );
+        }
+      } else {
+        console.warn("Genre master API failed, using static options", genreResult.reason);
+        setGenreList(genreOptions.map((g) => ({ value: g.value, label: g.label })));
+      }
+      setGenreLoading(false);
+    };
+    init();
   }, [fetchCollections]);
 
-  // ─── Save collection ───
+  // ─── Copy share link ─── (B72: filter preset sharing)
+  const handleCopyShareLink = () => {
+    const sp = new URLSearchParams();
+    sp.set("view", "pro-database");
+    if (selectedGenre !== "all") sp.set("genre", selectedGenre);
+    if (selectedPlatform !== "all") sp.set("platform", selectedPlatform);
+    if (sortBy !== "cumulative_views") sp.set("sort", sortBy);
+    if (period !== "weekly") sp.set("period", period);
+    if (searchQuery) sp.set("q", searchQuery);
+    const url = `${window.location.origin}${window.location.pathname}?${sp.toString()}`;
+    navigator.clipboard.writeText(url).then(
+      () => toast.success("共有リンクをコピーしました"),
+      () => toast.error("コピーに失敗しました"),
+    );
+  };
+
+  // ─── Save collection ─── (B84: max 20 limit)
+  const MAX_COLLECTIONS = 20;
   const handleSaveCollection = async () => {
-    if (!saveName.trim()) return;
+    if (!saveName.trim() || savingCollection) return;
+    if (collections.length >= MAX_COLLECTIONS) {
+      toast.error(`保存上限（${MAX_COLLECTIONS}件）に達しました。不要な条件を削除してください`);
+      return;
+    }
+    // Check for duplicate names
+    if (collections.some((c) => c.name === saveName.trim())) {
+      toast.error("同じ名前の検索条件が既に存在します");
+      return;
+    }
+    setSavingCollection(true);
     try {
       await fetchApi("/rankings/search-collections", {
         method: "POST",
@@ -201,20 +218,28 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
       setSaveName("");
       setShowSaveDialog(false);
       fetchCollections();
+      toast.success("検索条件を保存しました");
     } catch {
-      // Silently fail
+      toast.error("検索条件の保存に失敗しました");
+    } finally {
+      setSavingCollection(false);
     }
   };
 
   // ─── Delete collection ───
   const handleDeleteCollection = async (id: number) => {
+    if (deletingCollection) return;
+    setDeletingCollection(true);
     try {
       await fetchApi(`/rankings/search-collections/${id}`, {
         method: "DELETE",
       });
       fetchCollections();
+      toast.success("検索条件を削除しました");
     } catch {
-      // Silently fail
+      toast.error("検索条件の削除に失敗しました");
+    } finally {
+      setDeletingCollection(false);
     }
   };
 
@@ -282,7 +307,18 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
               </span>
             </div>
 
-            {/* Right: Collections dropdown */}
+            {/* Right: Share link + Collections dropdown */}
+            <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyShareLink}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
+              title="フィルタ条件の共有リンクをコピー"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-3.06a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.25 8.81" />
+              </svg>
+              <span className="hidden sm:inline">共有</span>
+            </button>
             <div className="relative" ref={collectionsRef}>
               <button
                 onClick={() => setShowCollections(!showCollections)}
@@ -363,10 +399,11 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
                 </div>
               )}
             </div>
+            </div>
           </div>
 
           {/* Search bar + period toggle row */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <SmartSearchBar
               currentQuery={searchQuery}
               onSearch={(q) => setSearchQuery(q)}
@@ -651,6 +688,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
             period={currentPeriodApi}
             onAdSelect={onAdSelect}
             hitLineThreshold={hitLineThreshold}
+            viewMode={viewMode}
           />
         </div>
       </div>

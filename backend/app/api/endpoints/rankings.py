@@ -19,7 +19,7 @@ from sqlalchemy import case, func, desc, or_
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import SyncSessionLocal, sync_session_scope
-from app.models.ad import Ad
+from app.models.ad import Ad, MediaExtractionStatus
 from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 from app.models.analysis import AdAnalysis, TextDetection, Transcription
 from app.services.ranking.ranking_service import (
@@ -32,6 +32,39 @@ from app.services.ranking.ranking_service import (
 
 # Path to collections JSON file (C12: Collections API)
 _COLLECTIONS_FILE = Path(__file__).resolve().parent.parent.parent.parent / "data" / "collections.json"
+
+
+def _dt_gte(dt: datetime | None, cutoff: datetime) -> bool:
+    """Safely compare dt >= cutoff handling naive/aware mismatch."""
+    if dt is None:
+        return False
+    if dt.tzinfo is None and cutoff.tzinfo is not None:
+        cutoff = cutoff.replace(tzinfo=None)
+    elif dt.tzinfo is not None and cutoff.tzinfo is None:
+        dt = dt.replace(tzinfo=None)
+    return dt >= cutoff
+
+
+def _dt_lt(dt: datetime | None, cutoff: datetime) -> bool:
+    """Safely compare dt < cutoff handling naive/aware mismatch."""
+    if dt is None:
+        return False
+    if dt.tzinfo is None and cutoff.tzinfo is not None:
+        cutoff = cutoff.replace(tzinfo=None)
+    elif dt.tzinfo is not None and cutoff.tzinfo is None:
+        dt = dt.replace(tzinfo=None)
+    return dt < cutoff
+
+
+def _dt_gt(a: datetime | None, b: datetime | None) -> bool:
+    """Safely compare a > b handling naive/aware mismatch."""
+    if a is None or b is None:
+        return a is not None
+    if a.tzinfo is None and b.tzinfo is not None:
+        b = b.replace(tzinfo=None)
+    elif a.tzinfo is not None and b.tzinfo is None:
+        a = a.replace(tzinfo=None)
+    return a > b
 
 # Path to saved searches JSON file (C13: Saved Searches)
 _SAVED_SEARCHES_FILE = Path(__file__).resolve().parent.parent.parent.parent / "data" / "saved_searches.json"
@@ -46,8 +79,14 @@ META_PLATFORMS = ["facebook", "instagram"]
 def _resolve_thumbnail_url(ad: Ad) -> str:
     """Resolve a display-ready thumbnail URL for an Ad.
 
-    Priority: local cache proxy > S3 presigned > thumbnail_url > image_url > ""
+    Priority: proxy endpoint > local cache > S3 presigned > original URL > ""
+    Always prefer the proxy endpoint for Facebook CDN URLs to avoid
+    CORS issues and expired signature 403 errors.
     """
+    # For any ad with an id, use the proxy endpoint (handles caching + fallback)
+    if ad.id and (ad.thumbnail_url or ad.image_url):
+        return f"/api/v1/media/thumbnail/{ad.id}"
+
     # Priority 1: Local cache proxy (Agent D media endpoint)
     if ad.thumbnail_s3_key and "media_cache/" in ad.thumbnail_s3_key:
         return f"/api/v1/media/thumbnail/{ad.id}"
@@ -61,7 +100,7 @@ def _resolve_thumbnail_url(ad: Ad) -> str:
         except Exception:
             pass
 
-    # Priority 3: Original URL (may be expired)
+    # Priority 3: Original URL
     if ad.thumbnail_url:
         return ad.thumbnail_url
     if ad.image_url:
@@ -72,6 +111,8 @@ def _resolve_thumbnail_url(ad: Ad) -> str:
 def _resolve_image_url(ad: Ad) -> str:
     """Resolve a display-ready image URL for an Ad."""
     if ad.image_s3_key and "media_cache/" in ad.image_s3_key:
+        return f"/api/v1/media/image/{ad.id}"
+    if ad.id and (ad.image_url or ad.thumbnail_url):
         return f"/api/v1/media/image/{ad.id}"
     return ad.image_url or ad.thumbnail_url or ""
 
@@ -262,11 +303,13 @@ def _classify_hit_dynamic(score: float, thresholds: dict) -> str:
     return "normal"
 
 
+_JP_RE = re.compile(r"[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]")
+
+
 def _is_quality_ad(ad: Ad) -> bool:
     """Check if an ad passes quality filters (not duplicate, Japanese, not spam).
 
     Returns True if the ad should be included in results.
-    Ads without metadata flags are included by default.
     """
     meta = ad.ad_metadata or {}
     # Exclude flagged low-quality/spam ads
@@ -277,9 +320,13 @@ def _is_quality_ad(ad: Ad) -> bool:
     # Exclude duplicates
     if meta.get("is_duplicate") is True:
         return False
-    # Exclude non-Japanese ads (only if language is explicitly set and not ja)
+    # Exclude non-Japanese ads (metadata flag)
     lang = meta.get("language")
     if lang is not None and lang != "ja":
+        return False
+    # Exclude non-Japanese ads (actual text detection)
+    combined = (ad.title or "") + " " + (ad.advertiser_name or "")
+    if combined.strip() and not _JP_RE.search(combined):
         return False
     return True
 
@@ -3064,78 +3111,69 @@ class _QuickCrawlBody(BaseModel):
 
 @router.post("/quick-crawl")
 def quick_crawl(body: _QuickCrawlBody):
-    """Simplified crawl trigger for the dashboard.
-
-    Runs an inline crawl for the given query across default platforms
-    and returns the number of new ads saved.
-    """
+    """Fast crawl: Facebook only, no keyword expansion, no timeout."""
     import uuid
+    import asyncio
+    import concurrent.futures
     from app.models.crawl_job import CrawlJob, CrawlJobStatusEnum
 
     query = body.query
     limit = body.limit
-    default_platforms = ["facebook", "tiktok"]
+    platforms = ["facebook"]
     job_id = str(uuid.uuid4())
 
-    # Create a CrawlJob record for tracking
+    # Track job
     tracking_session = SyncSessionLocal()
     try:
         crawl_job = CrawlJob(
             job_id=job_id,
             status=CrawlJobStatusEnum.RUNNING,
             query=query,
-            platforms=default_platforms,
-            total_platforms=len(default_platforms),
+            platforms=platforms,
+            total_platforms=1,
             completed_platforms=0,
             total_ads_found=0,
         )
         tracking_session.add(crawl_job)
         tracking_session.commit()
-    except Exception as track_err:
-        logger.warning("quick_crawl_tracking_init_failed", error=str(track_err))
+    except Exception:
         tracking_session.rollback()
     finally:
         tracking_session.close()
 
-    # Run the inline crawl
+    # Direct crawl: Facebook only, original query only, no expansion
     new_ads_count = 0
     error_msg = None
     try:
-        from app.api.endpoints.ads import _inline_crawl
-        new_ads_count = _inline_crawl(
-            query=query,
-            platforms=default_platforms,
-            category=None,
-            limit_per_platform=limit,
-        )
-        logger.info(
-            "quick_crawl_completed",
-            query=query,
-            new_ads_count=new_ads_count,
-        )
-    except Exception as crawl_err:
-        error_msg = str(crawl_err)
-        logger.error(
-            "quick_crawl_failed",
-            query=query,
-            error=error_msg,
-        )
+        def _run():
+            return asyncio.run(
+                _crawl_platforms_no_expand(query, platforms, limit)
+            )
 
-    # Update CrawlJob status
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_run)
+            results = future.result(timeout=45)
+
+        # Save to DB
+        new_ads_count = _save_crawled_ads(results)
+
+        logger.info("quick_crawl_completed", query=query, new_ads_count=new_ads_count)
+    except Exception as e:
+        import traceback
+        error_msg = str(e) or repr(e)
+        logger.error("quick_crawl_failed", query=query, error=error_msg, traceback=traceback.format_exc())
+
+    # Update job status
     update_session = SyncSessionLocal()
     try:
         job = update_session.query(CrawlJob).filter(CrawlJob.job_id == job_id).first()
         if job:
-            job.status = (
-                CrawlJobStatusEnum.COMPLETED if error_msg is None
-                else CrawlJobStatusEnum.FAILED
-            )
+            job.status = CrawlJobStatusEnum.COMPLETED if error_msg is None else CrawlJobStatusEnum.FAILED
             job.total_ads_found = new_ads_count
-            job.completed_platforms = len(default_platforms)
+            job.completed_platforms = 1
             job.error_message = error_msg
             update_session.commit()
-    except Exception as update_err:
-        logger.warning("quick_crawl_tracking_update_failed", error=str(update_err))
+    except Exception:
         update_session.rollback()
     finally:
         update_session.close()
@@ -3144,22 +3182,154 @@ def quick_crawl(body: _QuickCrawlBody):
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=500,
-            content={
-                "status": "failed",
-                "job_id": job_id,
-                "error": error_msg,
-            },
+            content={"status": "failed", "job_id": job_id, "error": error_msg},
         )
 
     return {
         "status": "completed",
         "job_id": job_id,
         "new_ads_count": new_ads_count,
-        "total_ads_found": new_ads_count,  # alias for frontend
-        "ads_found": new_ads_count,  # alias for frontend
+        "total_ads_found": new_ads_count,
+        "ads_found": new_ads_count,
         "keywords_searched": [query],
-        "platforms": default_platforms,
+        "platforms": platforms,
     }
+
+
+async def _crawl_platforms_no_expand(
+    query: str, platforms: list[str], limit: int, country: str = "JP",
+) -> dict:
+    """Minimal crawl: one query, one platform, no keyword expansion."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    db_keys: dict[str, dict[str, str]] = {}
+    try:
+        from app.api.endpoints.settings import load_api_keys_from_db
+        db_keys = load_api_keys_from_db()
+    except Exception:
+        pass
+
+    def _get(platform: str, key_name: str, env_fallback):
+        return (db_keys.get(platform, {}).get(key_name) or env_fallback) or None
+
+    from app.services.crawling.crawler_manager import CrawlerManager
+    manager = CrawlerManager.create_default(
+        meta_token=_get("meta", "access_token", settings.meta_access_token),
+        tiktok_token=_get("tiktok", "access_token", settings.tiktok_access_token),
+    )
+
+    results = await manager.search_all_platforms(
+        query=query,
+        platforms=platforms,
+        category=None,
+        limit_per_platform=limit,
+        country=country,
+    )
+
+    # Apply Japanese language filter
+    for plat, ads_list in results.items():
+        before = len(ads_list)
+        filtered = []
+        for ad in ads_list:
+            text = " ".join(filter(None, [
+                getattr(ad, "title", None),
+                getattr(ad, "description", None),
+                getattr(ad, "advertiser_name", None),
+            ]))
+            import re
+            has_jp = bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', text))
+            if has_jp or country != "JP":
+                filtered.append(ad)
+        results[plat] = filtered
+        logger.info("jp_language_filter_applied", before=before, after=len(filtered), country=country)
+
+    return results
+
+
+def _save_crawled_ads(results: dict) -> int:
+    """Save crawled ads to DB. Returns count of new/updated ads."""
+    from app.models.ad import Ad, AdStatusEnum, MediaExtractionStatus
+    from app.tasks.crawl_tasks import _extract_destination_url, _extract_text_fallback
+
+    saved = 0
+    session = SyncSessionLocal()
+    try:
+        for platform, crawled_ads in results.items():
+            for crawled_ad in crawled_ads:
+                if crawled_ad.external_id:
+                    existing = session.query(Ad).filter(
+                        Ad.external_id == crawled_ad.external_id
+                    ).first()
+                    if existing:
+                        if crawled_ad.view_count is not None:
+                            existing.view_count = crawled_ad.view_count
+                        if crawled_ad.last_seen_at is not None:
+                            existing.last_seen_at = crawled_ad.last_seen_at
+                        old_meta = dict(existing.ad_metadata or {})
+                        new_meta = dict(crawled_ad.metadata or {})
+                        old_meta.update({k: v for k, v in new_meta.items() if v is not None})
+                        existing.ad_metadata = old_meta
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(existing, "ad_metadata")
+                        saved += 1
+                        continue
+
+                has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
+                extraction_status = MediaExtractionStatus.SKIPPED if has_direct_media else (
+                    MediaExtractionStatus.PENDING if crawled_ad.snapshot_url else MediaExtractionStatus.SKIPPED
+                )
+
+                dest_url = _extract_destination_url(crawled_ad)
+                title, description = _extract_text_fallback(crawled_ad)
+                meta = dict(crawled_ad.metadata or {})
+                if dest_url:
+                    meta["destination_url"] = dest_url
+                    meta.setdefault("destination_type", "LP")
+
+                ad_category = None
+                if crawled_ad.category:
+                    from app.models.ad import AdCategoryEnum
+                    try:
+                        ad_category = AdCategoryEnum(crawled_ad.category)
+                    except ValueError:
+                        ad_category = AdCategoryEnum.OTHER
+
+                from app.tasks.crawl_tasks import _map_platform
+                ad = Ad(
+                    external_id=crawled_ad.external_id,
+                    title=title,
+                    description=description,
+                    platform=_map_platform(crawled_ad.platform or platform),
+                    status=AdStatusEnum.PENDING,
+                    category=ad_category,
+                    creative_type=crawled_ad.creative_type,
+                    video_url=crawled_ad.video_url,
+                    thumbnail_url=crawled_ad.thumbnail_url,
+                    image_url=crawled_ad.image_urls[0] if crawled_ad.image_urls else None,
+                    snapshot_url=crawled_ad.snapshot_url,
+                    destination_url=dest_url,
+                    media_extraction_status=extraction_status,
+                    advertiser_name=crawled_ad.advertiser_name,
+                    view_count=crawled_ad.view_count,
+                    like_count=crawled_ad.like_count,
+                    spend=crawled_ad.spend,
+                    impressions=crawled_ad.impressions,
+                    first_seen_at=crawled_ad.first_seen_at,
+                    last_seen_at=crawled_ad.last_seen_at,
+                    ad_metadata=meta,
+                )
+                session.add(ad)
+                saved += 1
+
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+    return saved
 
 
 # ==================== Trend Refresh ====================
@@ -6209,7 +6379,7 @@ def list_competitors(
                     hit_count += 1
                 if longevity["is_still_running"]:
                     active_count += 1
-                if ad.created_at and ad.created_at >= cutoff_30d:
+                if _dt_gte(ad.created_at, cutoff_30d):
                     recent_ad_count += 1
 
                 g = _resolve_genre_label(ad)
@@ -9903,7 +10073,7 @@ def get_dashboard_kpi():
             if longevity["is_still_running"]:
                 active_count += 1
 
-            if ad.created_at and ad.created_at >= cutoff_7d:
+            if _dt_gte(ad.created_at, cutoff_7d):
                 new_7d_count += 1
 
             est_spend = meta.get("estimated_total_spend_jpy") or ad.spend or 0
@@ -9913,7 +10083,9 @@ def get_dashboard_kpi():
             genre_counter[g] = genre_counter.get(g, 0) + 1
 
             if ad.created_at:
-                if latest_created is None or ad.created_at > latest_created:
+                if latest_created is None:
+                    latest_created = ad.created_at
+                elif _dt_gt(ad.created_at, latest_created):
                     latest_created = ad.created_at
 
         n = len(scores)
@@ -11105,11 +11277,11 @@ def get_data_freshness():
 
         for ad in ads:
             if ad.created_at:
-                if ad.created_at >= cutoff_24h:
+                if _dt_gte(ad.created_at, cutoff_24h):
                     ads_24h += 1
-                if ad.created_at >= cutoff_7d:
+                if _dt_gte(ad.created_at, cutoff_7d):
                     ads_7d += 1
-                if last_created is None or ad.created_at > last_created:
+                if last_created is None or _dt_gt(ad.created_at, last_created):
                     last_created = ad.created_at
 
             # Fill rate checks
@@ -11475,7 +11647,7 @@ def get_recommendations_engine(
 
             recent_ads = []
             for ad in quality_ads:
-                if ad.created_at and ad.created_at >= cutoff:
+                if _dt_gte(ad.created_at, cutoff):
                     meta = ad.ad_metadata or {}
                     score_val = meta.get("latest_hit_score")
                     if score_val is None:
@@ -13175,8 +13347,8 @@ def get_analytics_overview():
 
         cutoff_7d = datetime.now(tz=timezone.utc) - timedelta(days=7)
         cutoff_14d = datetime.now(tz=timezone.utc) - timedelta(days=14)
-        this_week = sum(1 for a in ads if a.created_at and a.created_at >= cutoff_7d)
-        last_week = sum(1 for a in ads if a.created_at and cutoff_14d <= a.created_at < cutoff_7d)
+        this_week = sum(1 for a in ads if _dt_gte(a.created_at, cutoff_7d))
+        last_week = sum(1 for a in ads if _dt_gte(a.created_at, cutoff_14d) and _dt_lt(a.created_at, cutoff_7d))
         growth = round((this_week - last_week) / max(last_week, 1) * 100, 1)
 
         dates = [a.created_at for a in ads if a.created_at]
@@ -13344,7 +13516,7 @@ def get_competitive_landscape(genre: Optional[str] = None):
             hit_rate = hits / cnt if cnt > 0 else 0
             share = cnt / total
             first_seen = min((a.created_at for a in adv_ads if a.created_at), default=None)
-            recent = sum(1 for a in adv_ads if a.created_at and a.created_at >= cutoff_30d)
+            recent = sum(1 for a in adv_ads if _dt_gte(a.created_at, cutoff_30d))
             trend = "growing" if recent > cnt * 0.4 else "declining" if recent == 0 else "stable"
             top_genre = None
             gc: dict[str, int] = {}
@@ -14002,7 +14174,7 @@ def get_genre_distribution(
         for fg, ads_list in genre_map.items():
             old_count = sum(
                 1 for a in ads_list
-                if (a.created_at or datetime.now(tz=timezone.utc)) < cutoff_30d
+                if _dt_lt(a.created_at or datetime.now(tz=timezone.utc), cutoff_30d)
             )
             genre_old_counts[fg] = old_count
 
@@ -14772,3 +14944,343 @@ def search_ads_simple(
             })
 
         return {"items": items, "total": total}
+
+
+
+# ==================== C32: Media Extraction Status API ====================
+
+
+@router.get("/media-extraction-status")
+def get_media_extraction_status():
+    """Media extraction pipeline status summary."""
+    with sync_session_scope() as session:
+        all_ads = session.query(Ad).all()
+
+        status_counts: dict[str, int] = {}
+        for ad in all_ads:
+            s = ad.media_extraction_status or "null"
+            status_counts[s] = status_counts.get(s, 0) + 1
+
+        total = len(all_ads)
+        completed = status_counts.get("completed", 0) + status_counts.get("enriched", 0)
+
+        return {
+            "total_ads": total,
+            "completed": completed,
+            "pending": status_counts.get("pending", 0),
+            "pending_heavy": status_counts.get("pending_heavy", 0),
+            "dispatched": status_counts.get("dispatched", 0),
+            "failed": status_counts.get("failed", 0),
+            "skipped": status_counts.get("skipped", 0),
+            "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            "status_breakdown": status_counts,
+        }
+
+
+@router.get("/media-extraction-ads")
+def get_media_extraction_ads(
+    status: str = Query("pending", description="Filter by extraction status"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+):
+    """List ads by media extraction status with pagination."""
+    with sync_session_scope() as session:
+        query = session.query(Ad).filter(Ad.media_extraction_status == status)
+        total = query.count()
+        ads = query.order_by(Ad.id).offset((page - 1) * per_page).limit(per_page).all()
+
+        return {
+            "ads": [{
+                "id": ad.id,
+                "title": ad.title or "",
+                "advertiser_name": ad.advertiser_name or "",
+                "creative_type": ad.creative_type or "",
+                "status": ad.media_extraction_status,
+                "has_snapshot": bool(ad.snapshot_url),
+                "has_image": bool(ad.image_url),
+                "has_video": bool(ad.video_url),
+                "has_s3_image": bool(ad.image_s3_key),
+                "has_s3_thumbnail": bool(ad.thumbnail_s3_key),
+            } for ad in ads],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+
+
+@router.post("/batch-extract-media")
+def batch_extract_media(
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Dispatch batch media extraction tasks to SQS -> ECS."""
+    from app.tasks.dispatcher import dispatch_task
+
+    with sync_session_scope() as session:
+        ads = session.query(Ad).filter(
+            Ad.media_extraction_status.in_([MediaExtractionStatus.PENDING, MediaExtractionStatus.PENDING_HEAVY]),
+            or_(Ad.snapshot_url.isnot(None), Ad.external_id.isnot(None)),
+        ).order_by(Ad.id).limit(limit).all()
+
+        dispatched = []
+        errors = []
+        for ad in ads:
+            try:
+                result = dispatch_task("extract_media", ad_id=ad.id)
+                ad.media_extraction_status = MediaExtractionStatus.DISPATCHED
+                dispatched.append({"ad_id": ad.id, "message_id": result.id})
+            except Exception as e:
+                errors.append({"ad_id": ad.id, "error": str(e)})
+
+        session.commit()
+
+        return {
+            "dispatched": len(dispatched),
+            "errors": len(errors),
+            "details": dispatched[:20],
+        }
+
+
+@router.post("/retry-failed-media")
+def retry_failed_media(
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Reset failed extractions to pending and re-dispatch."""
+    from app.tasks.dispatcher import dispatch_task
+
+    with sync_session_scope() as session:
+        ads = session.query(Ad).filter(
+            Ad.media_extraction_status == MediaExtractionStatus.FAILED,
+        ).order_by(Ad.id).limit(limit).all()
+
+        dispatched = []
+        errors = []
+        for ad in ads:
+            try:
+                ad.media_extraction_status = MediaExtractionStatus.PENDING
+                result = dispatch_task("extract_media", ad_id=ad.id)
+                ad.media_extraction_status = MediaExtractionStatus.DISPATCHED
+                dispatched.append({"ad_id": ad.id, "message_id": result.id})
+            except Exception as e:
+                errors.append({"ad_id": ad.id, "error": str(e)})
+
+        session.commit()
+
+        return {"retried": len(dispatched), "errors": len(errors)}
+
+
+# ==================== C33: DLQ Monitoring API ====================
+
+
+@router.get("/dlq-status")
+def get_dlq_status():
+    """Check SQS Dead Letter Queue status."""
+    try:
+        import boto3
+        from app.core.config import get_settings
+        settings = get_settings()
+        sqs = boto3.client("sqs", region_name=settings.aws_region)
+    except Exception as e:
+        return {"error": f"Cannot connect to AWS: {str(e)}"}
+
+    result = {}
+    for queue_name, base_url in [
+        ("heavy_dlq", settings.sqs_heavy_queue_url),
+        ("light_dlq", settings.sqs_light_queue_url),
+    ]:
+        if not base_url:
+            result[queue_name] = {"error": "Queue URL not configured"}
+            continue
+        dlq_url = base_url + "-dlq"
+        try:
+            attrs = sqs.get_queue_attributes(
+                QueueUrl=dlq_url,
+                AttributeNames=["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"],
+            )["Attributes"]
+            result[queue_name] = {
+                "messages": int(attrs.get("ApproximateNumberOfMessages", 0)),
+                "in_flight": int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0)),
+            }
+        except Exception as e:
+            result[queue_name] = {"error": str(e)}
+
+    return result
+
+
+@router.get("/dlq-messages")
+def get_dlq_messages(queue: str = Query("heavy", description="heavy or light"), limit: int = Query(10, ge=1, le=10)):
+    """Preview messages in DLQ without deleting them."""
+    try:
+        import boto3
+        from app.core.config import get_settings
+        settings = get_settings()
+        sqs = boto3.client("sqs", region_name=settings.aws_region)
+    except Exception as e:
+        return {"error": str(e)}
+
+    base_url = settings.sqs_heavy_queue_url if queue == "heavy" else settings.sqs_light_queue_url
+    if not base_url:
+        return {"error": "Queue URL not configured"}
+
+    dlq_url = base_url + "-dlq"
+    messages = []
+    try:
+        response = sqs.receive_message(
+            QueueUrl=dlq_url,
+            MaxNumberOfMessages=min(limit, 10),
+            VisibilityTimeout=0,
+            MessageAttributeNames=["All"],
+        )
+        for msg in response.get("Messages", []):
+            try:
+                body = json.loads(msg["Body"])
+            except Exception:
+                body = {"raw": msg["Body"][:500]}
+            messages.append({
+                "message_id": msg["MessageId"],
+                "task": body.get("task"),
+                "kwargs": body.get("kwargs"),
+            })
+    except Exception as e:
+        return {"error": str(e)}
+
+    return {"queue": queue, "messages": messages}
+
+
+@router.post("/dlq-retry")
+def retry_dlq_messages(queue: str = Query("heavy"), limit: int = Query(5, ge=1, le=10)):
+    """Move DLQ messages back to the main queue for retry."""
+    try:
+        import boto3
+        from app.core.config import get_settings
+        settings = get_settings()
+        sqs = boto3.client("sqs", region_name=settings.aws_region)
+    except Exception as e:
+        return {"error": str(e)}
+
+    base_url = settings.sqs_heavy_queue_url if queue == "heavy" else settings.sqs_light_queue_url
+    if not base_url:
+        return {"error": "Queue URL not configured"}
+
+    dlq_url = base_url + "-dlq"
+    main_url = base_url
+
+    retried = 0
+    errors = []
+    try:
+        response = sqs.receive_message(
+            QueueUrl=dlq_url,
+            MaxNumberOfMessages=min(limit, 10),
+            VisibilityTimeout=30,
+        )
+        for msg in response.get("Messages", []):
+            try:
+                sqs.send_message(QueueUrl=main_url, MessageBody=msg["Body"])
+                sqs.delete_message(QueueUrl=dlq_url, ReceiptHandle=msg["ReceiptHandle"])
+                retried += 1
+            except Exception as e:
+                errors.append(str(e))
+    except Exception as e:
+        return {"error": str(e)}
+
+    return {"retried": retried, "errors": errors}
+
+
+# ==================== C34: ECS Task Status API ====================
+
+
+@router.get("/ecs-tasks")
+def get_ecs_tasks(status: str = Query("RUNNING", description="RUNNING or STOPPED")):
+    """List ECS tasks in the VAAP cluster."""
+    try:
+        import boto3
+        ecs = boto3.client("ecs", region_name="ap-northeast-1")
+    except Exception as e:
+        return {"error": str(e)}
+
+    cluster = "vaap-cluster"
+
+    try:
+        task_arns = ecs.list_tasks(
+            cluster=cluster,
+            desiredStatus=status,
+        ).get("taskArns", [])
+
+        if not task_arns:
+            return {"tasks": [], "count": 0}
+
+        details = ecs.describe_tasks(cluster=cluster, tasks=task_arns)
+
+        tasks = []
+        for task in details.get("tasks", []):
+            container = task.get("containers", [{}])[0]
+            overrides = task.get("overrides", {}).get("containerOverrides", [{}])[0]
+            command = overrides.get("command", [])
+
+            task_name = command[3] if len(command) > 3 else "unknown"
+            task_kwargs = command[4] if len(command) > 4 else "{}"
+
+            tasks.append({
+                "task_arn": task["taskArn"].split("/")[-1],
+                "status": task.get("lastStatus"),
+                "desired_status": task.get("desiredStatus"),
+                "task_name": task_name,
+                "kwargs": task_kwargs,
+                "created_at": str(task.get("createdAt")),
+                "started_at": str(task.get("startedAt")),
+                "stopped_at": str(task.get("stoppedAt")),
+                "stop_reason": task.get("stoppedReason"),
+                "exit_code": container.get("exitCode"),
+                "cpu": task.get("cpu"),
+                "memory": task.get("memory"),
+            })
+
+        return {"tasks": tasks, "count": len(tasks)}
+    except Exception as e:
+        return {"error": str(e), "tasks": [], "count": 0}
+
+
+@router.get("/ecs-tasks/recent")
+def get_recent_ecs_tasks(limit: int = Query(20, ge=1, le=50)):
+    """Recent ECS task history (including stopped)."""
+    try:
+        import boto3
+        ecs = boto3.client("ecs", region_name="ap-northeast-1")
+    except Exception as e:
+        return {"error": str(e)}
+
+    cluster = "vaap-cluster"
+
+    try:
+        running = ecs.list_tasks(cluster=cluster, desiredStatus="RUNNING").get("taskArns", [])
+        stopped = ecs.list_tasks(cluster=cluster, desiredStatus="STOPPED").get("taskArns", [])
+
+        all_arns = (running + stopped)[:limit]
+        if not all_arns:
+            return {"tasks": [], "running": 0, "stopped": 0}
+
+        details = ecs.describe_tasks(cluster=cluster, tasks=all_arns)
+
+        tasks = []
+        for task in details.get("tasks", []):
+            container = task.get("containers", [{}])[0]
+            overrides = task.get("overrides", {}).get("containerOverrides", [{}])[0]
+            command = overrides.get("command", [])
+
+            duration_seconds = None
+            if task.get("startedAt") and task.get("stoppedAt"):
+                duration_seconds = int((task["stoppedAt"] - task["startedAt"]).total_seconds())
+
+            tasks.append({
+                "task_arn": task["taskArn"].split("/")[-1],
+                "status": task.get("lastStatus"),
+                "task_name": command[3] if len(command) > 3 else "unknown",
+                "started_at": str(task.get("startedAt")),
+                "stopped_at": str(task.get("stoppedAt")),
+                "exit_code": container.get("exitCode"),
+                "stop_reason": task.get("stoppedReason"),
+                "duration_seconds": duration_seconds,
+            })
+
+        return {"tasks": tasks, "running": len(running), "stopped": len(stopped)}
+    except Exception as e:
+        return {"error": str(e), "tasks": [], "running": 0, "stopped": 0}

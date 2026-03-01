@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { fetchApi, adsApi } from "@/lib/api";
 import { platformLabels, platformColors, genreOptions as sharedGenreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
+import { useUrlParam, useUrlParamNumber } from "@/lib/useUrlParam";
+import { useDebounce } from "@/lib/useDebounce";
 
 interface AdLibraryTableProps {
   onAdSelect: (adId: number) => void;
@@ -124,10 +126,15 @@ function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<s
 }
 
 export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
+  // URL-synced filter params — read initial values from URL
+  const [urlGenre] = useUrlParam("genre", "all");
+  const [urlMedia] = useUrlParam("media", "all");
+  const [urlPage] = useUrlParamNumber("page", 1);
+
   const [filters, setFilters] = useState<FilterState>({
     adType: "all",
-    media: "all",
-    genre: "all",
+    media: urlMedia as MediaType,
+    genre: urlGenre as GenreType,
     format: "all",
     version: "latest",
     interval: "2days",
@@ -135,19 +142,28 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   });
   const [sortField, setSortField] = useState<SortField>("rank");
   const [sortAsc, setSortAsc] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(urlPage);
+
+  // Sync filter/page state changes to URL
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const update = (key: string, val: string, def: string) => {
+      if (val && val !== def) sp.set(key, val); else sp.delete(key);
+    };
+    update("genre", filters.genre, "all");
+    update("media", filters.media, "all");
+    if (currentPage > 1) sp.set("page", String(currentPage)); else sp.delete("page");
+    const qs = sp.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [filters.genre, filters.media, currentPage]);
   const pageSize = 50;
 
   const queryClient = useQueryClient();
   const [showCrawlModal, setShowCrawlModal] = useState(false);
 
   // Debounce search input to avoid excessive API calls
-  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => {
-    debounceRef.current = setTimeout(() => setDebouncedSearch(filters.search), 400);
-    return () => clearTimeout(debounceRef.current);
-  }, [filters.search]);
+  const debouncedSearch = useDebounce(filters.search);
 
   const queryKey = ["adLibrary", filters.media, filters.genre, filters.interval, debouncedSearch] as const;
 
@@ -607,7 +623,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                 <td>
                   <button
                     className="text-[#4A7DFF] hover:underline text-[11px]"
-                    onClick={(e) => { e.stopPropagation(); window.open(ad.adUrl, "_blank"); }}
+                    onClick={(e) => { e.stopPropagation(); window.open(ad.adUrl, "_blank", "noopener,noreferrer"); }}
                   >
                     リンク
                   </button>
@@ -619,21 +635,26 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
                     <div className="flex items-center gap-1">
                       <button
                         className="text-[#4A7DFF] hover:underline text-[11px] max-w-[80px] truncate"
-                        onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank"); }}
+                        onClick={(e) => { e.stopPropagation(); window.open(ad.destination, "_blank", "noopener,noreferrer"); }}
                         title={ad.destination}
                       >
                         遷移先
                       </button>
                       <button
-                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors whitespace-nowrap disabled:opacity-50"
                         onClick={(e) => {
                           e.stopPropagation();
+                          const btn = e.currentTarget;
+                          if (btn.disabled) return;
+                          btn.disabled = true;
+                          btn.textContent = "送信中...";
                           fetchApi("/lp-analysis/crawl", {
                             method: "POST",
                             body: { url: ad.destination, ad_id: ad.id, auto_analyze: true },
                           })
                             .then(() => { toast.success("LP分析を開始しました"); })
-                            .catch(() => { toast.error("LP分析の開始に失敗しました"); });
+                            .catch(() => { toast.error("LP分析の開始に失敗しました"); })
+                            .finally(() => { btn.disabled = false; btn.textContent = "LP分析"; });
                         }}
                         title="遷移先LPを分析"
                       >
@@ -727,9 +748,7 @@ const PLATFORM_LABELS_MAP: Record<string, string> = {
 
 function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [query, setQuery] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
-    ALL_CRAWL_PLATFORMS.map((p) => p.value)
-  );
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["facebook"]);
   const [category, setCategory] = useState("");
   const [limit, setLimit] = useState(20);
   const [crawling, setCrawling] = useState(false);
@@ -743,10 +762,12 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
   const [adsFound, setAdsFound] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     };
   }, []);
 
@@ -812,34 +833,27 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
     setTotalPlatformsCount(selectedPlatforms.length);
 
     try {
-      const data = await fetchApi<{ task_id: string; status: string; message: string }>("/ads/crawl", {
+      // Use quick-crawl endpoint (fast, inline, no timeout issues)
+      const data = await fetchApi<{ job_id?: string; status?: string; message?: string; new_ads_count?: number; total_ads_found?: number; ads_found?: number }>("/rankings/quick-crawl", {
         method: "POST",
         body: {
           query: query.trim(),
-          platforms: selectedPlatforms,
-          category: category || undefined,
-          limit_per_platform: limit,
-          auto_analyze: true,
+          limit,
         },
       });
 
-      if (data?.status === "error") {
-        setMessage(data.message || "クロール中にエラーが発生しました");
+      const found = data?.total_ads_found ?? data?.ads_found ?? data?.new_ads_count ?? 0;
+
+      if (data?.status === "failed") {
+        setMessage(data.message || (data as Record<string, unknown>).error as string || "クロール中にエラーが発生しました");
         setCrawling(false);
-      } else if (data?.status === "completed") {
-        // Inline crawl completed immediately
+      } else {
         setProgress(100);
         setCrawling(false);
-        setMessage(data?.message || "クロール完了");
-        toast.success(data?.message || "クロール完了");
+        const msg = `クロール完了: ${found}件の広告を取得しました`;
+        setMessage(msg);
+        toast.success(msg);
         onSuccess();
-      } else if (data?.task_id) {
-        // Async task dispatched, start polling
-        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
-        startPolling(data.task_id);
-      } else {
-        setMessage(data?.message || `クロールを開始しました（${selectedPlatforms.length}媒体）`);
-        setTimeout(() => onSuccess(), 3000);
       }
     } catch (err: unknown) {
       const fetchErr = err as { status?: number; data?: { detail?: string; error?: { message?: string } }; message?: string };

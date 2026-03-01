@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
+import { ErrorState, EmptyState } from "@/components/common/StateDisplay";
 
 /* ─── Types ─── */
 
@@ -51,6 +52,7 @@ export default function ReportsView({ genre, onAdSelect }: ReportsViewProps) {
   const [hitAds, setHitAds] = useState<HitAd[]>([]);
   const [genres, setGenres] = useState<GenreSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [genreSortKey, setGenreSortKey] = useState<SortKey>("hit_rate");
@@ -59,19 +61,26 @@ export default function ReportsView({ genre, onAdSelect }: ReportsViewProps) {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const params: Record<string, string | number | undefined> = { limit: 200 };
       if (genre && genre !== "all") params.genre = genre;
 
-      const [hitRes, genreRes] = await Promise.all([
-        fetchApi<{ total: number; items: HitAd[] }>("/rankings/hit-ads", { params }).catch(() => ({ total: 0, items: [] })),
-        fetchApi<{ genres: GenreSummary[] }>("/rankings/genre-summary", { params: { period: "weekly" } }).catch(() => ({ genres: [] })),
+      const [hitResult, genreResult] = await Promise.allSettled([
+        fetchApi<{ total: number; items: HitAd[] }>("/rankings/hit-ads", { params }),
+        fetchApi<{ genres: GenreSummary[] }>("/rankings/genre-summary", { params: { period: "weekly" } }),
       ]);
+      const hitRes = hitResult.status === "fulfilled" ? hitResult.value : { total: 0, items: [] as HitAd[] };
+      const genreRes = genreResult.status === "fulfilled" ? genreResult.value : { genres: [] as GenreSummary[] };
+
+      if (hitResult.status === "rejected" && genreResult.status === "rejected") {
+        setFetchError("レポートデータの取得に失敗しました");
+      }
 
       setHitAds(hitRes.items || []);
       setGenres(genreRes.genres || []);
     } catch {
-      // silently use empty data
+      setFetchError("レポートデータの取得に失敗しました");
     } finally {
       setLoading(false);
     }
@@ -217,21 +226,20 @@ export default function ReportsView({ genre, onAdSelect }: ReportsViewProps) {
 
   const handleExportCSV = async () => {
     try {
-      const params: Record<string, string | number | undefined> = {};
-      if (genre && genre !== "all") params.genre = genre;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      params.format = "csv";
-      // TODO: use /rankings/export/csv when backend API is available
-      const blob = await fetchApi<Blob>("/rankings/export/rankings", { params });
-      if (blob instanceof Blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `report_${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      const params = new URLSearchParams();
+      if (genre && genre !== "all") params.set("genre", genre);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      const url = `/api/v1/rankings/export/csv${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `report_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
       toast.success("CSVをダウンロードしました");
     } catch {
       toast.error("CSVエクスポートに失敗しました");
@@ -240,10 +248,11 @@ export default function ReportsView({ genre, onAdSelect }: ReportsViewProps) {
 
   const handleExportJSON = async () => {
     try {
-      const params: Record<string, string | number | undefined> = { limit: 200 };
+      const params: Record<string, string | number | undefined> = {};
       if (genre && genre !== "all") params.genre = genre;
-      // TODO: use /rankings/export/json when backend API is available
-      const data = await fetchApi("/rankings/hit-ads", { params });
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      const data = await fetchApi("/rankings/export/json", { params });
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -323,10 +332,29 @@ ${advertiserReport.map((a) => `<tr><td>${a.name}</td><td>${a.ad_count}</td><td>$
     );
   }
 
+  /* ─── Error / Empty ─── */
+
+  if (fetchError && hitAds.length === 0) {
+    return <ErrorState message={fetchError} onRetry={fetchData} />;
+  }
+
+  if (!loading && hitAds.length === 0 && genres.length === 0) {
+    return (
+      <EmptyState
+        icon="chart"
+        message="レポートデータがありません"
+        description="広告データが収集されると、ここにレポートが表示されます"
+      />
+    );
+  }
+
   /* ─── Render ─── */
 
   return (
     <div className="space-y-4">
+      {/* Error banner (partial failure) */}
+      {fetchError && <ErrorState message={fetchError} onRetry={fetchData} compact />}
+
       {/* ── Summary Report Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="card px-4 py-3">

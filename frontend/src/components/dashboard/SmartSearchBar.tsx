@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
+import { useDebounce } from "@/lib/useDebounce";
 
 interface AutocompleteSuggestion {
   type: "all" | "genre" | "product" | "advertiser";
@@ -36,7 +37,7 @@ export default function SmartSearchBar({
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debouncedQuery = useDebounce(query);
 
   // Fetch autocomplete suggestions
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -115,12 +116,14 @@ export default function SmartSearchBar({
     }
   }, []);
 
-  // Debounced input handler
+  // Trigger suggestions fetch on debounced query change
+  useEffect(() => {
+    fetchSuggestions(debouncedQuery);
+  }, [debouncedQuery, fetchSuggestions]);
+
+  // Input handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setQuery(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchSuggestions(val), 250);
+    setQuery(e.target.value);
   };
 
   // Select a suggestion
@@ -229,7 +232,7 @@ export default function SmartSearchBar({
   };
 
   return (
-    <div className="relative flex-1 max-w-xl">
+    <div className="relative flex-1 max-w-full sm:max-w-xl">
       <div className="relative flex items-center">
         {/* Search icon */}
         <svg
@@ -255,6 +258,12 @@ export default function SmartSearchBar({
             if (query.trim() && suggestions.length > 0) setShowDropdown(true);
           }}
           placeholder={placeholder}
+          aria-label="広告・商材・広告主を検索"
+          aria-expanded={showDropdown}
+          aria-controls="search-suggestions"
+          aria-autocomplete="list"
+          aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
+          role="combobox"
           className="w-full pl-9 pr-20 py-2 text-[13px] border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF] placeholder-gray-400 transition-all"
         />
         {/* Loading spinner */}
@@ -315,6 +324,7 @@ export default function SmartSearchBar({
               setShowDropdown(false);
               onSearch("");
             }}
+            aria-label="検索をクリア"
             className="absolute right-2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <svg
@@ -337,12 +347,18 @@ export default function SmartSearchBar({
       {/* Dropdown */}
       {showDropdown && suggestions.length > 0 && (
         <div
+          id="search-suggestions"
           ref={dropdownRef}
+          role="listbox"
+          aria-label="検索候補"
           className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-72 overflow-y-auto"
         >
           {suggestions.map((item, idx) => (
             <button
+              id={`suggestion-${idx}`}
               key={`${item.type}-${item.value}-${idx}`}
+              role="option"
+              aria-selected={idx === activeIndex}
               onClick={() => handleSelect(item)}
               className={`w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left transition-colors ${
                 idx === activeIndex

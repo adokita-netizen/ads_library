@@ -27,6 +27,50 @@ META_AD_LIBRARY_URL = "https://www.facebook.com/ads/library/"
 META_GRAPH_API_VERSION = "v25.0"
 META_AD_LIBRARY_API = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/ads_archive"
 
+_DOMAIN_ONLY_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}(/.*)?$")
+
+
+def _normalize_external_url(raw: Optional[str]) -> Optional[str]:
+    """Normalize destination URL and unwrap Meta redirect links."""
+    if not raw:
+        return None
+    url = str(raw).strip()
+    if not url:
+        return None
+
+    for _ in range(2):
+        dec = urllib.parse.unquote(url)
+        if dec == url:
+            break
+        url = dec
+
+    if not url.startswith(("http://", "https://")):
+        if _DOMAIN_ONLY_RE.match(url):
+            url = f"https://{url}"
+        else:
+            return None
+
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.netloc or "").lower()
+    if "facebook.com" in host and parsed.path.startswith("/l.php"):
+        qs = urllib.parse.parse_qs(parsed.query)
+        inner = qs.get("u", [None])[0] or qs.get("url", [None])[0]
+        return _normalize_external_url(inner)
+
+    internal_hosts = ("facebook.com", "fb.com")
+    if any(host == h or host.endswith(f".{h}") for h in internal_hosts):
+        return None
+
+    return url
+
+
+def _pick_destination_url(*candidates: Optional[str]) -> Optional[str]:
+    for c in candidates:
+        normalized = _normalize_external_url(c)
+        if normalized:
+            return normalized
+    return None
+
 
 def _parse_metric_range(text: str) -> tuple[Optional[int], Optional[int]]:
     """Parse impression/spend range text into (lower, upper) ints.
@@ -444,6 +488,10 @@ class MetaAdLibraryCrawler(BaseCrawler):
     def __init__(self, access_token: Optional[str] = None, rate_limit_delay: float = 2.0):
         super().__init__(rate_limit_delay=rate_limit_delay)
         self.access_token = access_token
+        # CI-054: Adaptive rate limiting — increase delay on 429 spikes
+        self._base_delay = rate_limit_delay
+        self._consecutive_429s = 0
+        self._max_adaptive_delay = 120.0  # cap at 2 minutes
 
     async def search_ads(
         self,
@@ -474,10 +522,45 @@ class MetaAdLibraryCrawler(BaseCrawler):
             logger.info("meta_api_empty_or_failed_trying_browser", query=query)
             results = await self._search_via_browser(query, category, limit, country)
 
+        # CI-126: If API returned too few results, supplement with browser crawl
+        if results and len(results) < min(30, limit):
+            logger.info("meta_api_low_count_supplementing",
+                         query=query, api_count=len(results), target=min(30, limit))
+            browser_results = await self._search_via_browser(
+                query, category, limit - len(results), country)
+            if browser_results:
+                existing_ids = {r.external_id for r in results if r.external_id}
+                for br in browser_results:
+                    if br.external_id not in existing_ids:
+                        results.append(br)
+                        existing_ids.add(br.external_id)
+                logger.info("meta_supplemented_results",
+                             total=len(results), added=len(browser_results))
+
         # If browser also failed, try lightweight scraping
         if not results:
             logger.info("meta_browser_failed_trying_httpx", query=query)
             results = await self._search_via_scraping(query, category, limit, country)
+
+        # Filter and prioritize Japanese-language ads for JP country
+        if results and country == "JP":
+            for crawled_ad in results:
+                if "japanese_ratio" not in crawled_ad.metadata:
+                    text = (crawled_ad.title or "") + " " + (crawled_ad.description or "")
+                    ratio = japanese_text_ratio(text)
+                    crawled_ad.metadata["japanese_ratio"] = round(ratio, 3)
+
+            jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) > 0.05]
+            non_jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) <= 0.05]
+            results = jp_ads + non_jp_ads[:max(0, limit - len(jp_ads))]
+
+            logger.info(
+                "meta_japanese_filter_applied",
+                total=len(jp_ads) + len(non_jp_ads),
+                japanese_ads=len(jp_ads),
+                non_japanese_ads=len(non_jp_ads),
+                kept=len(results),
+            )
 
         # Post-crawl: enrich ads missing metrics/thumbnails
         if results and enrich_metrics:
@@ -505,7 +588,11 @@ class MetaAdLibraryCrawler(BaseCrawler):
             "search_terms": query,
             "ad_reached_countries": f'["{country}"]',
             "ad_type": ad_type,
-            "limit": min(limit, 100),
+            # CI-121: Sort by newest first for latest-first retrieval
+            "sort_direction": "desc",
+            "sort_field": "DELIVERY_START_TIME",
+            # Fetch extra to compensate for post-filter (Japanese ads)
+            "limit": min(limit * 3, 100),
             "fields": (
                 "id,ad_creation_time,ad_delivery_start_time,ad_delivery_stop_time,"
                 "ad_creative_bodies,ad_creative_link_titles,ad_creative_link_descriptions,"
@@ -532,10 +619,39 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     query=query,
                     error_body=error_body,
                 )
+                if response.status_code == 429:
+                    # CI-054: Adaptive rate limiting on 429
+                    self._consecutive_429s += 1
+                    retry_after = int(response.headers.get("Retry-After", "30"))
+                    adaptive_delay = min(
+                        retry_after * (2 ** (self._consecutive_429s - 1)),
+                        self._max_adaptive_delay,
+                    )
+                    self.rate_limit_delay = min(
+                        self._base_delay * (2 ** self._consecutive_429s),
+                        self._max_adaptive_delay,
+                    )
+                    logger.warning("meta_api_rate_limited",
+                                   retry_after=retry_after,
+                                   adaptive_delay=adaptive_delay,
+                                   consecutive_429s=self._consecutive_429s,
+                                   new_rate_limit_delay=self.rate_limit_delay)
+                    await asyncio.sleep(adaptive_delay)
+                    return []  # trigger browser fallback
+                if response.status_code == 401:
+                    # Token expired — log critical and stop retrying
+                    logger.critical("meta_api_token_expired",
+                                    msg="Meta API token expired or invalid. Manual renewal required.")
+                    return []
                 if response.status_code == 500:
                     return []  # trigger browser fallback
                 response.raise_for_status()
             data = response.json()
+
+            # CI-054: Reset adaptive delay on successful response
+            if self._consecutive_429s > 0:
+                self._consecutive_429s = 0
+                self.rate_limit_delay = self._base_delay
 
             if "error" in data:
                 logger.warning("meta_api_error", error=data["error"])
@@ -553,6 +669,26 @@ class MetaAdLibraryCrawler(BaseCrawler):
             while next_url and len(results) < limit:
                 await asyncio.sleep(self.rate_limit_delay)
                 response = await client.get(next_url)
+                if response.status_code == 429:
+                    self._consecutive_429s += 1
+                    retry_after = int(response.headers.get("Retry-After", "30"))
+                    adaptive_delay = min(
+                        retry_after * (2 ** (self._consecutive_429s - 1)),
+                        self._max_adaptive_delay,
+                    )
+                    self.rate_limit_delay = min(
+                        self._base_delay * (2 ** self._consecutive_429s),
+                        self._max_adaptive_delay,
+                    )
+                    logger.warning("meta_api_pagination_rate_limited",
+                                   retry_after=retry_after,
+                                   adaptive_delay=adaptive_delay,
+                                   consecutive_429s=self._consecutive_429s)
+                    await asyncio.sleep(adaptive_delay)
+                    break
+                if response.status_code == 401:
+                    logger.critical("meta_api_token_expired_during_pagination")
+                    break
                 if response.status_code != 200:
                     break
                 data = response.json()
@@ -599,6 +735,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
         pw = None
         browser = None
+        context = None
+        page = None
         try:
             pw = await async_playwright().start()
             browser = await pw.chromium.launch(headless=True)
@@ -638,12 +776,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
                 destination_url = ad.get("destination_url")
                 display_url = ad.get("display_url")
-                if not destination_url and display_url:
-                    destination_url = (
-                        display_url
-                        if display_url.startswith("http")
-                        else f"https://{display_url}"
-                    )
+                all_ext_links = ad.get("all_external_links", [])
+                first_external = all_ext_links[0] if all_ext_links else None
+                destination_url = _pick_destination_url(destination_url, first_external, display_url)
 
                 first_seen = None
                 if ad.get("start_date"):
@@ -686,7 +821,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                         "publisher_platforms": platforms,
                         "destination_url": destination_url,
                         "display_url": display_url,
-                        "all_external_links": ad.get("all_external_links", []),
+                        "all_external_links": all_ext_links,
                         "destination_type": "LP" if destination_url else None,
                     },
                 ))
@@ -713,6 +848,16 @@ class MetaAdLibraryCrawler(BaseCrawler):
         except Exception as e:
             logger.error("meta_browser_scraping_failed", error=str(e))
         finally:
+            if page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+            if context:
+                try:
+                    await context.close()
+                except Exception:
+                    pass
             if browser:
                 await browser.close()
             if pw:
@@ -823,7 +968,10 @@ class MetaAdLibraryCrawler(BaseCrawler):
             # Extract destination URL from link captions/descriptions
             link_descriptions = ad_data.get("ad_creative_link_descriptions", [])
             link_captions = ad_data.get("ad_creative_link_captions", [])
-            destination_url = ad_data.get("link_url") or ad_data.get("website_url")
+            destination_url = _pick_destination_url(
+                ad_data.get("link_url"),
+                ad_data.get("website_url"),
+            )
 
             display_url = None
             if not destination_url and link_captions:
@@ -831,14 +979,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 if caption:
                     display_url = caption
                     # Caption is a domain or URL (e.g. "hypnozio.com", "example.com/offer")
-                    if re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}', caption):
-                        destination_url = (
-                            caption
-                            if caption.startswith("http")
-                            else f"https://{caption}"
-                        )
-                    elif "http" in caption:
-                        destination_url = caption
+                    if re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}', caption) or "http" in caption:
+                        destination_url = _pick_destination_url(destination_url, caption)
 
             # Extract spend bounds from API response
             spend_data = ad_data.get("spend", {})
@@ -950,11 +1092,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     parsed = urllib.parse.urlparse(href)
                     params = urllib.parse.parse_qs(parsed.query)
                     raw_url = params.get("u", [None])[0]
-                    destination_url = (
-                        urllib.parse.unquote(raw_url) if raw_url else None
-                    )
+                    destination_url = _pick_destination_url(raw_url)
                 elif href.startswith("http") and "facebook.com" not in href:
-                    destination_url = href
+                    destination_url = _pick_destination_url(href)
 
             return CrawledAd(
                 external_id=ad_id or f"meta_scraped_{hash(str(card)):#010x}",
@@ -1074,6 +1214,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
                     page_url = f"{META_AD_LIBRARY_URL}?id={ad_id}"
                     context = None
+                    page = None
                     try:
                         context = await browser.new_context(
                             locale="ja-JP",
@@ -1126,6 +1267,11 @@ class MetaAdLibraryCrawler(BaseCrawler):
                             error=str(e)[:100],
                         )
                     finally:
+                        if page:
+                            try:
+                                await page.close()
+                            except Exception:
+                                pass
                         if context:
                             await context.close()
                         await asyncio.sleep(1.0)

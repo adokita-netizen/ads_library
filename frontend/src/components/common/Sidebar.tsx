@@ -3,12 +3,14 @@
 interface SidebarProps {
   currentView: string;
   onViewChange: (view: string) => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const navSections = [
   {
     items: [
-      { id: "pro-database", label: "PRO DATABASE", icon: "chart", badge: "HOT" },
+      { id: "pro-database", label: "PRO DATABASE", icon: "chart", badge: "注目" },
       { id: "search", label: "検索", icon: "search" },
       { id: "trend", label: "トレンド", icon: "trending" },
       { id: "analysis", label: "分析", icon: "chart" },
@@ -17,20 +19,22 @@ const navSections = [
   {
     items: [
       { id: "lp-analysis", label: "LP分析・USP設計", icon: "document" },
-      { id: "competitive", label: "競合インテリジェンス", icon: "shield", badge: "NEW" },
-      { id: "hit-ads", label: "ヒット広告分析", icon: "fire", badge: "NEW" },
-      { id: "compare", label: "比較ツール", icon: "compare", badge: "NEW" },
+      { id: "competitive", label: "競合インテリジェンス", icon: "shield", badge: "新着" },
+      { id: "hit-ads", label: "ヒット広告分析", icon: "fire", badge: "新着" },
+      { id: "compare", label: "比較ツール", icon: "compare", badge: "新着" },
       { id: "ai-expert", label: "AI専門家", icon: "sparkle" },
+      { id: "ai-chat", label: "AIチャット", icon: "sparkle", badge: "新着" },
       { id: "creative", label: "クリエイティブ生成", icon: "wand" },
-      { id: "scenario", label: "シナリオ作成", icon: "document", badge: "NEW" },
-      { id: "creative-brief", label: "ブリーフ作成", icon: "wand", badge: "NEW" },
+      { id: "scenario", label: "シナリオ作成", icon: "document", badge: "新着" },
+      { id: "creative-brief", label: "ブリーフ作成", icon: "wand", badge: "新着" },
     ],
   },
   {
     items: [
-      { id: "meta-ads", label: "自社広告管理", icon: "megaphone", badge: "NEW" },
-      { id: "reports", label: "レポート", icon: "chart", badge: "NEW" },
-      { id: "calendar", label: "カレンダー", icon: "calendar", badge: "NEW" },
+      { id: "meta-ads", label: "自社広告管理", icon: "megaphone", badge: "新着" },
+      { id: "reports", label: "レポート", icon: "chart", badge: "新着" },
+      { id: "calendar", label: "カレンダー", icon: "calendar", badge: "新着" },
+      { id: "notifications", label: "通知一覧", icon: "bell", badge: "新着" },
       { id: "alerts", label: "お知らせ", icon: "bell" },
       { id: "collections", label: "コレクション", icon: "folder" },
       { id: "team", label: "チームスペース", icon: "users" },
@@ -41,6 +45,8 @@ const navSections = [
   },
   {
     items: [
+      { id: "media-management", label: "メディア管理", icon: "image", badge: "新着" },
+      { id: "admin", label: "管理ツール", icon: "settings" },
       { id: "settings", label: "設定", icon: "settings" },
     ],
   },
@@ -128,6 +134,11 @@ const icons: Record<string, JSX.Element> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
     </svg>
   ),
+  image: (
+    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+    </svg>
+  ),
   settings: (
     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
@@ -136,21 +147,34 @@ const icons: Record<string, JSX.Element> = {
   ),
 };
 
-export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
-  return (
-    <aside className="flex h-full w-56 flex-col border-r border-gray-200 bg-white shrink-0">
+export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobileClose }: SidebarProps) {
+  const handleNav = (id: string) => {
+    onViewChange(id);
+    onMobileClose?.();
+  };
+
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="flex h-14 items-center px-5 border-b border-gray-100">
+      <div className="flex h-14 items-center justify-between px-5 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-[#4A7DFF] flex items-center justify-center">
             <span className="text-white text-xs font-black">V</span>
           </div>
           <span className="text-[15px] font-bold text-gray-900">VAAP</span>
         </div>
+        {/* Close button (mobile only) */}
+        {onMobileClose && (
+          <button onClick={onMobileClose} className="md:hidden p-1 text-gray-400 hover:text-gray-600" aria-label="メニューを閉じる">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto custom-scrollbar py-3">
+      <nav className="flex-1 overflow-y-auto custom-scrollbar py-3" aria-label="メインナビゲーション">
         {navSections.map((section, sIdx) => (
           <div key={sIdx}>
             {sIdx > 0 && <div className="my-2 mx-4 border-t border-gray-100" />}
@@ -160,14 +184,15 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => onViewChange(item.id)}
+                    onClick={() => handleNav(item.id)}
+                    aria-current={isActive ? "page" : undefined}
                     className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                       isActive
                         ? "bg-[#EEF2FF] text-[#4A7DFF]"
                         : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                   >
-                    <span className={isActive ? "text-[#4A7DFF]" : "text-gray-400"}>
+                    <span className={isActive ? "text-[#4A7DFF]" : "text-gray-400"} aria-hidden="true">
                       {icons[item.icon]}
                     </span>
                     <span>{item.label}</span>
@@ -184,6 +209,16 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
         ))}
       </nav>
 
+      {/* Keyboard shortcut hint */}
+      <div className="px-4 py-1.5 border-t border-gray-100">
+        <p className="text-[10px] text-gray-400 text-center">
+          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 border border-gray-200 rounded">Ctrl</kbd>
+          {" + "}
+          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 border border-gray-200 rounded">/</kbd>
+          {" ショートカット一覧"}
+        </p>
+      </div>
+
       {/* Footer */}
       <div className="border-t border-gray-100 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -196,6 +231,25 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
           </div>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex h-full w-56 flex-col border-r border-gray-200 bg-white shrink-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile drawer overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={onMobileClose} />
+          <aside className="relative flex h-full w-64 flex-col bg-white shadow-xl">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

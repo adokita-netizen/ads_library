@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 /* ─── Types ─── */
 
@@ -103,6 +104,7 @@ export default function DistributionChart({
       </div>
 
       {/* SVG Histogram */}
+      <ErrorBoundary fallback={<div className="flex items-center justify-center h-40 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
       <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full h-auto">
         {/* Background */}
         <rect x={PAD.left} y={PAD.top} width={PLOT_W} height={PLOT_H} fill="#fafafa" rx="2" />
@@ -191,6 +193,7 @@ export default function DistributionChart({
           </text>
         ))}
       </svg>
+      </ErrorBoundary>
     </div>
   );
 }

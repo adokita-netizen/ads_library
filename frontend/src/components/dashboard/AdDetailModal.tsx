@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { platformLabels, platformColors, platformBadgeColors, genreOptions } from "@/lib/constants";
-import { formatNumber, formatYen } from "@/lib/format";
+import { formatNumber, formatYen, copyToClipboard } from "@/lib/format";
 import { CreativeViewer } from "../common/CreativeViewer";
 import SimilarAdsPanel from "./SimilarAdsPanel";
 import CreativeIntelligence from "./CreativeIntelligence";
@@ -450,9 +450,7 @@ export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModal
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/80 text-gray-600 text-[11px] hover:bg-white transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(ad.destination_url).then(() => {
-                      toast.success("URLをコピーしました");
-                    }).catch(() => {});
+                    copyToClipboard(ad.destination_url).then(() => toast.success("URLをコピーしました"));
                   }}
                   title="URLをコピー"
                 >
@@ -470,7 +468,7 @@ export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModal
             <div className="space-y-2">
               <p className="text-[10px] text-gray-400">LPプレビュー</p>
               <div className="relative aspect-[3/2] bg-gray-100 rounded-lg overflow-hidden group cursor-pointer"
-                onClick={() => window.open(`/api/v1/media/lp-screenshot/${ad.ad_id}`, "_blank")}
+                onClick={() => window.open(`/api/v1/media/lp-screenshot/${ad.ad_id}`, "_blank", "noopener,noreferrer")}
               >
                 <img
                   src={`/api/v1/media/lp-screenshot/${ad.ad_id}`}
@@ -638,7 +636,7 @@ export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModal
             {ad.destination_url && (
               <button
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4A7DFF] text-white text-[12px] font-medium hover:bg-[#3a6ae8] transition-colors"
-                onClick={() => window.open(ad.destination_url, "_blank")}
+                onClick={() => window.open(ad.destination_url, "_blank", "noopener,noreferrer")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -649,7 +647,7 @@ export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModal
             {ad.ad_url && (
               <button
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-[12px] font-medium hover:bg-gray-200 transition-colors"
-                onClick={() => window.open(ad.ad_url, "_blank")}
+                onClick={() => window.open(ad.ad_url, "_blank", "noopener,noreferrer")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -687,7 +685,7 @@ export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModal
             {/* B10-2: Download button */}
             <button
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-[12px] font-medium hover:bg-emerald-100 transition-colors"
-              onClick={() => window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank")}
+              onClick={() => window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank", "noopener,noreferrer")}
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

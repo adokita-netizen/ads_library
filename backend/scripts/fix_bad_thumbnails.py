@@ -14,6 +14,7 @@ Run from the backend directory:
     python scripts/fix_bad_thumbnails.py
 """
 
+import os
 import re
 import sys
 import time
@@ -22,12 +23,24 @@ sys.path.insert(0, ".")
 
 import httpx
 from bs4 import BeautifulSoup
-from sqlalchemy import or_
+from sqlalchemy import create_engine, or_
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, is_in_memory_mode
 from app.models.ad import Ad
 from app.api.endpoints.settings import load_api_keys_from_db
+
+
+def _get_session() -> Session:
+    """Get a DB session, connecting to vaap_local.db if SQLite fallback is active."""
+    if not is_in_memory_mode():
+        return SyncSessionLocal()
+    db_path = os.path.join(os.path.dirname(__file__), "..", "vaap_local.db")
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"vaap_local.db not found at {db_path}")
+    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    return sessionmaker(bind=engine)()
 
 
 # ── Config ────────────────────────────────────────────────────────
@@ -239,12 +252,15 @@ def _try_playwright_lp_hero(destination_url: str | None, metadata: dict | None) 
 
 
 def main():
-    session = SyncSessionLocal()
+    session = _get_session()
     try:
         # Load Meta access token
-        keys = load_api_keys_from_db()
-        meta_keys = keys.get("meta", keys.get("facebook", {}))
-        access_token = meta_keys.get("access_token")
+        try:
+            keys = load_api_keys_from_db()
+            meta_keys = keys.get("meta", keys.get("facebook", {}))
+            access_token = meta_keys.get("access_token")
+        except Exception:
+            access_token = os.environ.get("META_ACCESS_TOKEN")
         if access_token:
             print(f"Meta access token: {access_token[:8]}****")
         else:

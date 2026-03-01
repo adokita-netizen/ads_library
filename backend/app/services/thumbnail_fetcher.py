@@ -19,7 +19,7 @@ import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from app.models.ad import Ad
+from app.models.ad import Ad, MediaExtractionStatus
 from app.services.media_extraction import MediaExtractor
 
 logger = structlog.get_logger()
@@ -36,6 +36,7 @@ class ThumbnailFetcher:
         self.meta_access_token = meta_access_token
         self.use_playwright = use_playwright
         self._extractor = MediaExtractor()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def fetch_all(
         self,
@@ -56,19 +57,26 @@ class ThumbnailFetcher:
         stats = {"total": len(ads), "success": 0, "failed": 0, "skipped": 0}
         logger.info("thumbnail_fetch_started", total=len(ads))
 
-        for i, ad in enumerate(ads):
-            try:
-                result = self._process_single(session, ad)
-                stats[result] += 1
-            except Exception as e:
-                logger.warning("thumbnail_fetch_error", ad_id=ad.id, error=str(e))
-                stats["failed"] += 1
+        # Reuse a single event loop for all async extractions instead of
+        # creating/destroying one per asyncio.run() call.
+        self._loop = asyncio.new_event_loop()
+        try:
+            for i, ad in enumerate(ads):
+                try:
+                    result = self._process_single(session, ad)
+                    stats[result] += 1
+                except Exception as e:
+                    logger.warning("thumbnail_fetch_error", ad_id=ad.id, error=str(e))
+                    stats["failed"] += 1
 
-            # Commit in batches and rate-limit
-            if (i + 1) % batch_size == 0:
-                session.commit()
-                if i + 1 < len(ads):
-                    time.sleep(delay)
+                # Commit in batches and rate-limit
+                if (i + 1) % batch_size == 0:
+                    session.commit()
+                    if i + 1 < len(ads):
+                        time.sleep(delay)
+        finally:
+            self._loop.close()
+            self._loop = None
 
         session.commit()
         logger.info("thumbnail_fetch_completed", **stats)
@@ -105,7 +113,7 @@ class ThumbnailFetcher:
             if extracted and extracted.image_urls:
                 ad.thumbnail_url = extracted.image_urls[0]
                 ad.image_url = ad.image_url or extracted.image_urls[0]
-                ad.media_extraction_status = "completed"
+                ad.media_extraction_status = MediaExtractionStatus.COMPLETED
                 if not ad.creative_type or ad.creative_type == "unknown":
                     ad.creative_type = extracted.creative_type
                 # Also save extracted text if missing
@@ -125,7 +133,7 @@ class ThumbnailFetcher:
         if page_pic:
             ad.thumbnail_url = page_pic
             ad.image_url = ad.image_url or page_pic
-            ad.media_extraction_status = "enriched"
+            ad.media_extraction_status = MediaExtractionStatus.ENRICHED
             logger.info("thumbnail_from_page_picture", ad_id=ad.id)
             return "success"
 
@@ -134,7 +142,7 @@ class ThumbnailFetcher:
         if og_image:
             ad.thumbnail_url = og_image
             ad.image_url = ad.image_url or og_image
-            ad.media_extraction_status = "enriched"
+            ad.media_extraction_status = MediaExtractionStatus.ENRICHED
             logger.info("thumbnail_from_og_image", ad_id=ad.id)
             return "success"
 
@@ -143,7 +151,7 @@ class ThumbnailFetcher:
         if api_pic:
             ad.thumbnail_url = api_pic
             ad.image_url = ad.image_url or api_pic
-            ad.media_extraction_status = "enriched"
+            ad.media_extraction_status = MediaExtractionStatus.ENRICHED
             logger.info("thumbnail_from_api_search", ad_id=ad.id)
             return "success"
 
@@ -152,26 +160,28 @@ class ThumbnailFetcher:
         if favicon:
             ad.thumbnail_url = favicon
             ad.image_url = ad.image_url or favicon
-            ad.media_extraction_status = "enriched"
+            ad.media_extraction_status = MediaExtractionStatus.ENRICHED
             logger.info("thumbnail_from_favicon", ad_id=ad.id)
             return "success"
 
-        ad.media_extraction_status = "failed"
+        ad.media_extraction_status = MediaExtractionStatus.FAILED
         return "failed"
 
     def _extract_thumbnail(self, url: str):
-        """Run MediaExtractor.extract() in a new event loop (sync context)."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        """Run MediaExtractor.extract() using the shared event loop (sync context)."""
         try:
-            return loop.run_until_complete(
-                self._extractor.extract(url, use_playwright=self.use_playwright)
-            )
+            loop = self._loop or asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(
+                    self._extractor.extract(url, use_playwright=self.use_playwright)
+                )
+            finally:
+                # Only close if we created a one-off loop (fallback path)
+                if not self._loop:
+                    loop.close()
         except Exception as e:
             logger.warning("media_extract_failed", url=url[:80], error=str(e))
             return None
-        finally:
-            loop.close()
 
     def _get_api_snapshot_url(self, external_id: str) -> Optional[str]:
         """Call Meta Graph API to get ad_snapshot_url (authenticated URL)."""

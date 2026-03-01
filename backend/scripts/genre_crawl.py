@@ -27,8 +27,14 @@ import requests as http_requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SyncSessionLocal
-from app.models.ad import Ad, AdStatusEnum
-from app.tasks.crawl_tasks import _crawl_platforms, _map_platform, get_connected_platforms
+from app.models.ad import Ad, AdStatusEnum, MediaExtractionStatus
+from app.tasks.crawl_tasks import (
+    _crawl_platforms,
+    _map_platform,
+    _extract_destination_url,
+    _extract_text_fallback,
+    get_connected_platforms,
+)
 from sqlalchemy.orm.attributes import flag_modified
 
 # ── Config paths ─────────────────────────────────────────────────────
@@ -274,15 +280,14 @@ def crawl_genre(genre_key, genre_info, platforms, limit_per_platform):
                         has_direct_media = bool(
                             crawled_ad.image_urls or crawled_ad.video_url
                         )
-                        extraction_status = "skipped" if has_direct_media else (
-                            "pending" if crawled_ad.snapshot_url else "skipped"
+                        extraction_status = (
+                            MediaExtractionStatus.SKIPPED if has_direct_media else (
+                                MediaExtractionStatus.PENDING if crawled_ad.snapshot_url else MediaExtractionStatus.SKIPPED
+                            )
                         )
 
-                        dest_url = crawled_ad.destination_url
-                        if not dest_url:
-                            dest_url = (crawled_ad.metadata or {}).get(
-                                "destination_url"
-                            )
+                        dest_url = _extract_destination_url(crawled_ad)
+                        title, description = _extract_text_fallback(crawled_ad)
 
                         ad_category = None
                         if crawled_ad.category:
@@ -294,14 +299,17 @@ def crawl_genre(genre_key, genre_info, platforms, limit_per_platform):
 
                         # Build initial metadata with genre tags
                         ad_meta = dict(crawled_ad.metadata or {})
+                        if dest_url:
+                            ad_meta["destination_url"] = dest_url
+                            ad_meta.setdefault("destination_type", "LP")
                         ad_meta["fine_genre"] = label
                         ad_meta["fine_genre_en"] = genre_key
                         ad_meta["crawl_source"] = "genre_crawl"
 
                         ad = Ad(
                             external_id=crawled_ad.external_id,
-                            title=crawled_ad.title,
-                            description=crawled_ad.description,
+                            title=title,
+                            description=description,
                             platform=_map_platform(platform),
                             creative_type=crawled_ad.creative_type,
                             video_url=crawled_ad.video_url,

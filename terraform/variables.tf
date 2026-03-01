@@ -99,3 +99,10 @@ variable "nat_instance_type" {
   type        = string
   default     = "t4g.nano"
 }
+
+variable "meta_access_token" {
+  description = "Meta Ad Library API access token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -64,8 +64,8 @@ def _flush():
 def _save_crawled_ads(crawl_results: dict) -> int:
     """Save crawled ads to DB. Returns count of newly saved ads."""
     from app.core.database import SyncSessionLocal
-    from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum, AdCategoryEnum
-    from app.tasks.crawl_tasks import _map_platform
+    from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum, AdCategoryEnum, MediaExtractionStatus
+    from app.tasks.crawl_tasks import _map_platform, _extract_destination_url, _extract_text_fallback
 
     session = SyncSessionLocal()
     saved = 0
@@ -81,15 +81,18 @@ def _save_crawled_ads(crawl_results: dict) -> int:
 
                 has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
                 if has_direct_media:
-                    extraction_status = "skipped"
+                    extraction_status = MediaExtractionStatus.SKIPPED
                 elif crawled_ad.snapshot_url:
-                    extraction_status = "pending"
+                    extraction_status = MediaExtractionStatus.PENDING
                 else:
-                    extraction_status = "skipped"
+                    extraction_status = MediaExtractionStatus.SKIPPED
 
-                dest_url = crawled_ad.destination_url
-                if not dest_url:
-                    dest_url = (crawled_ad.metadata or {}).get("destination_url")
+                dest_url = _extract_destination_url(crawled_ad)
+                title, description = _extract_text_fallback(crawled_ad)
+                ad_meta = dict(crawled_ad.metadata or {})
+                if dest_url:
+                    ad_meta["destination_url"] = dest_url
+                    ad_meta.setdefault("destination_type", "LP")
 
                 ad_category = None
                 if crawled_ad.category:
@@ -100,8 +103,8 @@ def _save_crawled_ads(crawl_results: dict) -> int:
 
                 ad = Ad(
                     external_id=crawled_ad.external_id,
-                    title=crawled_ad.title,
-                    description=crawled_ad.description,
+                    title=title,
+                    description=description,
                     platform=_map_platform(platform),
                     creative_type=crawled_ad.creative_type,
                     video_url=crawled_ad.video_url,
@@ -127,7 +130,7 @@ def _save_crawled_ads(crawl_results: dict) -> int:
                     first_seen_at=crawled_ad.first_seen_at,
                     last_seen_at=crawled_ad.last_seen_at,
                     tags=crawled_ad.tags,
-                    ad_metadata=crawled_ad.metadata,
+                    ad_metadata=ad_meta,
                     status=AdStatusEnum.PENDING,
                 )
                 session.add(ad)

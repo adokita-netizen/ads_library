@@ -35,6 +35,9 @@ mangum==0.17.0
 # Generative AI Clients (API-only, no local models)
 openai==1.12.0
 anthropic==0.18.1
+# Pin to avoid hf-xet Rust build requirement in Lambda
+huggingface-hub<0.25.0
+tokenizers<0.21.0
 
 # Web Scraping (lightweight)
 httpx==0.27.0

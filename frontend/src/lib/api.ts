@@ -75,8 +75,11 @@ export async function fetchApi<T = unknown>(
   let lastError: FetchError | Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55_000);
     try {
-      const res = await fetch(url, init);
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timeoutId);
 
       // Retry on transient server errors (502/503/504 from Lambda cold start etc.)
       if (isRetryable(res.status) && attempt < MAX_RETRIES) {
@@ -95,6 +98,7 @@ export async function fetchApi<T = unknown>(
       }
       return data as T;
     } catch (err) {
+      clearTimeout(timeoutId);
       lastError = err instanceof Error ? err : new Error(String(err));
 
       // Don't retry client errors (4xx) or if we're on last attempt
@@ -111,6 +115,20 @@ export async function fetchApi<T = unknown>(
   throw lastError || new Error("API request failed");
 }
 
+// ─── API response type guards ───
+
+export function isApiList<T>(data: unknown): data is { items: T[]; total: number } {
+  return data != null && typeof data === "object" && "items" in data && Array.isArray((data as Record<string, unknown>).items);
+}
+
+export function assertObject(data: unknown, context: string): asserts data is Record<string, unknown> {
+  if (!data || typeof data !== "object") throw new Error(`[${context}] Invalid response: expected object`);
+}
+
+export function assertHasField<K extends string>(data: Record<string, unknown>, field: K, context: string): asserts data is Record<string, unknown> & Record<K, unknown> {
+  if (!(field in data)) throw new Error(`[${context}] Missing required field: ${field}`);
+}
+
 // Request interceptor for auth token (guarded for SSR)
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
@@ -122,6 +140,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Track retry counts without mutating config objects
+const axiosRetryMap = new WeakMap<object, number>();
+
 // Response interceptor: retry on transient errors + handle 401
 api.interceptors.response.use(
   (response) => response,
@@ -130,10 +151,13 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     // Auto-retry on 502/503/504 (サーバー起動待ち)
-    if (config && isRetryable(status) && (config._retryCount || 0) < MAX_RETRIES) {
-      config._retryCount = (config._retryCount || 0) + 1;
-      await sleep(RETRY_DELAY_MS * config._retryCount);
-      return api(config);
+    if (config && isRetryable(status)) {
+      const count = (axiosRetryMap.get(config) || 0) + 1;
+      if (count <= MAX_RETRIES) {
+        axiosRetryMap.set(config, count);
+        await sleep(RETRY_DELAY_MS * count);
+        return api(config);
+      }
     }
 
     if (typeof window !== "undefined" && status === 401) {

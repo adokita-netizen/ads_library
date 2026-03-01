@@ -45,13 +45,6 @@ interface CollectionsViewProps {
   fullPage?: boolean;
 }
 
-// TODO: Replace mock bookmarks when /rankings/bookmarks API is available
-const MOCK_BOOKMARKS: BookmarkedAd[] = [
-  { ad_id: 101, product_name: "美肌サプリメント", advertiser_name: "Beauty Corp", hit_score: 88, hit_level: "mega_hit", platform: "instagram", bookmarked_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-  { ad_id: 102, product_name: "英会話アプリ", advertiser_name: "Language Inc", hit_score: 75, hit_level: "hit", platform: "youtube", bookmarked_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
-  { ad_id: 103, product_name: "プロテインバー", advertiser_name: "Health Foods", hit_score: 62, platform: "tiktok", bookmarked_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() },
-];
-
 export default function CollectionsView({ onAdSelect, fullPage }: CollectionsViewProps) {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +59,8 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
   const [bookmarks, setBookmarks] = useState<BookmarkedAd[]>([]);
   const [bookmarksLoading, setBookmarksLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadCollections = useCallback(async () => {
     setLoading(true);
@@ -85,18 +80,11 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
   const loadBookmarks = useCallback(async () => {
     setBookmarksLoading(true);
     try {
-      // TODO: Use /rankings/bookmarks when API is available
-      const res = await fetchApi<{ items?: BookmarkedAd[]; bookmarks?: BookmarkedAd[] }>("/rankings/bookmarks").catch(() => null);
-      if (res) {
-        const items = res.items || res.bookmarks || (Array.isArray(res) ? res : []);
-        if (Array.isArray(items) && items.length > 0) {
-          setBookmarks(items);
-        } else {
-          setBookmarks(MOCK_BOOKMARKS);
-        }
-      } else {
-        setBookmarks(MOCK_BOOKMARKS);
-      }
+      const res = await fetchApi<{ items?: BookmarkedAd[]; bookmarks?: BookmarkedAd[] }>("/rankings/bookmarks");
+      const items = res.items || res.bookmarks || (Array.isArray(res) ? res : []);
+      setBookmarks(Array.isArray(items) ? items : []);
+    } catch {
+      setBookmarks([]);
     } finally {
       setBookmarksLoading(false);
     }
@@ -120,7 +108,8 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
   }, []);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || creating) return;
+    setCreating(true);
     try {
       await fetchApi("/rankings/collections", {
         method: "POST",
@@ -133,6 +122,8 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
       loadCollections();
     } catch {
       toast.error("コレクション作成に失敗しました");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -141,6 +132,8 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
       setDeleteConfirm(id);
       return;
     }
+    if (deleting) return;
+    setDeleting(true);
     try {
       await fetchApi(`/rankings/collections/${id}`, { method: "DELETE" });
       toast.success("コレクションを削除しました");
@@ -151,8 +144,10 @@ export default function CollectionsView({ onAdSelect, fullPage }: CollectionsVie
       loadCollections();
     } catch {
       toast.error("削除に失敗しました");
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(null);
     }
-    setDeleteConfirm(null);
   };
 
   /* ─── Ad Card (shared) ─── */

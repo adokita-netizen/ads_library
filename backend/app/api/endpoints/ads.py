@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.core.database import get_async_session, SyncSessionLocal
 from app.core.storage import get_storage_client
 from app.models.user import User
-from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum
+from app.models.ad import Ad, AdPlatformEnum, AdStatusEnum, MediaExtractionStatus
 from app.models.analysis import AdAnalysis
 from app.schemas.ad import (
     AdCreate,
@@ -34,6 +34,8 @@ from app.schemas.ad import (
     AdAnalysisResponse,
     CrawlRequest,
     CrawlResponse,
+    LPKeywordExtractionRequest,
+    LPKeywordExtractionResponse,
 )
 
 logger = structlog.get_logger()
@@ -173,7 +175,7 @@ async def ad_data_integrity(
     # Ads with pending media extraction
     pending_media_result = await db.execute(
         select(func.count()).select_from(Ad).where(
-            Ad.media_extraction_status == "pending"
+            Ad.media_extraction_status == MediaExtractionStatus.PENDING
         )
     )
     pending_media_count = pending_media_result.scalar() or 0
@@ -482,6 +484,7 @@ def crawl_ads(
                 category=request.category,
                 limit_per_platform=request.limit_per_platform,
                 auto_analyze=request.auto_analyze,
+                country=request.country,
             )
             _logger.info("crawl_dispatched_to_sqs", task_id=result.id, query=request.query, platforms=active_platforms)
             msg = f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体: {', '.join(active_platforms)})"
@@ -500,6 +503,7 @@ def crawl_ads(
                     category=request.category,
                     limit_per_platform=request.limit_per_platform,
                     auto_analyze=request.auto_analyze,
+                    country=request.country,
                 )
                 _logger.info("crawl_dispatched_to_celery", task_id=result.id, query=request.query)
                 return CrawlResponse(task_id=result.id, status="started", message=f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体)")
@@ -537,6 +541,7 @@ def crawl_ads(
             platforms=active_platforms,
             category=request.category,
             limit_per_platform=request.limit_per_platform,
+            country=request.country,
         )
 
         # Update CrawlJob to COMPLETED
@@ -590,6 +595,7 @@ def _inline_crawl(
     platforms: list[str],
     category: str | None,
     limit_per_platform: int,
+    country: str = "JP",
 ) -> int:
     """Run the real crawlers inline (same logic as Celery task, but synchronous)."""
     import asyncio
@@ -599,7 +605,7 @@ def _inline_crawl(
     # Run async crawlers in a thread to avoid event loop conflicts with FastAPI
     def _run():
         return asyncio.run(
-            _crawl_platforms(query, platforms, category, limit_per_platform)
+            _crawl_platforms(query, platforms, category, limit_per_platform, country)
         )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -617,21 +623,42 @@ def _inline_crawl(
                         Ad.external_id == crawled_ad.external_id
                     ).first()
                     if existing:
+                        # Update metrics and metadata for existing ads
+                        if crawled_ad.spend is not None:
+                            existing.spend = crawled_ad.spend
+                        if crawled_ad.impressions is not None:
+                            existing.impressions = crawled_ad.impressions
+                        if crawled_ad.view_count is not None:
+                            existing.view_count = crawled_ad.view_count
+                        if crawled_ad.last_seen_at is not None:
+                            existing.last_seen_at = crawled_ad.last_seen_at
+                        # Merge new metadata keys
+                        old_meta = dict(existing.ad_metadata or {})
+                        new_meta = dict(crawled_ad.metadata or {})
+                        old_meta.update({k: v for k, v in new_meta.items() if v is not None})
+                        existing.ad_metadata = old_meta
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(existing, "ad_metadata")
+                        saved += 1
                         continue
 
                 # Determine media extraction status
                 has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
                 if has_direct_media:
-                    extraction_status = "skipped"
+                    extraction_status = MediaExtractionStatus.SKIPPED
                 elif crawled_ad.snapshot_url:
-                    extraction_status = "pending"
+                    extraction_status = MediaExtractionStatus.PENDING
                 else:
-                    extraction_status = "skipped"
+                    extraction_status = MediaExtractionStatus.SKIPPED
 
-                # Extract destination_url from CrawledAd field or metadata
-                dest_url = crawled_ad.destination_url
-                if not dest_url:
-                    dest_url = (crawled_ad.metadata or {}).get("destination_url")
+                # Reuse crawl task helpers to avoid URL extraction drift.
+                from app.tasks.crawl_tasks import _extract_destination_url, _extract_text_fallback
+                dest_url = _extract_destination_url(crawled_ad)
+                title, description = _extract_text_fallback(crawled_ad)
+                meta = dict(crawled_ad.metadata or {})
+                if dest_url:
+                    meta["destination_url"] = dest_url
+                    meta.setdefault("destination_type", "LP")
 
                 # Map category string to enum
                 ad_category = None
@@ -644,8 +671,8 @@ def _inline_crawl(
 
                 ad = Ad(
                     external_id=crawled_ad.external_id,
-                    title=crawled_ad.title,
-                    description=crawled_ad.description,
+                    title=title,
+                    description=description,
                     platform=_map_platform(platform),
                     creative_type=crawled_ad.creative_type,
                     video_url=crawled_ad.video_url,
@@ -671,7 +698,7 @@ def _inline_crawl(
                     first_seen_at=crawled_ad.first_seen_at,
                     last_seen_at=crawled_ad.last_seen_at,
                     tags=crawled_ad.tags,
-                    ad_metadata=crawled_ad.metadata,
+                    ad_metadata=meta,
                     status=AdStatusEnum.PENDING,
                 )
                 session.add(ad)
@@ -699,7 +726,7 @@ def _inline_crawl(
         try:
             from app.tasks.dispatcher import dispatch_task
             ads_with_snapshot = session.query(Ad).filter(
-                Ad.media_extraction_status == "pending",
+                Ad.media_extraction_status == MediaExtractionStatus.PENDING,
                 Ad.snapshot_url.isnot(None),
             ).order_by(Ad.created_at.desc()).limit(saved).all()
             for ad_to_extract in ads_with_snapshot:
@@ -712,7 +739,7 @@ def _inline_crawl(
         try:
             from app.tasks.dispatcher import dispatch_task as _dispatch
             ads_needing_thumb = session.query(Ad).filter(
-                Ad.media_extraction_status == "skipped",
+                Ad.media_extraction_status == MediaExtractionStatus.SKIPPED,
                 Ad.thumbnail_url.isnot(None),
                 Ad.thumbnail_s3_key.is_(None),
             ).order_by(Ad.created_at.desc()).limit(saved).all()
@@ -815,9 +842,11 @@ async def trigger_media_extraction(
             ad.creative_type = extracted.creative_type
             if extracted.image_urls:
                 ad.image_url = extracted.image_urls[0]
+                if not ad.thumbnail_url:
+                    ad.thumbnail_url = extracted.image_urls[0]
             if extracted.video_urls and not ad.video_url:
                 ad.video_url = extracted.video_urls[0]
-            ad.media_extraction_status = "completed"
+            ad.media_extraction_status = MediaExtractionStatus.COMPLETED
             await db.flush()
 
             return {
@@ -825,13 +854,16 @@ async def trigger_media_extraction(
                 "creative_type": extracted.creative_type,
                 "image_count": len(extracted.image_urls),
                 "video_count": len(extracted.video_urls),
+                "image_url": ad.image_url,
+                "thumbnail_url": ad.thumbnail_url,
+                "video_url": ad.video_url,
                 "message": "メディア抽出が完了しました（インライン実行）",
             }
         except Exception as inline_err:
             logger.error("inline_media_extraction_failed", ad_id=ad_id, error=str(inline_err))
             raise HTTPException(status_code=500, detail="メディア抽出に失敗しました")
 
-    ad.media_extraction_status = "pending"
+    ad.media_extraction_status = MediaExtractionStatus.PENDING
     await db.flush()
 
     return {
@@ -839,6 +871,52 @@ async def trigger_media_extraction(
         "status": "started",
         "message": "メディア抽出を開始しました",
     }
+
+
+@router.post("/batch-extract-media")
+def batch_extract_media(
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Dispatch media extraction for ads that need it.
+
+    Finds ads with snapshot_url but no extracted media and dispatches
+    extract_media tasks to ECS via SQS.
+    """
+    from app.tasks.dispatcher import dispatch_task
+
+    session = SyncSessionLocal()
+    try:
+        ads = (
+            session.query(Ad)
+            .filter(
+                Ad.snapshot_url.isnot(None),
+                Ad.media_extraction_status.in_([MediaExtractionStatus.PENDING, None, MediaExtractionStatus.FAILED]),
+            )
+            .order_by(Ad.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        dispatched = 0
+        for ad in ads:
+            try:
+                dispatch_task("extract_media", ad_id=ad.id)
+                ad.media_extraction_status = MediaExtractionStatus.DISPATCHED
+                dispatched += 1
+            except Exception as e:
+                logger.warning("batch_extract_dispatch_failed", ad_id=ad.id, error=str(e))
+
+        session.commit()
+        return {
+            "dispatched": dispatched,
+            "total_found": len(ads),
+            "message": f"{dispatched}件のメディア抽出タスクをキューに追加しました",
+        }
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 @router.post("/enrich-metrics")
@@ -1027,3 +1105,55 @@ async def delete_ad(
 
     await db.delete(ad)
     return {"message": "Ad deleted successfully"}
+
+
+@router.post("/extract-lp-keywords", response_model=LPKeywordExtractionResponse)
+async def extract_lp_keywords(
+    body: LPKeywordExtractionRequest,
+    _user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Extract brand/product keywords from landing pages of crawled ads.
+
+    Scans destination_url of recent ads and extracts product names,
+    brand names (katakana), and known product matches from LP content.
+    """
+    from app.services.crawling.keyword_expander import extract_keywords_from_lp
+
+    # Fetch ads that have a destination_url, ordered by most recent
+    result = await db.execute(
+        select(Ad)
+        .where(Ad.destination_url.isnot(None))
+        .where(Ad.destination_url != "")
+        .order_by(Ad.created_at.desc())
+        .limit(body.max_ads)
+    )
+    ads = result.scalars().all()
+
+    all_keywords: list[str] = []
+    sources: list[dict] = []
+    seen_keywords: set[str] = set()
+
+    for ad in ads:
+        url = ad.destination_url
+        if not url:
+            continue
+        try:
+            keywords = await extract_keywords_from_lp(url)
+            new_kws = [kw for kw in keywords if kw not in seen_keywords]
+            if new_kws:
+                all_keywords.extend(new_kws)
+                seen_keywords.update(new_kws)
+                sources.append({
+                    "ad_id": ad.id,
+                    "url": url,
+                    "keywords": new_kws,
+                })
+        except Exception as e:
+            logger.warning("lp_keyword_extraction_error", ad_id=ad.id, url=url, error=str(e))
+
+    return LPKeywordExtractionResponse(
+        keywords=all_keywords,
+        sources=sources,
+        total_ads_scanned=len(ads),
+    )

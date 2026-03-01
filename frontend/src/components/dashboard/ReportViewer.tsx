@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { copyToClipboard } from "@/lib/format";
 
 interface ReportViewerProps {
   reportId: string | number;
@@ -12,16 +13,16 @@ interface ReportViewerProps {
 
 export default function ReportViewer({ reportId, format, onBack }: ReportViewerProps) {
   const [content, setContent] = useState<string | null>(null);
-  const [jsonData, setJsonData] = useState<any>(null);
+  const [jsonData, setJsonData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoading(true);
-    fetchApi<any>(`/rankings/reports/${reportId}`)
+    fetchApi<Record<string, unknown>>(`/rankings/reports/${reportId}`)
       .then((res) => {
         if (format === "html") {
-          setContent(typeof res === "string" ? res : res?.html || res?.content || JSON.stringify(res));
+          setContent(typeof res === "string" ? res : String(res?.html || res?.content || JSON.stringify(res)));
         } else {
           setJsonData(res);
         }
@@ -36,7 +37,7 @@ export default function ReportViewer({ reportId, format, onBack }: ReportViewerP
 
   const handleShare = () => {
     const url = `${window.location.origin}/api/v1/rankings/reports/${reportId}`;
-    navigator.clipboard.writeText(url).then(() => toast.success("リンクをコピーしました")).catch(() => {});
+    copyToClipboard(url).then(() => toast.success("リンクをコピーしました"));
   };
 
   const toggleKey = (key: string) => {
@@ -93,7 +94,7 @@ export default function ReportViewer({ reportId, format, onBack }: ReportViewerP
         </button>
         <button
           className="text-[11px] px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors flex items-center gap-1"
-          onClick={() => window.open(`/api/v1/rankings/reports/${reportId}/download`, "_blank")}
+          onClick={() => window.open(`/api/v1/rankings/reports/${reportId}/download`, "_blank", "noopener,noreferrer")}
         >
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

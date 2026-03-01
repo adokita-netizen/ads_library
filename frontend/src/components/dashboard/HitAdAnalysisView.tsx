@@ -13,50 +13,14 @@ import CopyAnalysisPanel from "./CopyAnalysisPanel";
 import CreativeGalleryView from "./CreativeGalleryView";
 import CrawlPanel from "./CrawlPanel";
 import FreshAdsSection from "./FreshAdsSection";
-import TrendCharts from "./TrendCharts";
-import MarketOverview from "./MarketOverview";
-import AdvertiserLeaderboard from "./AdvertiserLeaderboard";
-import WinningFormulas from "./WinningFormulas";
-import AdComparisonView from "./AdComparisonView";
-import SimilarAdsPanel from "./SimilarAdsPanel";
 import AlertsPanel from "./AlertsPanel";
-import CollectionsView from "./CollectionsView";
-import CreativePlanner from "./CreativePlanner";
-import Recommendations from "./Recommendations";
-import ScenarioBuilder from "./ScenarioBuilder";
-import SavedScenarios from "./SavedScenarios";
-import SuccessFailureAnalysis from "./SuccessFailureAnalysis";
-import ElementAnalysis from "./ElementAnalysis";
-import LPAnalysisPanel from "./LPAnalysisPanel";
-import FunnelView from "./FunnelView";
-import LPComparison from "./LPComparison";
-import CompetitorDashboard from "./CompetitorDashboard";
-import CompetitorProfile from "./CompetitorProfile";
-import MarketGaps from "./MarketGaps";
-import ReportGenerator from "./ReportGenerator";
-import ReportsView from "./ReportsView";
-import ReportViewer from "./ReportViewer";
-import ProRankingTable from "./ProRankingTable";
 import ProRankingView from "./ProRankingView";
-import SmartSearchBar from "./SmartSearchBar";
 import AdvancedFilterPanel, { type AdvancedFilters, defaultFilters, getActiveFilterCount } from "./AdvancedFilterPanel";
-import DashboardKPI from "./DashboardKPI";
-import ActivityFeed from "./ActivityFeed";
-import GenreDistributionChart from "./GenreDistributionChart";
-import GenreComparisonView from "./GenreComparisonView";
-import GenreTrendChart from "./GenreTrendChart";
-import AdComparisonTool from "./AdComparisonTool";
-import AdvertiserProfile from "./AdvertiserProfile";
-import CalendarView from "./CalendarView";
-import AdTimeline from "./AdTimeline";
-import AdAnnotations from "./AdAnnotations";
-import TeamActivity from "./TeamActivity";
 import BulkActionsBar from "./BulkActionsBar";
-import CreativeBriefGenerator from "./CreativeBriefGenerator";
-import TemplateLibrary from "./TemplateLibrary";
-import CopyVariations from "./CopyVariations";
-import AnalyticsDashboard from "./AnalyticsDashboard";
+import SectionTabContent from "./SectionTabContent";
 import { DarkModeToggle } from "../common/ThemeProvider";
+import HitAdFilterControls, { type FilterState, DEFAULT_FILTERS } from "./HitAdFilterControls";
+import HitAdSummaryCards, { genreLabel } from "./HitAdSummaryCards";
 
 // B11-17: Main tab type for analytics navigation
 type MainTab = "overview" | "trends" | "market" | "advertisers" | "formulas" | "compare" | "collections" | "ai" | "scenario" | "deep-analysis" | "lp" | "competitors" | "reports" | "calendar" | "team" | "brief" | "analytics" | "genre";
@@ -152,6 +116,69 @@ interface GenreSummary {
   total_spend: number;
 }
 
+interface ScoreBreakdownDetail {
+  signals?: Record<string, { value: number; max: number; detail?: string }>;
+  breakdown?: Record<string, number>;
+  total?: number;
+  hit_score?: number;
+  [key: string]: unknown;
+}
+
+interface AdvertiserDetailAdItem {
+  ad_id: number;
+  product_name?: string;
+  title?: string;
+  hit_score?: number;
+}
+
+interface AdvertiserDetailData {
+  advertiser_name: string;
+  ad_count?: number;
+  total_ads?: number;
+  active_count?: number;
+  active_ads?: number;
+  avg_score?: number;
+  total_spend?: number;
+  estimated_spend?: number;
+  hit_ads?: AdvertiserDetailAdItem[];
+  non_hit_ads?: AdvertiserDetailAdItem[];
+}
+
+interface ScoreDistributionData {
+  distribution?: { bucket: string; count: number }[];
+  buckets?: { label: string; count: number }[];
+  mean?: number;
+  median?: number;
+  hit_count?: number;
+  mega_hit_count?: number;
+}
+
+interface DashboardSummaryData {
+  mega_hit_count?: number;
+  hit_count?: number;
+  total_ads?: number;
+  active_ads?: number;
+  avg_score?: number;
+  top_genre?: string;
+  top_creative_type?: string;
+}
+
+interface GenreComparisonItem {
+  genre?: string;
+  name?: string;
+  ad_count?: number;
+  total_ads?: number;
+  avg_score?: number;
+  avg_hit_score?: number;
+  hit_rate?: number;
+  [key: string]: string | number | undefined;
+}
+
+interface GenreComparisonData {
+  genres?: GenreComparisonItem[];
+  items?: GenreComparisonItem[];
+}
+
 interface HitAdAnalysisViewProps {
   onAdSelect: (adId: number) => void;
 }
@@ -183,28 +210,24 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // B4-1: Score breakdown popover state
-  const [scoreDetail, setScoreDetail] = useState<any>(null);
+  const [scoreDetail, setScoreDetail] = useState<ScoreBreakdownDetail | null>(null);
   const [scoreDetailAdId, setScoreDetailAdId] = useState<number | null>(null);
   const [scoreDetailLoading, setScoreDetailLoading] = useState(false);
   const scorePopoverRef = useRef<HTMLDivElement>(null);
 
   // B4-2: Advertiser detail inline expansion state
-  const [advertiserDetail, setAdvertiserDetail] = useState<any>(null);
+  const [advertiserDetail, setAdvertiserDetail] = useState<AdvertiserDetailData | null>(null);
   const [selectedAdvertiser, setSelectedAdvertiser] = useState<string | null>(null);
   const [advertiserExpandAdId, setAdvertiserExpandAdId] = useState<number | null>(null);
   const [advertiserLoading, setAdvertiserLoading] = useState(false);
 
   // B4-3: Score distribution from API
-  const [scoreDistribution, setScoreDistribution] = useState<any>(null);
+  const [scoreDistribution, setScoreDistribution] = useState<ScoreDistributionData | null>(null);
 
   // B6-3: Dashboard summary from API
-  const [dashboardSummary, setDashboardSummary] = useState<any>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummaryData | null>(null);
   // B6-4: Genre comparison from API
-  const [genreComparison, setGenreComparison] = useState<any>(null);
-
-  // B8: Creative analysis data
-  const [hitFactors, setHitFactors] = useState<any>(null);
-  const [copyAnalysis, setCopyAnalysis] = useState<any>(null);
+  const [genreComparison, setGenreComparison] = useState<GenreComparisonData | null>(null);
 
   // B9: Fresh ads refresh key (incremented after crawl completes)
   const [freshAdsKey, setFreshAdsKey] = useState(0);
@@ -212,79 +235,79 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
   // B10: Export dropdown state
   const [showExport, setShowExport] = useState(false);
 
-  // B16: Competitor profile drill-down state
-  const [competitorName, setCompetitorName] = useState<string | null>(null);
 
-  // B19: Smart search state for ProRankingTable
-  const [proSearchQuery, setProSearchQuery] = useState("");
-  const [proPlatformFilter, setProPlatformFilter] = useState<string | undefined>(undefined);
-  const [proSortBy, setProSortBy] = useState<string | undefined>(undefined);
+
+  // B19: Period for genre tab components
   const [proPeriod, setProPeriod] = useState<string | undefined>(undefined);
 
-  // B24: Advertiser profile drill-down state
-  const [profileAdvertiser, setProfileAdvertiser] = useState<string | null>(null);
+
 
   // B21: Advanced filter panel state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(defaultFilters);
   const advFilterCount = getActiveFilterCount(advancedFilters);
 
-  // B17: Report viewer state
-  const [viewingReport, setViewingReport] = useState<{ id: string | number; format: string } | null>(null);
 
-  const [filters, setFilters] = useState({
-    scoreMin: 0,
-    scoreMax: 100,
-    daysMin: 0,
-    daysMax: 9999,
-    runningStatus: "all" as "all" | "running" | "stopped",
-    sortBy: "score" as "score" | "days" | "spend" | "recent",
-    searchText: "",
-    creativeType: "all" as "all" | "video" | "image",
-    hookType: "all",
-    emotion: "all",
-    platform: "all",
-    dateFrom: "",
-    dateTo: "",
-    japaneseOnly: true,
-    hideDuplicates: true,
-  });
+
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
+    // Abort any in-flight request before starting a new one
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
       const params: Record<string, string | number | undefined> = { limit: 50 };
       if (selectedGenre !== "all") params.genre = selectedGenre;
 
-      const [hitRes, genreRes, distRes, summaryRes, genreCompRes, hitFactorsRes, copyRes] = await Promise.all([
+      // Critical path: hit-ads and genre-summary (needed for main table)
+      const [hitRes, genreRes] = await Promise.allSettled([
         fetchApi<{ total: number; items: HitAd[] }>("/rankings/hit-ads", { params }),
         fetchApi<{ genres: GenreSummary[] }>("/rankings/genre-summary", { params: { period: "weekly" } }),
-        fetchApi<any>("/rankings/score-distribution").catch(() => null),
-        fetchApi<any>("/rankings/dashboard-summary").catch(() => null),
-        fetchApi<any>("/rankings/genre-comparison").catch(() => null),
-        fetchApi<any>("/rankings/hit-factors").catch(() => null),
-        fetchApi<any>("/rankings/copy-analysis").catch(() => null),
       ]);
 
-      setHitAds(hitRes.items || []);
-      setGenres(genreRes.genres || []);
-      setScoreDistribution(distRes);
-      setDashboardSummary(summaryRes);
-      setGenreComparison(genreCompRes);
-      setHitFactors(hitFactorsRes);
-      setCopyAnalysis(copyRes);
-      setIsEmpty((hitRes.items || []).length === 0 && (genreRes.genres || []).length === 0);
+      // Skip state updates if request was aborted (user changed genre quickly)
+      if (controller.signal.aborted) return;
+
+      const hits = hitRes.status === "fulfilled" ? (hitRes.value.items || []) : [];
+      const genreList = genreRes.status === "fulfilled" ? (genreRes.value.genres || []) : [];
+      setHitAds(hits);
+      setGenres(genreList);
+      setIsEmpty(hits.length === 0 && genreList.length === 0);
+
+      // Log critical failures
+      if (hitRes.status === "rejected" && genreRes.status === "rejected") {
+        toast.error("データの取得に失敗しました");
+      }
+
+      // Secondary data: load in background after main table is rendered
+      Promise.allSettled([
+        fetchApi<ScoreDistributionData>("/rankings/score-distribution"),
+        fetchApi<DashboardSummaryData>("/rankings/dashboard-summary"),
+        fetchApi<GenreComparisonData>("/rankings/genre-comparison"),
+      ]).then(([distRes, summaryRes, genreCompRes]) => {
+        if (controller.signal.aborted) return;
+        setScoreDistribution(distRes.status === "fulfilled" ? distRes.value : null);
+        setDashboardSummary(summaryRes.status === "fulfilled" ? summaryRes.value : null);
+        setGenreComparison(genreCompRes.status === "fulfilled" ? genreCompRes.value : null);
+      });
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError("データの取得に失敗しました");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [selectedGenre]);
 
   useEffect(() => {
     fetchData();
+    return () => { if (abortRef.current) abortRef.current.abort(); };
   }, [fetchData]);
 
   // BUG-2: Clear selected IDs when genre changes to avoid stale references
@@ -353,10 +376,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
   const totalSpend = genres.reduce((s, g) => s + (g.total_spend || 0), 0);
   const activeAdsCount = ds?.active_ads ?? null;
 
-  const genreLabel = (value: string | null | undefined): string => {
-    if (!value || value === "未分類") return "未分類";
-    return genreOptions.find((g) => g.value === value)?.label || value;
-  };
+  // genreLabel imported from HitAdSummaryCards
 
   // BUG-3: Memoize winning pattern analysis to avoid recalculating on every render
   const { hitOnly, genreDistribution, platformDistribution, sortedGenres, sortedPlatforms, avgSpendIncrease, avgViewIncrease } = useMemo(() => {
@@ -378,13 +398,16 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     return { hitOnly, genreDistribution, platformDistribution, sortedGenres, sortedPlatforms, avgSpendIncrease, avgViewIncrease };
   }, [hitAds]);
 
-  // Phase 4: Delivery & confidence stats
-  const adsWithDays = hitAds.filter((a) => a.days_running != null && a.days_running > 0);
-  const avgDaysRunning = adsWithDays.length > 0 ? Math.round(adsWithDays.reduce((s, a) => s + (a.days_running || 0), 0) / adsWithDays.length) : 0;
-  const stillRunningCount = hitAds.filter((a) => a.is_still_running === true).length;
-  const realDataCount = hitAds.filter((a) => a.estimation_method === "audience_based").length;
-  const estimatedCount = hitAds.length - realDataCount;
-  const realDataPct = hitAds.length > 0 ? Math.round((realDataCount / hitAds.length) * 100) : 0;
+  // Phase 4: Delivery & confidence stats (memoized to avoid recalculation on every render)
+  const { adsWithDays, avgDaysRunning, stillRunningCount, realDataCount, estimatedCount, realDataPct } = useMemo(() => {
+    const adsWithDays = hitAds.filter((a) => a.days_running != null && a.days_running > 0);
+    const avgDaysRunning = adsWithDays.length > 0 ? Math.round(adsWithDays.reduce((s, a) => s + (a.days_running || 0), 0) / adsWithDays.length) : 0;
+    const stillRunningCount = hitAds.filter((a) => a.is_still_running === true).length;
+    const realDataCount = hitAds.filter((a) => a.estimation_method === "audience_based").length;
+    const estimatedCount = hitAds.length - realDataCount;
+    const realDataPct = hitAds.length > 0 ? Math.round((realDataCount / hitAds.length) * 100) : 0;
+    return { adsWithDays, avgDaysRunning, stillRunningCount, realDataCount, estimatedCount, realDataPct };
+  }, [hitAds]);
 
   // B3-2: Filtered & sorted ads (B10: added emotion + date range)
   const filteredAds = useMemo(() => {
@@ -471,7 +494,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     setScoreDetailLoading(true);
     setScoreDetailAdId(adId);
     try {
-      const data = await fetchApi(`/rankings/score-breakdown/${adId}`);
+      const data = await fetchApi<ScoreBreakdownDetail>(`/rankings/score-breakdown/${adId}`);
       setScoreDetail(data);
     } catch {
       setScoreDetail(null);
@@ -495,7 +518,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     setSelectedAdvertiser(name);
     setAdvertiserExpandAdId(adId);
     try {
-      const data = await fetchApi(`/rankings/advertiser-detail`, { params: { advertiser_name: name } });
+      const data = await fetchApi<AdvertiserDetailData>(`/rankings/advertiser-detail`, { params: { advertiser_name: name } });
       setAdvertiserDetail(data);
     } catch {
       setAdvertiserDetail(null);
@@ -523,13 +546,13 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
   // B4-3: Build score distribution buckets from API data (fallback to local computation)
   const apiBuckets = useMemo(() => {
     if (scoreDistribution?.distribution) {
-      return scoreDistribution.distribution.map((b: any) => ({
+      return scoreDistribution.distribution.map((b: { range_start?: number; range?: number; count?: number }) => ({
         range: b.range_start ?? b.range ?? 0,
         count: b.count ?? 0,
       }));
     }
     if (scoreDistribution?.buckets) {
-      return scoreDistribution.buckets.map((b: any) => ({
+      return scoreDistribution.buckets.map((b: { range_start?: number; range?: number; count?: number }) => ({
         range: b.range_start ?? b.range ?? 0,
         count: b.count ?? 0,
       }));
@@ -537,8 +560,8 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     return null;
   }, [scoreDistribution]);
 
-  const effectiveBuckets = apiBuckets || scoreBuckets;
-  const effectiveMaxCount = Math.max(1, ...effectiveBuckets.map((b: any) => b.count));
+  const effectiveBuckets: { range: number; count: number }[] = apiBuckets || scoreBuckets;
+  const effectiveMaxCount = Math.max(1, ...effectiveBuckets.map((b) => b.count));
 
   // B5-1: Open ad detail modal on row click
   const handleAdClick = useCallback((adId: number) => {
@@ -580,7 +603,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
             <button
               onClick={() => {
                 selectedIds.forEach((id) => {
-                  window.open(`/api/v1/media/download/${id}`, "_blank");
+                  window.open(`/api/v1/media/download/${id}`, "_blank", "noopener,noreferrer");
                 });
                 toast.success(`${selectedIds.length}件のダウンロードを開始`);
               }}
@@ -709,7 +732,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
       {/* Content */}
       <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4 space-y-4">
         {/* B11: Section tabs */}
-        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 w-fit">
+        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 w-fit max-w-full overflow-x-auto scrollbar-none">
           {([
             { key: "overview" as const, label: "概要" },
             { key: "trends" as const, label: "トレンド" },
@@ -742,337 +765,41 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
           ))}
         </div>
 
-        {/* B11: Trends tab */}
-        {sectionTab === "trends" && (
-          <div className="space-y-4">
-            <MarketOverview genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-            <TrendCharts genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-          </div>
-        )}
-
-        {/* B11/B24: Advertisers tab with profile drill-down */}
-        {sectionTab === "advertisers" && (
-          profileAdvertiser ? (
-            <AdvertiserProfile
-              advertiserName={profileAdvertiser}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-              onBack={() => setProfileAdvertiser(null)}
-            />
-          ) : (
-            <AdvertiserLeaderboard
-              genre={selectedGenre !== "all" ? selectedGenre : undefined}
-              onAdSelect={onAdSelect}
-              onAdvertiserProfile={setProfileAdvertiser}
-            />
-          )
-        )}
-
-        {/* B11: Formulas tab */}
-        {sectionTab === "formulas" && (
-          <WinningFormulas
-            genre={selectedGenre !== "all" ? selectedGenre : undefined}
-            onAdSelect={onAdSelect}
-          />
-        )}
-
-        {/* B11: Market overview tab */}
-        {sectionTab === "market" && (
-          <MarketOverview genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-        )}
-
-        {/* B12: Compare tab */}
-        {sectionTab === "compare" && (
-          <div className="space-y-4">
-            {selectedIds.length < 2 ? (
-              <div className="card px-4 py-10 text-center">
-                <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                </svg>
-                <p className="text-[13px] font-medium text-gray-600 mb-1">比較する広告を選択してください</p>
-                <p className="text-[11px] text-gray-400 mb-3">概要タブのテーブルまたはカードビューで2-4件の広告にチェックを入れてください</p>
-                <button
-                  onClick={() => setSectionTab("overview")}
-                  className="btn-primary text-[12px] px-4 py-2"
-                >
-                  概要タブに戻る
-                </button>
-              </div>
-            ) : (
-              <AdComparisonView
-                adIds={selectedIds.slice(0, 4)}
-                onClose={() => setSectionTab("overview")}
-                onAdSelect={(adId) => {
-                  const ad = hitAds.find((a) => a.ad_id === adId);
-                  if (ad) setDetailAd(ad);
-                  else onAdSelect(adId);
-                }}
-                inline
-              />
-            )}
-            {/* B24: Standalone comparison tool */}
-            <AdComparisonTool onAdSelect={(adId) => {
-              const ad = hitAds.find((a) => a.ad_id === adId);
-              if (ad) setDetailAd(ad);
-              else onAdSelect(adId);
-            }} />
-          </div>
-        )}
-
-        {/* B13: Collections tab */}
-        {sectionTab === "collections" && (
-          <CollectionsView onAdSelect={(adId) => {
-            const ad = hitAds.find((a) => a.ad_id === adId);
-            if (ad) setDetailAd(ad);
-            else onAdSelect(adId);
-          }} />
-        )}
-
-        {/* B14: AI Insights tab */}
-        {sectionTab === "ai" && (
-          <div className="space-y-4">
-            <CreativePlanner
-              genre={selectedGenre !== "all" ? selectedGenre : undefined}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-            />
-            <Recommendations
-              genre={selectedGenre !== "all" ? selectedGenre : undefined}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-            />
-          </div>
-        )}
-
-        {/* B20: Scenario tab */}
-        {sectionTab === "scenario" && (
-          <div className="space-y-4">
-            <ScenarioBuilder />
-            <SavedScenarios onLoad={(id) => { /* TODO: load scenario into builder */ }} />
-          </div>
-        )}
-
-        {/* B21: Deep Analysis tab */}
-        {sectionTab === "deep-analysis" && (
-          <div className="space-y-4">
-            <SuccessFailureAnalysis
-              genre={selectedGenre !== "all" ? selectedGenre : undefined}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-            />
-            <ElementAnalysis
-              genre={selectedGenre !== "all" ? selectedGenre : undefined}
-              onElementFilter={(category, element) => {
-                /* TODO: Apply element filter to ad list */
-              }}
-            />
-          </div>
-        )}
-
-        {/* B15: LP Analysis tab */}
-        {sectionTab === "lp" && (
-          <div className="space-y-4">
-            <LPAnalysisPanel genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-            <FunnelView
-              adIds={selectedIds.length > 0 ? selectedIds : filteredAds.slice(0, 6).map((a) => a.ad_id)}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-            />
-            {selectedIds.length >= 2 && (
-              <LPComparison adIds={selectedIds.slice(0, 3)} />
-            )}
-          </div>
-        )}
-
-        {/* B16: Competitors tab */}
-        {sectionTab === "competitors" && (
-          competitorName ? (
-            <CompetitorProfile
-              name={competitorName}
-              onBack={() => setCompetitorName(null)}
-              onAdSelect={(adId) => {
-                const ad = hitAds.find((a) => a.ad_id === adId);
-                if (ad) setDetailAd(ad);
-                else onAdSelect(adId);
-              }}
-            />
-          ) : (
-            <div className="space-y-4">
-              <CompetitorDashboard
-                genre={selectedGenre !== "all" ? selectedGenre : undefined}
-                onAdSelect={(adId) => {
-                  const ad = hitAds.find((a) => a.ad_id === adId);
-                  if (ad) setDetailAd(ad);
-                  else onAdSelect(adId);
-                }}
-                onCompetitorSelect={(name) => setCompetitorName(name)}
-              />
-              <MarketGaps genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-            </div>
-          )
-        )}
-
-        {/* B17/B22: Reports tab — ReportsView dashboard + ReportGenerator */}
-        {sectionTab === "reports" && (
-          viewingReport ? (
-            <ReportViewer
-              reportId={viewingReport.id}
-              format={viewingReport.format}
-              onBack={() => setViewingReport(null)}
-            />
-          ) : (
-            <div className="space-y-4">
-              <ReportsView
-                genre={selectedGenre !== "all" ? selectedGenre : undefined}
-                onAdSelect={(adId) => {
-                  const ad = hitAds.find((a) => a.ad_id === adId);
-                  if (ad) setDetailAd(ad);
-                  else onAdSelect(adId);
-                }}
-              />
-              <ReportGenerator
-                genre={selectedGenre !== "all" ? selectedGenre : undefined}
-                onViewReport={(report) => setViewingReport({ id: report.id, format: report.format })}
-              />
-            </div>
-          )
-        )}
-
-        {/* B25: Calendar tab */}
-        {sectionTab === "calendar" && (
-          <div className="space-y-4">
-            <CalendarView />
-            <AdTimeline />
-          </div>
-        )}
-
-        {/* B26: Team tab */}
-        {sectionTab === "team" && (
-          <TeamActivity />
-        )}
-
-        {/* B28: Creative Brief tab */}
-        {sectionTab === "brief" && (
-          <div className="space-y-4">
-            <CreativeBriefGenerator genre={selectedGenre !== "all" ? selectedGenre : undefined} />
-            <TemplateLibrary />
-            <CopyVariations />
-          </div>
-        )}
-
-        {/* B30: Analytics Dashboard tab */}
-        {sectionTab === "analytics" && (
-          <AnalyticsDashboard
-            genre={selectedGenre !== "all" ? selectedGenre : undefined}
-            onAdSelect={(adId) => {
-              const ad = hitAds.find((a) => a.ad_id === adId);
-              if (ad) setDetailAd(ad);
-              else onAdSelect(adId);
-            }}
-          />
-        )}
-
-        {/* B32: Genre analysis tab */}
-        {sectionTab === "genre" && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <GenreDistributionChart
-                period={proPeriod || "7d"}
-                onGenreClick={(genre) => setSelectedGenre(genre)}
-              />
-              <GenreComparisonView period={proPeriod || "7d"} />
-            </div>
-            <GenreTrendChart
-              period={proPeriod || "30d"}
-              onGenreClick={(genre) => setSelectedGenre(genre)}
-            />
-          </div>
-        )}
+        {/* Non-overview tab content */}
+        <SectionTabContent
+          sectionTab={sectionTab}
+          setSectionTab={setSectionTab}
+          selectedGenre={selectedGenre}
+          setSelectedGenre={setSelectedGenre}
+          selectedIds={selectedIds}
+          hitAds={hitAds}
+          filteredAds={filteredAds}
+          onAdSelect={onAdSelect}
+          onDetailAd={setDetailAd}
+          period={proPeriod}
+        />
 
         {/* Overview tab content (existing) */}
         {sectionTab === "overview" && <>
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">ヒット広告数</p>
-            <p className="text-[22px] font-bold text-gray-900 mt-0.5">{totalHits}<span className="text-[13px] text-gray-400 ml-1">件</span></p>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {megaHitCount > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">大HIT {megaHitCount}</span>
-              )}
-              {hitCount > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">HIT {hitCount}</span>
-              )}
-              <span className="text-[10px] text-gray-400">/ 全{totalAdsCount}件</span>
-              {activeAdsCount != null && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">アクティブ {activeAdsCount}</span>
-              )}
-            </div>
-          </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">平均ヒットスコア</p>
-            <p className="text-[22px] font-bold text-[#4A7DFF] mt-0.5">{avgHitScore}<span className="text-[13px] text-gray-400 ml-1">/ 100</span></p>
-            <div className="mt-1.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-[#4A7DFF]" style={{ width: `${avgHitScore}%` }} />
-            </div>
-          </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">トップジャンル</p>
-            <p className="text-[15px] font-bold text-gray-900 mt-0.5 truncate">
-              {topGenreFromApi ? genreLabel(topGenreFromApi) : topGenre ? genreLabel(topGenre.genre) : "-"}
-            </p>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <p className="text-[10px] text-gray-400">{topGenre ? `${topGenre.ad_count}件 / ${topGenre.advertiser_count}社` : "データなし"}</p>
-              {topCreativeType && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
-                  {topCreativeType === "video" ? "動画" : topCreativeType === "image" ? "静止画" : topCreativeType}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">市場推定消化額</p>
-            <p className="text-[22px] font-bold text-gray-900 mt-0.5">{formatYen(totalSpend)}</p>
-            <p className="text-[10px] text-gray-400 mt-1">{genres.length}ジャンル合計 (週間)</p>
-          </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">平均配信日数</p>
-            <p className="text-[22px] font-bold text-gray-900 mt-0.5">
-              {avgDaysRunning > 0 ? avgDaysRunning : "-"}
-              {avgDaysRunning > 0 && <span className="text-[13px] text-gray-400 ml-1">日</span>}
-            </p>
-            <p className="text-[10px] text-gray-400 mt-1">
-              {stillRunningCount > 0 ? (
-                <><span className="text-emerald-600 font-medium">● {stillRunningCount}件</span> 配信中</>
-              ) : "配信中なし"}
-            </p>
-          </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] text-gray-400 font-medium">データ信頼度</p>
-            <p className="text-[22px] font-bold mt-0.5" style={{ color: realDataPct >= 50 ? "#10b981" : "#f59e0b" }}>
-              {realDataPct}<span className="text-[13px] text-gray-400 ml-1">%</span>
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">実データ {realDataCount}</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">推定 {estimatedCount}</span>
-            </div>
-          </div>
-        </div>
+        <HitAdSummaryCards
+          megaHitCount={megaHitCount}
+          hitCount={hitCount}
+          totalHits={totalHits}
+          totalAdsCount={totalAdsCount}
+          activeAdsCount={activeAdsCount}
+          avgHitScore={avgHitScore}
+          topGenreLabel={topGenreFromApi ? genreLabel(topGenreFromApi) : topGenre ? genreLabel(topGenre.genre) : "-"}
+          topGenreDetail={topGenre ? `${topGenre.ad_count}件 / ${topGenre.advertiser_count}社` : "データなし"}
+          topCreativeType={topCreativeType}
+          totalSpend={totalSpend}
+          genreCount={genres.length}
+          avgDaysRunning={avgDaysRunning}
+          stillRunningCount={stillRunningCount}
+          realDataPct={realDataPct}
+          realDataCount={realDataCount}
+          estimatedCount={estimatedCount}
+        />
 
         {/* B9: Crawl Panel — trigger new crawls from dashboard */}
         {!loading && (
@@ -1115,7 +842,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               )}
             </div>
             <div className="flex items-end gap-px h-14">
-              {effectiveBuckets.map((bucket: any, i: number) => (
+              {effectiveBuckets.map((bucket, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
                   <div
                     className={`w-full rounded-t-sm ${bucket.range >= 70 ? "bg-red-400" : bucket.range >= 45 ? "bg-orange-400" : "bg-gray-300"}`}
@@ -1136,263 +863,15 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
         {/* Filter Bar (B3-2) */}
         {!loading && !isEmpty && hitAds.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="text-[11px] px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors flex items-center gap-1"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-                </svg>
-                フィルター {showFilters ? "▲" : "▼"}
-              </button>
-              {activeFilterCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#4A7DFF] text-white font-medium">{activeFilterCount}</span>
-              )}
-              <span className="text-[10px] text-gray-400 ml-auto">{filteredAds.length}件表示 / 全{hitAds.length}件</span>
-            </div>
-            {showFilters && (
-              <div className="card px-4 py-3 space-y-3">
-                {/* B10-3: Search input */}
-                <div className="relative">
-                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="商材名、広告主、テキストで検索..."
-                    value={filters.searchText}
-                    onChange={(e) => setFilters((f) => ({ ...f, searchText: e.target.value }))}
-                    className="w-full h-8 pl-8 pr-3 rounded-lg border border-gray-200 text-[11px] text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF]"
-                  />
-                  {filters.searchText && (
-                    <button
-                      onClick={() => setFilters((f) => ({ ...f, searchText: "" }))}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {/* Score range presets + slider */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">
-                    スコア範囲
-                    {(filters.scoreMin > 0 || filters.scoreMax < 100) && (
-                      <span className="ml-1 text-[#4A7DFF] font-bold">{filters.scoreMin}-{filters.scoreMax}</span>
-                    )}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mb-1.5">
-                    {([
-                      { label: "全て", min: 0, max: 100 },
-                      { label: "大HIT (70+)", min: 70, max: 100 },
-                      { label: "HIT (45+)", min: 45, max: 100 },
-                      { label: "低スコア", min: 0, max: 44 },
-                    ]).map((p) => (
-                      <button
-                        key={p.label}
-                        onClick={() => setFilters((f) => ({ ...f, scoreMin: p.min, scoreMax: p.max }))}
-                        className={`text-[9px] px-2 py-1 rounded transition-colors ${filters.scoreMin === p.min && filters.scoreMax === p.max ? "bg-[#4A7DFF] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={filters.scoreMin}
-                      onChange={(e) => setFilters((f) => ({ ...f, scoreMin: Math.min(Number(e.target.value), f.scoreMax) }))}
-                      className="flex-1 h-1 accent-[#4A7DFF]"
-                    />
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={filters.scoreMax}
-                      onChange={(e) => setFilters((f) => ({ ...f, scoreMax: Math.max(Number(e.target.value), f.scoreMin) }))}
-                      className="flex-1 h-1 accent-[#4A7DFF]"
-                    />
-                  </div>
-                </div>
-                {/* Days range presets */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">配信日数</p>
-                  <div className="flex flex-wrap gap-1">
-                    {([
-                      { label: "全期間", min: 0, max: 9999 },
-                      { label: "30日+", min: 30, max: 9999 },
-                      { label: "60日+", min: 60, max: 9999 },
-                      { label: "90日+", min: 90, max: 9999 },
-                    ]).map((p) => (
-                      <button
-                        key={p.label}
-                        onClick={() => setFilters((f) => ({ ...f, daysMin: p.min, daysMax: p.max }))}
-                        className={`text-[9px] px-2 py-1 rounded transition-colors ${filters.daysMin === p.min && filters.daysMax === p.max ? "bg-[#4A7DFF] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Running status */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">配信状態</p>
-                  <select
-                    value={filters.runningStatus}
-                    onChange={(e) => setFilters((f) => ({ ...f, runningStatus: e.target.value as "all" | "running" | "stopped" }))}
-                    className="select-filter text-[11px] h-7 w-full"
-                  >
-                    <option value="all">全て</option>
-                    <option value="running">配信中</option>
-                    <option value="stopped">停止済み</option>
-                  </select>
-                </div>
-                {/* Sort */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">ソート順</p>
-                  <select
-                    value={filters.sortBy}
-                    onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value as "score" | "days" | "spend" | "recent" }))}
-                    className="select-filter text-[11px] h-7 w-full"
-                  >
-                    <option value="score">スコア順</option>
-                    <option value="days">配信日数順</option>
-                    <option value="spend">消化額順</option>
-                    <option value="recent">最新順</option>
-                  </select>
-                </div>
-                {/* B10-3: Creative type filter */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">クリエイティブ</p>
-                  <select
-                    value={filters.creativeType}
-                    onChange={(e) => setFilters((f) => ({ ...f, creativeType: e.target.value as "all" | "video" | "image" }))}
-                    className="select-filter text-[11px] h-7 w-full"
-                  >
-                    <option value="all">全て</option>
-                    <option value="video">動画</option>
-                    <option value="image">静止画</option>
-                  </select>
-                </div>
-                {/* B10-3: Platform filter */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-1.5">媒体</p>
-                  <select
-                    value={filters.platform}
-                    onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value }))}
-                    className="select-filter text-[11px] h-7 w-full"
-                  >
-                    <option value="all">全媒体</option>
-                    {Object.entries(platformLabels).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </div>
-                </div>
-                {/* B10: Additional filters row */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2 border-t border-gray-100">
-                  {/* Hook type filter */}
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-medium mb-1.5">フックタイプ</p>
-                    <select
-                      value={filters.hookType}
-                      onChange={(e) => setFilters((f) => ({ ...f, hookType: e.target.value }))}
-                      className="select-filter text-[11px] h-7 w-full"
-                    >
-                      <option value="all">全フック</option>
-                      <option value="question">質問型</option>
-                      <option value="pain_point">悩み訴求</option>
-                      <option value="benefit">ベネフィット</option>
-                      <option value="curiosity">好奇心</option>
-                      <option value="social_proof">社会的証明</option>
-                      <option value="urgency">緊急性</option>
-                      <option value="storytelling">ストーリー</option>
-                      <option value="number">数字訴求</option>
-                      <option value="comparison">比較</option>
-                      <option value="authority">権威性</option>
-                    </select>
-                  </div>
-                  {/* Emotion filter */}
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-medium mb-1.5">感情訴求</p>
-                    <select
-                      value={filters.emotion}
-                      onChange={(e) => setFilters((f) => ({ ...f, emotion: e.target.value }))}
-                      className="select-filter text-[11px] h-7 w-full"
-                    >
-                      <option value="all">全て</option>
-                      <option value="fear">不安</option>
-                      <option value="hope">希望</option>
-                      <option value="anger">怒り</option>
-                      <option value="joy">喜び</option>
-                      <option value="surprise">驚き</option>
-                      <option value="trust">信頼</option>
-                      <option value="desire">欲望</option>
-                      <option value="relief">安心</option>
-                      <option value="curiosity">好奇心</option>
-                    </select>
-                  </div>
-                  {/* Date range: from */}
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-medium mb-1.5">掲載開始日（から）</p>
-                    <input
-                      type="date"
-                      value={filters.dateFrom}
-                      onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                      className="w-full h-7 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF]"
-                    />
-                  </div>
-                  {/* Date range: to */}
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-medium mb-1.5">掲載開始日（まで）</p>
-                    <input
-                      type="date"
-                      value={filters.dateTo}
-                      onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                      className="w-full h-7 px-2 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF]"
-                    />
-                  </div>
-                  {/* B18: Language & duplicate toggles */}
-                  <div>
-                    <label className="flex items-center gap-1.5 cursor-pointer mt-1">
-                      <input
-                        type="checkbox"
-                        checked={filters.japaneseOnly}
-                        onChange={(e) => setFilters((f) => ({ ...f, japaneseOnly: e.target.checked }))}
-                        className="w-3 h-3 rounded border-gray-300 text-[#4A7DFF] focus:ring-[#4A7DFF]"
-                      />
-                      <span className="text-[10px] text-gray-600">日本語のみ</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer mt-1">
-                      <input
-                        type="checkbox"
-                        checked={filters.hideDuplicates}
-                        onChange={(e) => setFilters((f) => ({ ...f, hideDuplicates: e.target.checked }))}
-                        className="w-3 h-3 rounded border-gray-300 text-[#4A7DFF] focus:ring-[#4A7DFF]"
-                      />
-                      <span className="text-[10px] text-gray-600">重複を非表示</span>
-                    </label>
-                  </div>
-                  {/* Reset all filters */}
-                  <div className="flex items-end">
-                    <button
-                      onClick={() => setFilters({ scoreMin: 0, scoreMax: 100, daysMin: 0, daysMax: 9999, runningStatus: "all", sortBy: "score", searchText: "", creativeType: "all", hookType: "all", emotion: "all", platform: "all", dateFrom: "", dateTo: "", japaneseOnly: true, hideDuplicates: true })}
-                      className="h-7 px-3 rounded-lg text-[10px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors w-full"
-                    >
-                      リセット
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <HitAdFilterControls
+            filters={filters}
+            setFilters={setFilters}
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            activeFilterCount={activeFilterCount}
+            filteredCount={filteredAds.length}
+            totalCount={hitAds.length}
+          />
         )}
 
         {/* Winning Pattern Analysis */}
@@ -1475,11 +954,12 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
         {/* B6-4: Genre Comparison Chart (horizontal bar chart from API) */}
         {!loading && genreComparison && (() => {
-          const items: any[] = genreComparison.genres || genreComparison.items || (Array.isArray(genreComparison) ? genreComparison : []);
+          type GenreItem = Record<string, string | number | undefined>;
+          const items: GenreItem[] = genreComparison.genres || genreComparison.items || (Array.isArray(genreComparison) ? genreComparison : []);
           if (!Array.isArray(items) || items.length === 0) return null;
-          const sorted = [...items].sort((a: any, b: any) => (b.ad_count || b.total_ads || 0) - (a.ad_count || a.total_ads || 0)).slice(0, 10);
-          const maxCount = Math.max(1, ...sorted.map((g: any) => g.ad_count || g.total_ads || 0));
-          const maxScore = Math.max(1, ...sorted.map((g: any) => g.avg_score || g.avg_hit_score || 0));
+          const sorted = [...items].sort((a, b) => ((b.ad_count as number) || (b.total_ads as number) || 0) - ((a.ad_count as number) || (a.total_ads as number) || 0)).slice(0, 10);
+          const maxCount = Math.max(1, ...sorted.map((g) => (g.ad_count as number) || (g.total_ads as number) || 0));
+          const maxScore = Math.max(1, ...sorted.map((g) => (g.avg_score as number) || (g.avg_hit_score as number) || 0));
           return (
             <div className="card px-4 py-4">
               <div className="flex items-center gap-2 mb-3">
@@ -1494,13 +974,13 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 <div>
                   <p className="text-[10px] text-gray-400 font-medium mb-2">広告数</p>
                   <div className="space-y-1.5">
-                    {sorted.map((g: any, i: number) => {
-                      const count = g.ad_count || g.total_ads || 0;
+                    {sorted.map((g, i) => {
+                      const count = Number(g.ad_count || g.total_ads || 0);
                       const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
                       return (
-                        <div key={g.genre || i} className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre)}>
-                            {genreLabel(g.genre)}
+                        <div key={String(g.genre) || i} className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
+                            {genreLabel(g.genre as string)}
                           </span>
                           <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden relative">
                             <div
@@ -1520,14 +1000,15 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 <div>
                   <p className="text-[10px] text-gray-400 font-medium mb-2">平均スコア</p>
                   <div className="space-y-1.5">
-                    {sorted.map((g: any, i: number) => {
-                      const score = Math.round(g.avg_score || g.avg_hit_score || 0);
+                    {sorted.map((g, i) => {
+                      const score = Math.round(Number(g.avg_score || g.avg_hit_score || 0));
                       const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
-                      const hitRate = g.hit_rate != null ? Math.round((typeof g.hit_rate === "number" && g.hit_rate <= 1 ? g.hit_rate * 100 : g.hit_rate)) : null;
+                      const rawHitRate = g.hit_rate != null ? Number(g.hit_rate) : null;
+                      const hitRate = rawHitRate != null ? Math.round(rawHitRate <= 1 ? rawHitRate * 100 : rawHitRate) : null;
                       return (
-                        <div key={g.genre || i} className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre)}>
-                            {genreLabel(g.genre)}
+                        <div key={String(g.genre) || i} className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
+                            {genreLabel(g.genre as string)}
                           </span>
                           <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden relative">
                             <div
@@ -1998,7 +1479,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                             <div className="px-4 py-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-between">
                                 <p className="text-[12px] font-bold text-gray-900">
-                                  {advertiserDetail.advertiser_name || ad.advertiser_name} の広告分析
+                                  {advertiserDetail?.advertiser_name || ad.advertiser_name} の広告分析
                                 </p>
                                 <button
                                   className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
@@ -2014,7 +1495,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                   </svg>
                                 </div>
-                              ) : (
+                              ) : advertiserDetail ? (
                                 <>
                                   {/* Stats row */}
                                   <div className="flex items-center gap-4">
@@ -2024,9 +1505,9 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                         <p className="text-[9px] text-gray-400">広告数</p>
                                       </div>
                                     )}
-                                    {advertiserDetail.active_ads != null && (
+                                    {advertiserDetail.active_count != null && (
                                       <div className="text-center">
-                                        <p className="text-[16px] font-bold text-emerald-600">{advertiserDetail.active_ads}</p>
+                                        <p className="text-[16px] font-bold text-emerald-600">{advertiserDetail.active_count}</p>
                                         <p className="text-[9px] text-gray-400">アクティブ</p>
                                       </div>
                                     )}
@@ -2042,19 +1523,13 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                         <p className="text-[9px] text-gray-400">推定消化額</p>
                                       </div>
                                     )}
-                                    {advertiserDetail.estimated_spend != null && advertiserDetail.total_spend == null && (
-                                      <div className="text-center">
-                                        <p className="text-[16px] font-bold text-gray-900">{formatYen(advertiserDetail.estimated_spend)}</p>
-                                        <p className="text-[9px] text-gray-400">推定消化額</p>
-                                      </div>
-                                    )}
                                   </div>
                                   {/* Hit ads list */}
                                   {advertiserDetail.hit_ads && advertiserDetail.hit_ads.length > 0 && (
                                     <div>
                                       <p className="text-[10px] text-gray-500 font-medium mb-1">ヒット広告</p>
                                       <div className="flex flex-wrap gap-1.5">
-                                        {advertiserDetail.hit_ads.slice(0, 8).map((ha: any) => (
+                                        {advertiserDetail.hit_ads.slice(0, 8).map((ha: { ad_id: number; product_name?: string; title?: string; hit_score?: number }) => (
                                           <button
                                             key={ha.ad_id}
                                             className="text-[9px] px-2 py-1 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors truncate max-w-[160px]"
@@ -2072,7 +1547,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                     <div>
                                       <p className="text-[10px] text-gray-500 font-medium mb-1">その他の広告</p>
                                       <div className="flex flex-wrap gap-1.5">
-                                        {advertiserDetail.non_hit_ads.slice(0, 6).map((na: any) => (
+                                        {advertiserDetail.non_hit_ads.slice(0, 6).map((na: { ad_id: number; product_name?: string; title?: string; hit_score?: number }) => (
                                           <button
                                             key={na.ad_id}
                                             className="text-[9px] px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors truncate max-w-[160px]"
@@ -2086,7 +1561,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                     </div>
                                   )}
                                 </>
-                              )}
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -2136,7 +1611,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               </button>
               {showFilters && (
                 <button
-                  onClick={() => setFilters({ scoreMin: 0, scoreMax: 100, daysMin: 0, daysMax: 9999, runningStatus: "all", sortBy: "score", searchText: "", creativeType: "all", hookType: "all", emotion: "all", platform: "all", dateFrom: "", dateTo: "", japaneseOnly: true, hideDuplicates: true })}
+                  onClick={() => setFilters(DEFAULT_FILTERS)}
                   className="btn-secondary text-[12px] px-3 py-1.5"
                 >
                   フィルターをリセット

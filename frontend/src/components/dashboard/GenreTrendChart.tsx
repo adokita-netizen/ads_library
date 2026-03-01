@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
+
+/** Guard against NaN/Infinity in SVG coordinates */
+function safeNum(n: number, fallback = 0): number {
+  return Number.isFinite(n) ? n : fallback;
+}
 
 // ─── Types ───
 
@@ -212,7 +218,7 @@ function LineChart({
           .map((p) => {
             const dateIdx = allDates.indexOf(p.date);
             if (dateIdx < 0) return null;
-            return { x: xScale(dateIdx), y: yScale(p.value), value: p.value, date: p.date, dateIdx };
+            return { x: safeNum(xScale(dateIdx)), y: safeNum(yScale(p.value)), value: p.value, date: p.date, dateIdx };
           })
           .filter(Boolean) as { x: number; y: number; value: number; date: string; dateIdx: number }[];
 
@@ -530,15 +536,17 @@ export default function GenreTrendChart({
         {/* Chart */}
         {!loading && !error && trends.length > 0 && (
           <div>
-            <LineChart
-              trends={trends}
-              hoveredLine={hoveredLine}
-              hoveredPointIndex={hoveredPointIndex}
-              onLineHover={setHoveredLine}
-              onPointHover={setHoveredPointIndex}
-              onGenreClick={onGenreClick}
-              selectedMetric={selectedMetric}
-            />
+            <ErrorBoundary fallback={<div className="flex items-center justify-center h-40 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
+              <LineChart
+                trends={trends}
+                hoveredLine={hoveredLine}
+                hoveredPointIndex={hoveredPointIndex}
+                onLineHover={setHoveredLine}
+                onPointHover={setHoveredPointIndex}
+                onGenreClick={onGenreClick}
+                selectedMetric={selectedMetric}
+              />
+            </ErrorBoundary>
 
             {/* Legend */}
             <div className="flex items-center gap-3 flex-wrap mt-3 px-2">

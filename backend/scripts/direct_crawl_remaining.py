@@ -8,8 +8,14 @@ import requests as http_requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SyncSessionLocal
-from app.models.ad import Ad, AdStatusEnum
-from app.tasks.crawl_tasks import _crawl_platforms, _map_platform, get_connected_platforms
+from app.models.ad import Ad, AdStatusEnum, MediaExtractionStatus
+from app.tasks.crawl_tasks import (
+    _crawl_platforms,
+    _map_platform,
+    _extract_destination_url,
+    _extract_text_fallback,
+    get_connected_platforms,
+)
 
 KEYWORDS = [
     "\u8131\u6bdb",              # hair removal
@@ -99,7 +105,12 @@ def main():
                                 continue
 
                         has_media = bool(ca.image_urls or ca.video_url)
-                        dest = ca.destination_url or (ca.metadata or {}).get("destination_url")
+                        dest = _extract_destination_url(ca)
+                        title, description = _extract_text_fallback(ca)
+                        ad_meta = dict(ca.metadata or {})
+                        if dest:
+                            ad_meta["destination_url"] = dest
+                            ad_meta.setdefault("destination_type", "LP")
 
                         ad_cat = None
                         if ca.category:
@@ -111,8 +122,8 @@ def main():
 
                         ad = Ad(
                             external_id=ca.external_id,
-                            title=ca.title,
-                            description=ca.description,
+                            title=title,
+                            description=description,
                             platform=_map_platform(platform),
                             creative_type=ca.creative_type,
                             video_url=ca.video_url,
@@ -122,7 +133,11 @@ def main():
                             image_s3_keys={"urls": ca.image_urls} if len(ca.image_urls) > 1 else None,
                             destination_url=dest,
                             category=ad_cat,
-                            media_extraction_status="skipped" if has_media else ("pending" if ca.snapshot_url else "skipped"),
+                            media_extraction_status=(
+                                MediaExtractionStatus.SKIPPED if has_media else (
+                                    MediaExtractionStatus.PENDING if ca.snapshot_url else MediaExtractionStatus.SKIPPED
+                                )
+                            ),
                             advertiser_name=ca.advertiser_name,
                             advertiser_url=ca.advertiser_url,
                             brand_name=ca.brand_name,
@@ -138,7 +153,7 @@ def main():
                             first_seen_at=ca.first_seen_at,
                             last_seen_at=ca.last_seen_at,
                             tags=ca.tags,
-                            ad_metadata=ca.metadata,
+                            ad_metadata=ad_meta,
                             status=AdStatusEnum.PENDING,
                         )
                         session.add(ad)

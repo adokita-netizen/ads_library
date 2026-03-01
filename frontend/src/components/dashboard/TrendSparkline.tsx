@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 interface TrendSparklineProps {
   data: number[];
@@ -50,11 +51,13 @@ export default function TrendSparkline({
   const lastPoint = points[points.length - 1];
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="inline-block">
-      <path d={pathD} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      {showDot && lastPoint && (
-        <circle cx={lastPoint.x} cy={lastPoint.y} r={2} fill={color} />
-      )}
-    </svg>
+    <ErrorBoundary fallback={<svg width={width} height={height} />}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="inline-block">
+        <path d={pathD} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        {showDot && lastPoint && (
+          <circle cx={lastPoint.x} cy={lastPoint.y} r={2} fill={color} />
+        )}
+      </svg>
+    </ErrorBoundary>
   );
 }

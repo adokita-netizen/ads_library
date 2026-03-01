@@ -69,8 +69,25 @@ export default function DashboardKPI() {
 
   useEffect(() => {
     fetchKPI();
-    const interval = setInterval(fetchKPI, 60000); // 60秒ごとに自動更新
-    return () => clearInterval(interval);
+    // Pause polling when tab is hidden to reduce API load
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(fetchKPI, 60000);
+    };
+    const stopPolling = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) { stopPolling(); }
+      else { fetchKPI(); startPolling(); }
+    };
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchKPI]);
 
   if (loading) {

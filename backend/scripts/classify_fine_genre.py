@@ -164,6 +164,42 @@ FINE_GENRE_TAXONOMY: list[tuple[str, str, list[str], int]] = [
         ],
         10,
     ),
+    # ── Short Drama / Mini Drama ─────────────────
+    (
+        "short_drama",
+        [
+            "DramaBox", "dramabox", "DramaWave", "dramawave",
+            "Flick", "FlickReels", "flickreels",
+            "Reelstv", "reelstv", "ShortMax", "shortmax",
+            "Stardusttv", "stardusttv", "NetShort", "netshort",
+            "iDrama", "idrama", "DramaBite", "dramabite",
+            "DramaBuzz", "dramabuzz", "DramaKita", "dramakita",
+            "MoboShort", "moboshort", "shorttv",
+            "short drama", "Short Drama", "mini drama", "Mini Drama",
+        ],
+        14,
+    ),
+    # ── Manga / Webtoon / Comic ─────────────────
+    (
+        "manga_webtoon",
+        [
+            "manga", "Manga", "webtoon", "Webtoon",
+            "comic", "Comic", "Renta", "renta",
+            "Comico", "comico", "pixiv",
+        ],
+        10,
+    ),
+    # ── Gaming / VR / Entertainment ─────────────
+    (
+        "gaming_entertainment",
+        [
+            "Meta Quest", "meta quest", "Oculus",
+            "PlayStation", "Xbox", "Nintendo",
+            "Steam", "Epic Games",
+            "VR game", "VR Game",
+        ],
+        10,
+    ),
 ]
 
 # Japanese keyword layer -- applied on top of the English taxonomy
@@ -284,6 +320,12 @@ JP_GENRE_KEYWORDS: list[tuple[str, list[str], int]] = [
         "\u30d1\u30fc\u30bd\u30ca\u30eb\u30c8\u30ec\u30fc\u30ca\u30fc",  # パーソナルトレーナー
         "\u30b9\u30dd\u30fc\u30c4\u30b8\u30e0",  # スポーツジム
         "\u30a8\u30af\u30b5\u30b5\u30a4\u30ba",  # エクササイズ
+        "\u30ef\u30fc\u30af\u30a2\u30a6\u30c8",  # ワークアウト
+        "\u7b4b\u529b",                      # 筋力
+        "\u6301\u4e45\u529b",                # 持久力
+        "\u67d4\u8edf\u6027",                # 柔軟性
+        "\u59ff\u52e2",                      # 姿勢
+        "\u5909\u8eab",                      # 変身
     ], 11),
 
     ("yoga_pilates", [
@@ -387,6 +429,31 @@ JP_GENRE_KEYWORDS: list[tuple[str, list[str], int]] = [
         "\u6d3e\u9063",                      # 派遣
         "\u526f\u696d",                      # 副業
     ], 10),
+
+    ("short_drama", [
+        "\u30b7\u30e7\u30fc\u30c8\u30c9\u30e9\u30de",  # ショートドラマ
+        "\u77ed\u7de8\u30c9\u30e9\u30de",    # 短編ドラマ
+        "\u30df\u30cb\u30c9\u30e9\u30de",    # ミニドラマ
+        "\u5439\u66ff\u7248",                # 吹替版
+        "\u5439\u304d\u66ff\u3048",          # 吹き替え
+        "\u8ee2\u751f",                      # 転生
+        "\u4eca\u3059\u3050\u898b\u308b",    # 今すぐ見る
+        "\u4eba\u6c17\u306e\u77ed\u7de8",    # 人気の短編
+        "\u7d4c\u5178\u77ed\u5287",          # 經典短劇
+    ], 14),
+
+    ("manga_webtoon", [
+        "\u30de\u30f3\u30ac",                # マンガ
+        "\u6f2b\u753b",                      # 漫画
+        "\u30b3\u30df\u30c3\u30af",          # コミック
+        "\u30a6\u30a7\u30d6\u30c8\u30a5\u30fc\u30f3",  # ウェブトゥーン
+    ], 10),
+
+    ("gaming_entertainment", [
+        "\u30b2\u30fc\u30e0",                # ゲーム
+        "VR",
+        "\u30d0\u30fc\u30c1\u30e3\u30eb\u30ea\u30a2\u30ea\u30c6\u30a3",  # バーチャルリアリティ
+    ], 10),
 ]
 
 # Japanese display labels for each slug
@@ -407,6 +474,9 @@ GENRE_DISPLAY_JP: dict[str, str] = {
     "education_school": "\u6559\u80b2\u30fb\u30b9\u30af\u30fc\u30eb",  # 教育・スクール
     "real_estate": "\u4e0d\u52d5\u7523",                    # 不動産
     "jobs_recruitment": "\u8ee2\u8077\u30fb\u6c42\u4eba",    # 転職・求人
+    "short_drama": "\u30b7\u30e7\u30fc\u30c8\u30c9\u30e9\u30de",  # ショートドラマ
+    "manga_webtoon": "\u30de\u30f3\u30ac\u30fb\u30a6\u30a7\u30d6\u30c8\u30a5\u30fc\u30f3",  # マンガ・ウェブトゥーン
+    "gaming_entertainment": "\u30b2\u30fc\u30e0\u30fb\u30a8\u30f3\u30bf\u30e1",  # ゲーム・エンタメ
     "other": "\u305d\u306e\u4ed6",                          # その他
 }
 

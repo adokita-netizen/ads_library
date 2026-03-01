@@ -22,11 +22,24 @@ SECURITY_GROUPS = os.environ.get("ECS_SECURITY_GROUPS", "").split(",")
 
 
 def handler(event, context):
-    """Process SQS records and launch ECS tasks."""
+    """Process SQS records and launch ECS tasks.
+
+    Returns batchItemFailures for partial batch failure support.
+    Failed messages stay in the queue and are retried by SQS.
+    """
     results = []
+    batch_item_failures = []
 
     for record in event.get("Records", []):
-        body = json.loads(record["body"])
+        message_id = record.get("messageId", "unknown")
+
+        try:
+            body = json.loads(record["body"])
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("sqs_message_parse_error", message_id=message_id, error=str(e))
+            batch_item_failures.append({"itemIdentifier": message_id})
+            continue
+
         task_name = body.get("task", "unknown")
         task_kwargs = body.get("kwargs", {})
 
@@ -65,6 +78,11 @@ def handler(event, context):
             if failures:
                 logger.warning("ecs_run_task_failures", task=task_name, failures=failures)
 
+            if not task_arns:
+                # ECS RunTask returned no tasks — mark as failed for SQS retry
+                logger.error("ecs_run_task_no_arns", task=task_name, message_id=message_id)
+                batch_item_failures.append({"itemIdentifier": message_id})
+
             results.append({
                 "task": task_name,
                 "status": "launched" if task_arns else "failed",
@@ -74,10 +92,16 @@ def handler(event, context):
 
         except Exception as e:
             logger.error("ecs_run_task_error", task=task_name, error=str(e), exc_info=True)
+            batch_item_failures.append({"itemIdentifier": message_id})
             results.append({
                 "task": task_name,
                 "status": "error",
                 "error": str(e),
             })
 
-    return {"results": results}
+    if batch_item_failures:
+        logger.warning("sqs_batch_partial_failure",
+                       total=len(event.get("Records", [])),
+                       failed=len(batch_item_failures))
+
+    return {"batchItemFailures": batch_item_failures}

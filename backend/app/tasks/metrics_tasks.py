@@ -168,7 +168,22 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
         target_date = datetime.now(JST).date()
 
     estimator = SpendEstimator()
-    ads = session.query(Ad).all()
+    # Process in batches to avoid loading all ads into memory at once
+    BATCH_SIZE = 500
+    offset = 0
+    created = 0
+    while True:
+        ads = session.query(Ad).order_by(Ad.id).offset(offset).limit(BATCH_SIZE).all()
+        if not ads:
+            break
+        created += _process_metrics_batch(session, ads, estimator, target_date)
+        offset += BATCH_SIZE
+
+    return created
+
+
+def _process_metrics_batch(session: Session, ads: list, estimator, target_date: date) -> int:
+    """Process a batch of ads for metrics collection."""
     created = 0
 
     for ad in ads:
@@ -326,8 +341,19 @@ def collect_metrics_for_ads(session: Session, target_date: date | None = None) -
 
 @celery_app.task(name="app.tasks.metrics_tasks.collect_daily_metrics_task")
 def collect_daily_metrics_task():
-    """Celery task: collect daily metrics for all ads."""
+    """Celery task: collect daily metrics for all ads.
+
+    Uses a distributed lock (Redis) to prevent concurrent executions.
+    Falls back to process-level lock when Redis is unavailable.
+    """
     from app.core.database import SyncSessionLocal
+    from app.core.distributed_lock import acquire_distributed_lock, release_distributed_lock
+
+    job_name = "collect_daily_metrics"
+    token = acquire_distributed_lock(job_name, ttl=900)
+    if token is None:
+        logger.warning("daily_metrics_skipped_locked", job=job_name)
+        return {"status": "skipped", "reason": "already_running"}
 
     logger.info("daily_metrics_collection_start")
     session = SyncSessionLocal()
@@ -342,3 +368,4 @@ def collect_daily_metrics_task():
         raise
     finally:
         session.close()
+        release_distributed_lock(job_name, token)

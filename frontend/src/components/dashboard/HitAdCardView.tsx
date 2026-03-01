@@ -181,7 +181,7 @@ export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
                     className="text-[10px] px-2 py-1 rounded bg-gray-50 text-[#4A7DFF] hover:bg-blue-50 transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.open(ad.destination_url, "_blank");
+                      window.open(ad.destination_url, "_blank", "noopener,noreferrer");
                     }}
                   >
                     LP確認
@@ -220,7 +220,7 @@ export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
                 className="text-[10px] px-2 py-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
-                  window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank");
+                  window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank", "noopener,noreferrer");
                 }}
                 title="クリエイティブをダウンロード"
               >

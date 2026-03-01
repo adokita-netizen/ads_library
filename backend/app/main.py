@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing, media
+from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing, media, data_quality
 from app.api.endpoints import settings as settings_endpoints
 from app.core.config import get_settings
 
@@ -151,10 +151,13 @@ async def timing_middleware(request: Request, call_next):
 
 
 # CORS middleware — configure via CORS_ORIGINS env var (default "*" for development)
+# In production, set CORS_ORIGINS to specific domains (e.g. "https://d3qlbagx7gq5sp.cloudfront.net")
+_cors_origins = settings.cors_origins_list
+_allow_credentials = "*" not in _cors_origins  # credentials require explicit origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -182,6 +185,7 @@ app.include_router(competitive_intel.router, prefix=API_PREFIX)
 app.include_router(meta_marketing.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 app.include_router(media.router, prefix=API_PREFIX)
+app.include_router(data_quality.router, prefix=API_PREFIX)
 
 
 @app.get("/")

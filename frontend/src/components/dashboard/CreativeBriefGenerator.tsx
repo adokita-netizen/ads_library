@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
+import { copyToClipboard } from "@/lib/format";
 
 // ─── Types ───
 
@@ -104,8 +105,7 @@ export default function CreativeBriefGenerator({ genre: initialGenre }: Creative
       brief.structure.forEach((s) => lines.push(`  ${s.label}: ${s.description}`));
     }
     if (brief.predicted_performance != null) lines.push(`\n推定パフォーマンス: ${brief.predicted_performance}/100`);
-    navigator.clipboard.writeText(lines.join("\n"));
-    toast.success("クリップボードにコピーしました");
+    copyToClipboard(lines.join("\n")).then(() => toast.success("クリップボードにコピーしました"));
   };
 
   const score = brief?.predicted_performance ?? 0;

@@ -15,17 +15,30 @@ Run from the backend directory:
 """
 
 import asyncio
+import os
 import sys
 import time
 
 sys.path.insert(0, ".")
 
-from sqlalchemy import func
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, is_in_memory_mode
 from app.models.ad import Ad
 from app.services.media_extraction import MediaExtractor
+
+
+def _get_session() -> Session:
+    """Get a DB session, connecting to vaap_local.db if SQLite fallback is active."""
+    if not is_in_memory_mode():
+        return SyncSessionLocal()
+    db_path = os.path.join(os.path.dirname(__file__), "..", "vaap_local.db")
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"vaap_local.db not found at {db_path}")
+    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    return sessionmaker(bind=engine)()
 
 # ── Config ────────────────────────────────────────────────────────
 BATCH_SIZE = 10
@@ -211,7 +224,7 @@ def phase3_metadata_video(session) -> int:
 # ── Main ──────────────────────────────────────────────────────────
 
 def main():
-    session = SyncSessionLocal()
+    session = _get_session()
     try:
         before = _count_nulls(session)
         _print_stats("BEFORE", before)

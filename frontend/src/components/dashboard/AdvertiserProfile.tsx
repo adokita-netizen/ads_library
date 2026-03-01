@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { formatNumber, formatYen } from "@/lib/format";
+import { ErrorState } from "@/components/common/StateDisplay";
 
 /* ─── Types ─── */
 
@@ -110,17 +111,20 @@ interface AdvertiserProfileProps {
 export default function AdvertiserProfile({ advertiserName, onAdSelect, onBack }: AdvertiserProfileProps) {
   const [data, setData] = useState<AdvertiserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usingMock, setUsingMock] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
+    setUsingMock(false);
     try {
       const res = await fetchApi<AdvertiserProfileData>(
         `/rankings/advertiser/${encodeURIComponent(advertiserName)}/profile`
       );
       setData(res);
     } catch {
-      // TODO: API未実装時はモックデータを使用
+      // API未実装時はモックデータを使用
       setData(getMockProfile(advertiserName));
+      setUsingMock(true);
     } finally {
       setLoading(false);
     }
@@ -149,13 +153,23 @@ export default function AdvertiserProfile({ advertiserName, onAdSelect, onBack }
     );
   }
 
-  if (!data) return null;
+  if (!data) return <ErrorState message="広告主データの取得に失敗しました" onRetry={fetchProfile} />;
 
   // Find max monthly ad count for bar chart scaling
   const maxMonthlyCount = Math.max(...data.monthly_trends.map((t) => t.ad_count), 1);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#f8f9fb]">
+      {/* Mock data indicator */}
+      {usingMock && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-[11px] text-amber-700 flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <span>APIからデータを取得できなかったため、サンプルデータを表示しています</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="shrink-0 bg-white border-b border-gray-200 px-5 py-3">
         <div className="flex items-center gap-3">

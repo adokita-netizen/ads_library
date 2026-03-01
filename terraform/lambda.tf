@@ -20,17 +20,18 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      APP_ENV                = var.environment
-      DB_SECRET_ARN          = aws_secretsmanager_secret.db_password.arn
-      DB_USERNAME            = var.db_username
-      DB_ENDPOINT            = aws_db_instance.main.endpoint
-      DB_NAME                = var.db_name
-      CORS_ORIGINS           = join(",", var.cors_allowed_origins)
-      STORAGE_BACKEND        = "s3"
-      AWS_S3_BUCKET          = aws_s3_bucket.storage.id
-      TASK_BACKEND           = "sqs"
-      SQS_HEAVY_QUEUE_URL    = aws_sqs_queue.heavy_tasks.url
-      SQS_LIGHT_QUEUE_URL    = aws_sqs_queue.light_tasks.url
+      APP_ENV             = var.environment
+      DB_SECRET_ARN       = aws_secretsmanager_secret.db_password.arn
+      DB_USERNAME         = var.db_username
+      DB_ENDPOINT         = aws_db_instance.main.endpoint
+      DB_NAME             = var.db_name
+      CORS_ORIGINS        = join(",", var.cors_allowed_origins)
+      STORAGE_BACKEND     = "s3"
+      AWS_S3_BUCKET       = aws_s3_bucket.storage.id
+      TASK_BACKEND        = "sqs"
+      SQS_HEAVY_QUEUE_URL = aws_sqs_queue.heavy_tasks.url
+      SQS_LIGHT_QUEUE_URL = aws_sqs_queue.light_tasks.url
+      META_ACCESS_TOKEN   = var.meta_access_token
     }
   }
 
@@ -84,16 +85,16 @@ resource "aws_lambda_function" "light_tasks" {
 
   environment {
     variables = {
-      APP_ENV                = var.environment
-      DB_SECRET_ARN          = aws_secretsmanager_secret.db_password.arn
-      DB_USERNAME            = var.db_username
-      DB_ENDPOINT            = aws_db_instance.main.endpoint
-      DB_NAME                = var.db_name
-      STORAGE_BACKEND        = "s3"
-      AWS_S3_BUCKET          = aws_s3_bucket.storage.id
-      TASK_BACKEND           = "sqs"
-      SQS_HEAVY_QUEUE_URL    = aws_sqs_queue.heavy_tasks.url
-      SQS_LIGHT_QUEUE_URL    = aws_sqs_queue.light_tasks.url
+      APP_ENV             = var.environment
+      DB_SECRET_ARN       = aws_secretsmanager_secret.db_password.arn
+      DB_USERNAME         = var.db_username
+      DB_ENDPOINT         = aws_db_instance.main.endpoint
+      DB_NAME             = var.db_name
+      STORAGE_BACKEND     = "s3"
+      AWS_S3_BUCKET       = aws_s3_bucket.storage.id
+      TASK_BACKEND        = "sqs"
+      SQS_HEAVY_QUEUE_URL = aws_sqs_queue.heavy_tasks.url
+      SQS_LIGHT_QUEUE_URL = aws_sqs_queue.light_tasks.url
     }
   }
 
@@ -103,10 +104,11 @@ resource "aws_lambda_function" "light_tasks" {
 # ==================== SQS Event Source Mappings ====================
 
 resource "aws_lambda_event_source_mapping" "heavy_tasks" {
-  event_source_arn = aws_sqs_queue.heavy_tasks.arn
-  function_name    = aws_lambda_function.sqs_ecs_trigger.arn
-  batch_size       = 1
-  enabled          = true
+  event_source_arn        = aws_sqs_queue.heavy_tasks.arn
+  function_name           = aws_lambda_function.sqs_ecs_trigger.arn
+  batch_size              = 1
+  enabled                 = true
+  function_response_types = ["ReportBatchItemFailures"]
 }
 
 resource "aws_lambda_event_source_mapping" "light_tasks" {

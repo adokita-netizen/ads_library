@@ -97,12 +97,13 @@ def _download_video(ad: Ad) -> str | None:
 
         elif ad.video_url:
             import httpx
-            response = httpx.get(ad.video_url, timeout=60, follow_redirects=True)
-            response.raise_for_status()
+            with httpx.Client(timeout=60, follow_redirects=True) as client:
+                response = client.get(ad.video_url)
+                response.raise_for_status()
 
-            temp_dir = tempfile.mkdtemp()
-            video_path = str(Path(temp_dir) / "video.mp4")
-            Path(video_path).write_bytes(response.content)
+                temp_dir = tempfile.mkdtemp()
+                video_path = str(Path(temp_dir) / "video.mp4")
+                Path(video_path).write_bytes(response.content)
             return video_path
 
     except Exception as e:

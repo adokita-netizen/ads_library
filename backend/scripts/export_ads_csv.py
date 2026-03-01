@@ -17,14 +17,17 @@ Usage:
     python scripts/export_ads_csv.py --format json            # JSON only
     python scripts/export_ads_csv.py --format both            # CSV + JSON
     python scripts/export_ads_csv.py --output-dir /path/to    # Custom output dir
+    python scripts/export_ads_csv.py --mask-pii               # Mask PII fields
 """
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import sys
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -122,6 +125,58 @@ def format_datetime(dt) -> str:
         return str(dt)
 
 
+# ── PII Masking (CI-085) ─────────────────────────────────────────
+
+# Fields that contain personally identifiable or commercially sensitive info
+_PII_NAME_FIELDS = {"advertiser_name", "brand_name"}
+_PII_URL_FIELDS = {"destination_url", "snapshot_url", "video_url", "image_url", "thumbnail_url"}
+_PII_ID_FIELDS = {"external_id"}
+
+
+def _mask_name(value: str) -> str:
+    """Mask a name: keep first 2 chars + hash suffix. '山田太郎' → '山田***_a3f2'."""
+    if not value:
+        return value
+    prefix = value[:2]
+    h = hashlib.sha256(value.encode()).hexdigest()[:4]
+    return f"{prefix}***_{h}"
+
+
+def _mask_url(value: str) -> str:
+    """Mask URL to domain only. 'https://example.com/path?id=123' → 'https://example.com/***'."""
+    if not value:
+        return value
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}/***"
+        return "***"
+    except Exception:
+        return "***"
+
+
+def _mask_id(value: str) -> str:
+    """Replace external ID with a one-way hash."""
+    if not value:
+        return value
+    return hashlib.sha256(value.encode()).hexdigest()[:12]
+
+
+def mask_row(row: dict) -> dict:
+    """Apply PII masking to a single export row."""
+    masked = dict(row)
+    for field in _PII_NAME_FIELDS:
+        if field in masked and masked[field]:
+            masked[field] = _mask_name(str(masked[field]))
+    for field in _PII_URL_FIELDS:
+        if field in masked and masked[field]:
+            masked[field] = _mask_url(str(masked[field]))
+    for field in _PII_ID_FIELDS:
+        if field in masked and masked[field]:
+            masked[field] = _mask_id(str(masked[field]))
+    return masked
+
+
 def extract_row(ad: Ad) -> dict:
     """Extract a flat dict of export values from an Ad record."""
     meta = ad.ad_metadata or {}
@@ -182,7 +237,7 @@ def extract_row(ad: Ad) -> dict:
 # ── Main ──────────────────────────────────────────────────────────
 
 
-def write_csv(ads: list[Ad], filepath: str) -> int:
+def write_csv(ads: list[Ad], filepath: str, mask_pii: bool = False) -> int:
     """Write ads to CSV file. Returns count exported."""
     with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
@@ -191,6 +246,8 @@ def write_csv(ads: list[Ad], filepath: str) -> int:
         for ad in ads:
             try:
                 row = extract_row(ad)
+                if mask_pii:
+                    row = mask_row(row)
                 writer.writerow(row)
                 exported += 1
             except Exception as e:
@@ -198,12 +255,14 @@ def write_csv(ads: list[Ad], filepath: str) -> int:
     return exported
 
 
-def write_json(ads: list[Ad], filepath: str) -> int:
+def write_json(ads: list[Ad], filepath: str, mask_pii: bool = False) -> int:
     """Write ads to JSON file. Returns count exported."""
     records = []
     for ad in ads:
         try:
             row = extract_row(ad)
+            if mask_pii:
+                row = mask_row(row)
             # Convert numeric strings back to numbers for JSON
             for key in ["id", "hit_score", "days_running", "view_count",
                          "like_count", "line_count", "hit_pattern_rank",
@@ -239,15 +298,20 @@ def main():
                         default="csv", help="Output format (default: csv)")
     parser.add_argument("--output-dir", default=DEFAULT_EXPORTS_DIR,
                         help=f"Output directory (default: {DEFAULT_EXPORTS_DIR})")
+    parser.add_argument("--mask-pii", action="store_true",
+                        help="Mask PII fields (names, URLs, IDs) in output")
     args = parser.parse_args()
 
     export_format = args.format
     exports_dir = args.output_dir
+    mask_pii = args.mask_pii
 
     print("=" * 60)
     print("Ad Data Export")
     print(f"Executed at: {datetime.now(timezone.utc).isoformat()}")
     print(f"Format: {export_format}")
+    if mask_pii:
+        print("PII masking: ENABLED")
     print("=" * 60)
 
     os.makedirs(exports_dir, exist_ok=True)
@@ -269,15 +333,17 @@ def main():
 
         # CSV export
         if export_format in ("csv", "both"):
-            csv_path = os.path.join(exports_dir, f"ads_export_{today}.csv")
-            csv_count = write_csv(ads, csv_path)
+            suffix = "_masked" if mask_pii else ""
+            csv_path = os.path.join(exports_dir, f"ads_export_{today}{suffix}.csv")
+            csv_count = write_csv(ads, csv_path, mask_pii=mask_pii)
             csv_size = os.path.getsize(csv_path) / 1024
             files_created.append(("CSV", csv_path, csv_count, csv_size))
 
         # JSON export
         if export_format in ("json", "both"):
-            json_path = os.path.join(exports_dir, f"ads_export_{today}.json")
-            json_count = write_json(ads, json_path)
+            suffix = "_masked" if mask_pii else ""
+            json_path = os.path.join(exports_dir, f"ads_export_{today}{suffix}.json")
+            json_count = write_json(ads, json_path, mask_pii=mask_pii)
             json_size = os.path.getsize(json_path) / 1024
             files_created.append(("JSON", json_path, json_count, json_size))
 

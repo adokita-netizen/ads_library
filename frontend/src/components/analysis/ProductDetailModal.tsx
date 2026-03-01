@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { adsApi, predictionsApi, lpAnalysisApi } from "@/lib/api";
 import { platformLabels, platformColors } from "@/lib/constants";
 import { formatYen, formatNumber } from "@/lib/format";
+import { copyToClipboard } from "@/lib/format";
 import { CreativeViewer } from "../common/CreativeViewer";
 
 interface ProductDetailModalProps {
@@ -115,6 +116,16 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
   const [lpAnalyzing, setLpAnalyzing] = useState(false);
   const [lpSearched, setLpSearched] = useState(false);
   const [briefCopied, setBriefCopied] = useState(false);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const briefTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+      if (briefTimeoutRef.current) clearTimeout(briefTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -270,12 +281,12 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
           // Still processing
         }
         if (attempts < 15) {
-          setTimeout(poll, 3000);
+          pollTimeoutRef.current = setTimeout(poll, 3000);
         } else {
           setLpAnalyzing(false);
         }
       };
-      setTimeout(poll, 2000);
+      pollTimeoutRef.current = setTimeout(poll, 2000);
     } catch (error) {
       console.error("Failed to start LP analysis:", error);
       setLpAnalyzing(false);
@@ -383,6 +394,7 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                   snapshotUrl={creative.snapshotUrl}
                   thumbnailUrl={creative.thumbnailUrl}
                   creativeType={creative.creativeType}
+                  adId={adId}
                 />
               )}
 
@@ -655,9 +667,11 @@ export default function ProductDetailModal({ adId, onClose }: ProductDetailModal
                         product.destination ? `遷移先LP: ${product.destination}` : null,
                       ].filter(Boolean).join("\n");
 
-                      navigator.clipboard.writeText(brief).then(() => {
+                      copyToClipboard(brief).then(() => {
                         setBriefCopied(true);
-                        setTimeout(() => setBriefCopied(false), 2000);
+                        briefTimeoutRef.current = setTimeout(() => setBriefCopied(false), 2000);
+                      }).catch(() => {
+                        // Clipboard API may fail due to permissions or non-secure context
                       });
                     }}
                   >

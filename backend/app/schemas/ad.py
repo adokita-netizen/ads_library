@@ -60,6 +60,8 @@ class AdResponse(BaseModel):
     days_running: Optional[int] = None
     is_still_running: Optional[bool] = None
     delivery_start_time: Optional[str] = None
+    crawl_query: Optional[str] = None
+    expanded_from: Optional[str] = None
     ad_metadata: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
@@ -83,6 +85,8 @@ class AdResponse(BaseModel):
             d["estimation_method"] = metadata.get("estimation_method")
             d["delivery_start_time"] = metadata.get("delivery_start_time")
             d["is_still_running"] = metadata.get("is_still_running")
+            d["crawl_query"] = metadata.get("crawl_query")
+            d["expanded_from"] = metadata.get("expanded_from")
             # Compute days_running from metadata or timestamps
             days = metadata.get("days_running", 0)
             if not days:
@@ -110,6 +114,8 @@ class AdResponse(BaseModel):
                 data.setdefault("delivery_start_time", metadata.get("delivery_start_time"))
                 data.setdefault("is_still_running", metadata.get("is_still_running"))
                 data.setdefault("days_running", metadata.get("days_running"))
+                data.setdefault("crawl_query", metadata.get("crawl_query"))
+                data.setdefault("expanded_from", metadata.get("expanded_from"))
             image_s3_keys = data.get("image_s3_keys")
             if isinstance(image_s3_keys, dict):
                 data["all_image_urls"] = image_s3_keys.get("urls", [])
@@ -170,6 +176,7 @@ class CrawlRequest(BaseModel):
         ]
     )
     category: Optional[str] = None
+    country: str = Field(default="JP", description="ISO country code for ad targeting filter")
     limit_per_platform: int = Field(default=20, ge=1, le=100)
     auto_analyze: bool = False
 
@@ -178,3 +185,13 @@ class CrawlResponse(BaseModel):
     task_id: str
     status: str
     message: str
+
+
+class LPKeywordExtractionRequest(BaseModel):
+    max_ads: int = Field(default=5, ge=1, le=50)
+
+
+class LPKeywordExtractionResponse(BaseModel):
+    keywords: list[str]
+    sources: list[dict]
+    total_ads_scanned: int

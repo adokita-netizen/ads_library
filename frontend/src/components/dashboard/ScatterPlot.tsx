@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 /* ─── Types ─── */
 
@@ -150,6 +151,7 @@ export default function ScatterPlot({ onAdSelect }: ScatterPlotProps) {
       </div>
 
       {/* SVG Chart */}
+      <ErrorBoundary fallback={<div className="flex items-center justify-center h-56 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
       <div className="relative">
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full h-auto">
           {/* Background */}
@@ -261,6 +263,7 @@ export default function ScatterPlot({ onAdSelect }: ScatterPlotProps) {
           </div>
         )}
       </div>
+      </ErrorBoundary>
     </div>
   );
 }

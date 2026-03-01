@@ -299,7 +299,10 @@ export default function CompetitiveIntelView() {
   }, []);
 
   // Dismiss alert handler
+  const [dismissingAlertId, setDismissingAlertId] = useState<number | null>(null);
   const handleDismissAlert = async (alertId: number) => {
+    if (dismissingAlertId !== null) return;
+    setDismissingAlertId(alertId);
     try {
       await competitiveApi.dismissAlert(alertId);
       setAlerts((prev) =>
@@ -307,6 +310,8 @@ export default function CompetitiveIntelView() {
       );
     } catch (error) {
       console.warn("Failed to dismiss alert:", error);
+    } finally {
+      setDismissingAlertId(null);
     }
   };
 

@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Optional
 from urllib.parse import urlparse
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _config_logger = logging.getLogger(__name__)
@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-to-a-secure-random-string"
     api_v1_prefix: str = "/api/v1"
 
+    @field_validator("secret_key")
+    @classmethod
+    def _validate_secret_key(cls, v):
+        if v in _INSECURE_SECRET_KEYS:
+            if os.getenv("APP_ENV", "").lower() in ("production", "prod"):
+                raise ValueError("SECRET_KEY must be set to a secure value in production")
+            import secrets
+            return secrets.token_urlsafe(32)
+        return v
+
     # Rate limiting
     rate_limit_login: str = "5/minute"
     rate_limit_register: str = "3/minute"
@@ -70,6 +80,10 @@ class Settings(BaseSettings):
     db_username: str = ""
     db_endpoint: str = ""
     db_name: str = ""
+
+    # Read replica URL (optional, falls back to primary if empty)
+    database_read_url: str = ""
+    database_read_url_sync: str = ""
 
     # Database pool — Lambda / コンテナ環境向け
     db_pool_size: int = 5
@@ -115,12 +129,14 @@ class Settings(BaseSettings):
                 self.database_url = f"postgresql+asyncpg://{self.db_username}:{password}@{self.db_endpoint}/{self.db_name}"
                 self.database_url_sync = ""  # will be derived below
             except Exception as e:
+                if os.getenv("APP_ENV", "").lower() in ("production", "prod"):
+                    raise ValueError(f"Failed to resolve DB secret from Secrets Manager: {e}")
                 _config_logger.warning("Failed to resolve DB secret from Secrets Manager: %s", e)
         return self
 
     @model_validator(mode="after")
     def _derive_urls(self) -> "Settings":
-        """Auto-derive database_url_sync and normalize URL schemes."""
+        """Auto-derive database_url_sync, read replica URLs, and normalize URL schemes."""
         # Normalize async URL
         self.database_url = _normalize_database_url(self.database_url, driver="asyncpg")
         # Auto-derive sync URL if not explicitly set
@@ -132,6 +148,13 @@ class Settings(BaseSettings):
             self.database_url_sync = _normalize_database_url(
                 self.database_url_sync, driver="sync"
             )
+        # Read replica: normalize if set, otherwise left empty (fallback to primary)
+        if self.database_read_url:
+            self.database_read_url = _normalize_database_url(self.database_read_url, driver="asyncpg")
+            if not self.database_read_url_sync:
+                self.database_read_url_sync = _normalize_database_url(self.database_read_url, driver="sync")
+            else:
+                self.database_read_url_sync = _normalize_database_url(self.database_read_url_sync, driver="sync")
         return self
 
     # AI API Keys

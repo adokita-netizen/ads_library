@@ -87,12 +87,16 @@ def _find_best_creative(ad_id: int) -> tuple[str, str, str] | None:
 
 def _stream_file(path: str, chunk_size: int = 65536):
     """Generator that yields file content in chunks."""
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            yield chunk
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+    except Exception as e:
+        logger.error("stream_file_error", extra={"path": path, "error": str(e)})
+        raise
 
 
 def _placeholder_response(ad_id: int):
@@ -139,8 +143,11 @@ def _cloudfront_url(s3_key: str) -> str | None:
     return f"{scheme}://{domain}/{s3_key}"
 
 
-def _get_ad_s3_key(ad_id: int, media_type: str) -> str | None:
-    """Fetch S3 key for an ad from DB. media_type: thumbnail, image, video."""
+def _get_ad_media_info(ad_id: int, media_type: str) -> dict | None:
+    """Fetch S3 key and original URLs for an ad from DB.
+
+    Returns dict with s3_key, thumbnail_url, image_url, video_url, snapshot_url.
+    """
     try:
         from app.core.database import SyncSessionLocal
         from app.models.ad import Ad
@@ -149,17 +156,30 @@ def _get_ad_s3_key(ad_id: int, media_type: str) -> str | None:
             ad = session.query(Ad).filter(Ad.id == ad_id).first()
             if not ad:
                 return None
+            s3_key = None
             if media_type == "thumbnail":
-                return ad.thumbnail_s3_key
+                s3_key = ad.thumbnail_s3_key
             elif media_type == "image":
-                return ad.image_s3_key
+                s3_key = ad.image_s3_key
             elif media_type == "video":
-                return ad.s3_key
-            return None
+                s3_key = ad.s3_key
+            return {
+                "s3_key": s3_key,
+                "thumbnail_url": ad.thumbnail_url,
+                "image_url": ad.image_url,
+                "video_url": ad.video_url,
+                "snapshot_url": ad.snapshot_url,
+            }
         finally:
             session.close()
     except Exception:
         return None
+
+
+def _get_ad_s3_key(ad_id: int, media_type: str) -> str | None:
+    """Fetch S3 key for an ad from DB. media_type: thumbnail, image, video."""
+    info = _get_ad_media_info(ad_id, media_type)
+    return info["s3_key"] if info else None
 
 
 def _file_info(path: str) -> dict:
@@ -193,12 +213,12 @@ def _file_info(path: str) -> dict:
 async def get_thumbnail(ad_id: int):
     """Return cached thumbnail image for the given ad ID.
 
-    If CloudFront is enabled and S3 key exists, redirects to CDN URL.
-    Falls back to the cached full-size image if thumbnail is missing.
-    Falls back to a generated placeholder SVG if neither exists.
+    Fallback chain: CloudFront CDN → local cache → original URL redirect → placeholder.
     """
+    info = _get_ad_media_info(ad_id, "thumbnail")
+
     # Try CloudFront redirect first
-    s3_key = _get_ad_s3_key(ad_id, "thumbnail")
+    s3_key = info["s3_key"] if info else None
     cf_url = _cloudfront_url(s3_key)
     if cf_url:
         return RedirectResponse(url=cf_url, status_code=302)
@@ -216,6 +236,33 @@ async def get_thumbnail(ad_id: int):
             headers={"X-Fallback": "image"},
         )
 
+    # Fallback: fetch image server-side and cache it (avoids CORS/403 from Facebook CDN)
+    if info:
+        for url_field in ["thumbnail_url", "image_url"]:
+            url = info.get(url_field)
+            if url and url.startswith("http"):
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(
+                        follow_redirects=True, timeout=10.0,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                    ) as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
+                            # Cache for future requests
+                            cache_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
+                            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                            with open(cache_path, "wb") as f:
+                                f.write(resp.content)
+                            from fastapi.responses import Response
+                            return Response(
+                                content=resp.content,
+                                media_type=resp.headers.get("content-type", "image/jpeg"),
+                                headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
+                            )
+                except Exception:
+                    pass
+
     # Fallback: placeholder SVG
     return _placeholder_response(ad_id)
 
@@ -224,12 +271,12 @@ async def get_thumbnail(ad_id: int):
 async def get_image(ad_id: int):
     """Return cached full-size image for the given ad ID.
 
-    If CloudFront is enabled and S3 key exists, redirects to CDN URL.
-    Falls back to the cached thumbnail if the full-size image is missing.
-    Falls back to a generated placeholder SVG if neither exists.
+    Fallback chain: CloudFront CDN → local cache → original URL redirect → placeholder.
     """
+    info = _get_ad_media_info(ad_id, "image")
+
     # Try CloudFront redirect first
-    s3_key = _get_ad_s3_key(ad_id, "image")
+    s3_key = info["s3_key"] if info else None
     cf_url = _cloudfront_url(s3_key)
     if cf_url:
         return RedirectResponse(url=cf_url, status_code=302)
@@ -247,6 +294,32 @@ async def get_image(ad_id: int):
             headers={"X-Fallback": "thumbnail"},
         )
 
+    # Fallback: fetch image server-side and cache it
+    if info:
+        for url_field in ["image_url", "thumbnail_url"]:
+            url = info.get(url_field)
+            if url and url.startswith("http"):
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(
+                        follow_redirects=True, timeout=10.0,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                    ) as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
+                            cache_path = os.path.join(CACHE_DIR, "images", f"{ad_id}.jpg")
+                            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                            with open(cache_path, "wb") as f:
+                                f.write(resp.content)
+                            from fastapi.responses import Response
+                            return Response(
+                                content=resp.content,
+                                media_type=resp.headers.get("content-type", "image/jpeg"),
+                                headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
+                            )
+                except Exception:
+                    pass
+
     # Fallback: placeholder SVG
     return _placeholder_response(ad_id)
 
@@ -255,33 +328,41 @@ async def get_image(ad_id: int):
 async def get_video(ad_id: int):
     """Return cached video file for the given ad ID.
 
-    If CloudFront is enabled and S3 key exists, redirects to CDN URL.
+    Fallback chain: CloudFront CDN → local cache → video_url redirect → 404.
     Uses StreamingResponse for files larger than 10 MB to avoid
     loading the entire video into memory.
     """
+    info = _get_ad_media_info(ad_id, "video")
+
     # Try CloudFront redirect first
-    s3_key = _get_ad_s3_key(ad_id, "video")
+    s3_key = info["s3_key"] if info else None
     cf_url = _cloudfront_url(s3_key)
     if cf_url:
         return RedirectResponse(url=cf_url, status_code=302)
 
     result = _find_video_path(ad_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Video not cached")
+    if result:
+        path, mime = result
+        file_size = os.path.getsize(path)
 
-    path, mime = result
-    file_size = os.path.getsize(path)
+        if file_size > STREAM_THRESHOLD_BYTES:
+            return StreamingResponse(
+                _stream_file(path),
+                media_type=mime,
+                headers={
+                    "Content-Length": str(file_size),
+                    "Accept-Ranges": "bytes",
+                },
+            )
+        return FileResponse(path, media_type=mime)
 
-    if file_size > STREAM_THRESHOLD_BYTES:
-        return StreamingResponse(
-            _stream_file(path),
-            media_type=mime,
-            headers={
-                "Content-Length": str(file_size),
-                "Accept-Ranges": "bytes",
-            },
-        )
-    return FileResponse(path, media_type=mime)
+    # Fallback: redirect to original video_url from DB
+    if info:
+        url = info.get("video_url")
+        if url and url.startswith("http"):
+            return RedirectResponse(url=url, status_code=302, headers={"X-Fallback": "video_url"})
+
+    raise HTTPException(status_code=404, detail="Video not found")
 
 
 # ── New: Smart creative endpoint ─────────────────────────────────────

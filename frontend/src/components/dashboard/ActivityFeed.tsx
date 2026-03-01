@@ -128,8 +128,25 @@ export default function ActivityFeed({ onAdSelect }: ActivityFeedProps) {
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 30000); // 30秒ごとに自動更新
-    return () => clearInterval(interval);
+    // Pause polling when tab is hidden to reduce API load
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(fetchAlerts, 30000);
+    };
+    const stopPolling = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) { stopPolling(); }
+      else { fetchAlerts(); startPolling(); }
+    };
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchAlerts]);
 
   return (

@@ -42,7 +42,13 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "TASK_BACKEND", value = "sqs" },
         { name = "SQS_HEAVY_QUEUE_URL", value = aws_sqs_queue.heavy_tasks.url },
         { name = "SQS_LIGHT_QUEUE_URL", value = aws_sqs_queue.light_tasks.url },
+        { name = "PLAYWRIGHT_BROWSERS_PATH", value = "/opt/playwright-browsers" },
+        { name = "META_ACCESS_TOKEN", value = var.meta_access_token },
       ]
+
+      linuxParameters = {
+        sharedMemorySize = 2048
+      }
 
       logConfiguration = {
         logDriver = "awslogs"

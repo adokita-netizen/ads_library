@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 interface WeeklyTrendItem {
   week: string;
@@ -129,24 +130,26 @@ export default function TrendCharts({ genre }: TrendChartsProps) {
           <h3 className="text-[13px] font-bold text-gray-900">週次広告ボリューム</h3>
           <span className="text-[10px] text-gray-400">過去{data.length}週間の出稿数推移</span>
         </div>
-        <div className="flex items-end gap-1 h-36">
-          {data.map((week, i) => {
-            const pct = maxAdCount > 0 ? ((week.ad_count || 0) / maxAdCount) * 100 : 0;
-            return (
-              <div key={week.week || i} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
-                <span className="text-[8px] text-gray-500 font-medium">{week.ad_count || 0}</span>
-                <div
-                  className="w-full rounded-t bg-[#4A7DFF] transition-all hover:bg-[#3a6de8]"
-                  style={{ height: `${Math.max(pct, 2)}%`, minHeight: "2px" }}
-                  title={`${week.week_label || week.week}: ${week.ad_count}件`}
-                />
-                <span className="text-[7px] text-gray-400 truncate w-full text-center">
-                  {week.week_label || (week.week ? week.week.slice(5) : `W${i + 1}`)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <ErrorBoundary fallback={<div className="flex items-center justify-center h-36 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
+          <div className="flex items-end gap-1 h-36">
+            {data.map((week, i) => {
+              const pct = maxAdCount > 0 ? ((week.ad_count || 0) / maxAdCount) * 100 : 0;
+              return (
+                <div key={week.week || i} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                  <span className="text-[8px] text-gray-500 font-medium">{week.ad_count || 0}</span>
+                  <div
+                    className="w-full rounded-t bg-[#4A7DFF] transition-all hover:bg-[#3a6de8]"
+                    style={{ height: `${Math.max(pct, 2)}%`, minHeight: "2px" }}
+                    title={`${week.week_label || week.week}: ${week.ad_count}件`}
+                  />
+                  <span className="text-[7px] text-gray-400 truncate w-full text-center">
+                    {week.week_label || (week.week ? week.week.slice(5) : `W${i + 1}`)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </ErrorBoundary>
       </div>
 
       {/* Hit rate trend line */}
@@ -158,60 +161,62 @@ export default function TrendCharts({ genre }: TrendChartsProps) {
           <h3 className="text-[13px] font-bold text-gray-900">ヒット率推移</h3>
           <span className="text-[10px] text-gray-400">週次HIT広告の検出率</span>
         </div>
-        <div className="relative h-32">
-          {/* Y-axis labels */}
-          <div className="absolute left-0 top-0 bottom-4 flex flex-col justify-between text-[8px] text-gray-400 w-8">
-            <span>{Math.round(maxHitRate)}%</span>
-            <span>{Math.round(maxHitRate / 2)}%</span>
-            <span>0%</span>
-          </div>
-          {/* Line chart area */}
-          <div className="ml-9 h-full relative">
-            <svg className="w-full h-[calc(100%-16px)]" viewBox={`0 0 ${data.length * 40} 100`} preserveAspectRatio="none">
-              {/* Grid lines */}
-              <line x1="0" y1="0" x2={data.length * 40} y2="0" stroke="#e5e7eb" strokeWidth="0.5" />
-              <line x1="0" y1="50" x2={data.length * 40} y2="50" stroke="#e5e7eb" strokeWidth="0.5" />
-              <line x1="0" y1="100" x2={data.length * 40} y2="100" stroke="#e5e7eb" strokeWidth="0.5" />
-              {/* Area fill */}
-              <path
-                d={data.map((d, i) => {
+        <ErrorBoundary fallback={<div className="flex items-center justify-center h-32 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
+          <div className="relative h-32">
+            {/* Y-axis labels */}
+            <div className="absolute left-0 top-0 bottom-4 flex flex-col justify-between text-[8px] text-gray-400 w-8">
+              <span>{Math.round(maxHitRate)}%</span>
+              <span>{Math.round(maxHitRate / 2)}%</span>
+              <span>0%</span>
+            </div>
+            {/* Line chart area */}
+            <div className="ml-9 h-full relative">
+              <svg className="w-full h-[calc(100%-16px)]" viewBox={`0 0 ${data.length * 40} 100`} preserveAspectRatio="none">
+                {/* Grid lines */}
+                <line x1="0" y1="0" x2={data.length * 40} y2="0" stroke="#e5e7eb" strokeWidth="0.5" />
+                <line x1="0" y1="50" x2={data.length * 40} y2="50" stroke="#e5e7eb" strokeWidth="0.5" />
+                <line x1="0" y1="100" x2={data.length * 40} y2="100" stroke="#e5e7eb" strokeWidth="0.5" />
+                {/* Area fill */}
+                <path
+                  d={data.map((d, i) => {
+                    const rate = typeof d.hit_rate === "number" ? (d.hit_rate <= 1 ? d.hit_rate * 100 : d.hit_rate) : 0;
+                    const x = i * 40 + 20;
+                    const y = maxHitRate > 0 ? 100 - (rate / maxHitRate) * 100 : 100;
+                    return `${i === 0 ? "M" : "L"}${x},${y}`;
+                  }).join(" ") + ` L${(data.length - 1) * 40 + 20},100 L20,100 Z`}
+                  fill="rgba(16,185,129,0.1)"
+                />
+                {/* Line */}
+                <polyline
+                  points={data.map((d, i) => {
+                    const rate = typeof d.hit_rate === "number" ? (d.hit_rate <= 1 ? d.hit_rate * 100 : d.hit_rate) : 0;
+                    const x = i * 40 + 20;
+                    const y = maxHitRate > 0 ? 100 - (rate / maxHitRate) * 100 : 100;
+                    return `${x},${y}`;
+                  }).join(" ")}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="2"
+                />
+                {/* Dots */}
+                {data.map((d, i) => {
                   const rate = typeof d.hit_rate === "number" ? (d.hit_rate <= 1 ? d.hit_rate * 100 : d.hit_rate) : 0;
                   const x = i * 40 + 20;
                   const y = maxHitRate > 0 ? 100 - (rate / maxHitRate) * 100 : 100;
-                  return `${i === 0 ? "M" : "L"}${x},${y}`;
-                }).join(" ") + ` L${(data.length - 1) * 40 + 20},100 L20,100 Z`}
-                fill="rgba(16,185,129,0.1)"
-              />
-              {/* Line */}
-              <polyline
-                points={data.map((d, i) => {
-                  const rate = typeof d.hit_rate === "number" ? (d.hit_rate <= 1 ? d.hit_rate * 100 : d.hit_rate) : 0;
-                  const x = i * 40 + 20;
-                  const y = maxHitRate > 0 ? 100 - (rate / maxHitRate) * 100 : 100;
-                  return `${x},${y}`;
-                }).join(" ")}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="2"
-              />
-              {/* Dots */}
-              {data.map((d, i) => {
-                const rate = typeof d.hit_rate === "number" ? (d.hit_rate <= 1 ? d.hit_rate * 100 : d.hit_rate) : 0;
-                const x = i * 40 + 20;
-                const y = maxHitRate > 0 ? 100 - (rate / maxHitRate) * 100 : 100;
-                return <circle key={i} cx={x} cy={y} r="3" fill="#10b981" stroke="white" strokeWidth="1.5" />;
-              })}
-            </svg>
-            {/* X-axis labels */}
-            <div className="flex justify-between text-[7px] text-gray-400 h-4">
-              {data.map((d, i) => (
-                <span key={i} className="text-center" style={{ width: `${100 / data.length}%` }}>
-                  {d.week_label || (d.week ? d.week.slice(5) : `W${i + 1}`)}
-                </span>
-              ))}
+                  return <circle key={i} cx={x} cy={y} r="3" fill="#10b981" stroke="white" strokeWidth="1.5" />;
+                })}
+              </svg>
+              {/* X-axis labels */}
+              <div className="flex justify-between text-[7px] text-gray-400 h-4">
+                {data.map((d, i) => (
+                  <span key={i} className="text-center" style={{ width: `${100 / data.length}%` }}>
+                    {d.week_label || (d.week ? d.week.slice(5) : `W${i + 1}`)}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </ErrorBoundary>
       </div>
 
       {/* Hook type popularity stacked area (simplified as stacked bars) */}

@@ -78,18 +78,18 @@ export default function CreativeStudio() {
   };
 
   const modes: { id: CreativeMode; label: string }[] = [
-    { id: "script", label: "Video Script" },
-    { id: "copy", label: "Ad Copy" },
-    { id: "lp", label: "LP Copy" },
-    { id: "storyboard", label: "Storyboard" },
+    { id: "script", label: "動画台本" },
+    { id: "copy", label: "広告コピー" },
+    { id: "lp", label: "LPコピー" },
+    { id: "storyboard", label: "絵コンテ" },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Creative Studio</h2>
+        <h2 className="text-2xl font-bold text-gray-900">クリエイティブ作成</h2>
         <p className="mt-1 text-sm text-gray-500">
-          AI-powered ad creative generation
+          AIによる広告クリエイティブ生成
         </p>
       </div>
 
@@ -116,42 +116,42 @@ export default function CreativeStudio() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Input Form */}
         <div className="card space-y-4">
-          <h3 className="text-lg font-semibold">Input Parameters</h3>
+          <h3 className="text-lg font-semibold">入力項目</h3>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Product Name *
+              商品名 *
             </label>
             <input
               type="text"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              placeholder="e.g., Premium Skincare Cream"
+              placeholder="例: プレミアムスキンケアクリーム"
               className="input mt-1"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Product Description
+              商品説明
             </label>
             <textarea
               value={productDescription}
               onChange={(e) => setProductDescription(e.target.value)}
-              placeholder="Describe your product, key features, benefits..."
+              placeholder="商品の特徴やベネフィットを入力してください"
               className="input mt-1 h-24 resize-none"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Target Audience
+              ターゲット
             </label>
             <input
               type="text"
               value={targetAudience}
               onChange={(e) => setTargetAudience(e.target.value)}
-              placeholder="e.g., 30-40 women interested in skincare"
+              placeholder="例: スキンケアに関心のある30〜40代女性"
               className="input mt-1"
             />
           </div>
@@ -159,7 +159,7 @@ export default function CreativeStudio() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Platform
+                配信プラットフォーム
               </label>
               <select
                 value={platform}
@@ -182,20 +182,20 @@ export default function CreativeStudio() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Appeal Axis
+                訴求軸
               </label>
               <select
                 value={appealAxis}
                 onChange={(e) => setAppealAxis(e.target.value)}
                 className="input mt-1"
               >
-                <option value="benefit">Benefit</option>
-                <option value="price">Price</option>
-                <option value="quality">Quality</option>
-                <option value="convenience">Convenience</option>
-                <option value="authority">Authority</option>
-                <option value="social_proof">Social Proof</option>
-                <option value="scarcity">Scarcity</option>
+                <option value="benefit">ベネフィット</option>
+                <option value="price">価格</option>
+                <option value="quality">品質</option>
+                <option value="convenience">利便性</option>
+                <option value="authority">権威性</option>
+                <option value="social_proof">社会的証明</option>
+                <option value="scarcity">希少性</option>
               </select>
             </div>
           </div>
@@ -204,7 +204,7 @@ export default function CreativeStudio() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Duration (seconds)
+                  尺（秒）
                 </label>
                 <input
                   type="number"
@@ -218,18 +218,18 @@ export default function CreativeStudio() {
               {mode === "script" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Structure
+                    構成
                   </label>
                   <select
                     value={structure}
                     onChange={(e) => setStructure(e.target.value)}
                     className="input mt-1"
                   >
-                    <option value="problem_solution">Problem &rarr; Solution</option>
-                    <option value="ugc_testimonial">UGC Testimonial</option>
-                    <option value="product_demo">Product Demo</option>
-                    <option value="listicle">Listicle (Top N)</option>
-                    <option value="short_impact">Short Impact (15s)</option>
+                    <option value="problem_solution">課題提示 → 解決提案</option>
+                    <option value="ugc_testimonial">UGC体験談</option>
+                    <option value="product_demo">商品デモ</option>
+                    <option value="listicle">ランキング形式（Top N）</option>
+                    <option value="short_impact">短尺インパクト（15秒）</option>
                   </select>
                 </div>
               )}
@@ -241,13 +241,13 @@ export default function CreativeStudio() {
             disabled={loading || !productName.trim()}
             className="btn-primary w-full"
           >
-            {loading ? "Generating..." : "Generate"}
+            {loading ? "生成中..." : "生成する"}
           </button>
         </div>
 
         {/* Result Display */}
         <div className="card">
-          <h3 className="text-lg font-semibold">Generated Result</h3>
+          <h3 className="text-lg font-semibold">生成結果</h3>
           {loading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
@@ -260,7 +260,7 @@ export default function CreativeStudio() {
             </div>
           ) : (
             <div className="flex h-64 items-center justify-center text-gray-400">
-              <p>Fill in the parameters and click Generate</p>
+              <p>入力後に「生成する」を押してください</p>
             </div>
           )}
         </div>

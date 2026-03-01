@@ -1,37 +1,57 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import Sidebar from "@/components/common/Sidebar";
-import AdLibraryTable from "@/components/dashboard/AdLibraryTable";
-import TrendView from "@/components/dashboard/TrendView";
-import ProductDetailModal from "@/components/analysis/ProductDetailModal";
-import CreativeStudio from "@/components/creative/CreativeStudio";
-import LPAnalysisView from "@/components/lp/LPAnalysisView";
-import AIExpertView from "@/components/ai/AIExpertView";
-import TeamSpaceView from "@/components/workspace/TeamSpaceView";
-import MyListView from "@/components/workspace/MyListView";
-import StoreView from "@/components/workspace/StoreView";
-import CompetitiveIntelView from "@/components/competitive/CompetitiveIntelView";
-import CampaignGalleryView from "@/components/workspace/CampaignGalleryView";
-import MetaAdsView from "@/components/meta-ads/MetaAdsView";
-import HitAdAnalysisView from "@/components/dashboard/HitAdAnalysisView";
 import ProRankingView from "@/components/dashboard/ProRankingView";
-import ReportsView from "@/components/dashboard/ReportsView";
-import AlertsPanel from "@/components/dashboard/AlertsPanel";
-import CollectionsView from "@/components/dashboard/CollectionsView";
-import ScenarioBuilder from "@/components/dashboard/ScenarioBuilder";
-import AdComparisonTool from "@/components/dashboard/AdComparisonTool";
-import AdvertiserProfile from "@/components/dashboard/AdvertiserProfile";
-import APIKeysSettings from "@/components/settings/APIKeysSettings";
-import DatabaseSettings from "@/components/settings/DatabaseSettings";
-import UserPreferences from "@/components/settings/UserPreferences";
-import CalendarView from "@/components/dashboard/CalendarView";
-import CreativeBriefGenerator from "@/components/dashboard/CreativeBriefGenerator";
-import AnalyticsDashboard from "@/components/dashboard/AnalyticsDashboard";
+import ProductDetailModal from "@/components/analysis/ProductDetailModal";
 import OnboardingTour from "@/components/common/OnboardingTour";
 import KeyboardShortcuts from "@/components/common/KeyboardShortcuts";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
+import { useUrlParam } from "@/lib/useUrlParam";
+import { prefetchApi } from "@/lib/prefetch";
 
-type ViewType = "pro-database" | "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "analytics-dashboard";
+// Loading placeholder for lazy-loaded views
+const ViewLoader = () => (
+  <div className="flex-1 flex items-center justify-center">
+    <div className="animate-pulse flex flex-col items-center gap-3">
+      <div className="w-8 h-8 rounded-lg bg-gray-200" />
+      <div className="h-2 w-24 rounded bg-gray-200" />
+    </div>
+  </div>
+);
+
+// Lazy-load non-default views to reduce initial bundle size
+const AdLibraryTable = dynamic(() => import("@/components/dashboard/AdLibraryTable"), { ssr: false, loading: ViewLoader });
+const TrendView = dynamic(() => import("@/components/dashboard/TrendView"), { ssr: false, loading: ViewLoader });
+const CreativeStudio = dynamic(() => import("@/components/creative/CreativeStudio"), { ssr: false, loading: ViewLoader });
+const LPAnalysisView = dynamic(() => import("@/components/lp/LPAnalysisView"), { ssr: false, loading: ViewLoader });
+const AIExpertView = dynamic(() => import("@/components/ai/AIExpertView"), { ssr: false, loading: ViewLoader });
+const TeamSpaceView = dynamic(() => import("@/components/workspace/TeamSpaceView"), { ssr: false, loading: ViewLoader });
+const MyListView = dynamic(() => import("@/components/workspace/MyListView"), { ssr: false, loading: ViewLoader });
+const StoreView = dynamic(() => import("@/components/workspace/StoreView"), { ssr: false, loading: ViewLoader });
+const CompetitiveIntelView = dynamic(() => import("@/components/competitive/CompetitiveIntelView"), { ssr: false, loading: ViewLoader });
+const CampaignGalleryView = dynamic(() => import("@/components/workspace/CampaignGalleryView"), { ssr: false, loading: ViewLoader });
+const MetaAdsView = dynamic(() => import("@/components/meta-ads/MetaAdsView"), { ssr: false, loading: ViewLoader });
+const HitAdAnalysisView = dynamic(() => import("@/components/dashboard/HitAdAnalysisView"), { ssr: false, loading: ViewLoader });
+const ReportsView = dynamic(() => import("@/components/dashboard/ReportsView"), { ssr: false, loading: ViewLoader });
+const AlertsPanel = dynamic(() => import("@/components/dashboard/AlertsPanel"), { ssr: false, loading: ViewLoader });
+const CollectionsView = dynamic(() => import("@/components/dashboard/CollectionsView"), { ssr: false, loading: ViewLoader });
+const ScenarioBuilder = dynamic(() => import("@/components/dashboard/ScenarioBuilder"), { ssr: false, loading: ViewLoader });
+const AdComparisonTool = dynamic(() => import("@/components/dashboard/AdComparisonTool"), { ssr: false, loading: ViewLoader });
+const AdvertiserProfile = dynamic(() => import("@/components/dashboard/AdvertiserProfile"), { ssr: false, loading: ViewLoader });
+const APIKeysSettings = dynamic(() => import("@/components/settings/APIKeysSettings"), { ssr: false, loading: ViewLoader });
+const DatabaseSettings = dynamic(() => import("@/components/settings/DatabaseSettings"), { ssr: false, loading: ViewLoader });
+const UserPreferences = dynamic(() => import("@/components/settings/UserPreferences"), { ssr: false, loading: ViewLoader });
+const CalendarView = dynamic(() => import("@/components/dashboard/CalendarView"), { ssr: false, loading: ViewLoader });
+const CreativeBriefGenerator = dynamic(() => import("@/components/dashboard/CreativeBriefGenerator"), { ssr: false, loading: ViewLoader });
+const AnalyticsDashboard = dynamic(() => import("@/components/dashboard/AnalyticsDashboard"), { ssr: false, loading: ViewLoader });
+const MediaExtractionDashboard = dynamic(() => import("@/components/dashboard/MediaExtractionDashboard"), { ssr: false, loading: ViewLoader });
+const BatchOperationsPanel = dynamic(() => import("@/components/dashboard/BatchOperationsPanel"), { ssr: false, loading: ViewLoader });
+const AIChatView = dynamic(() => import("@/components/ai/AIChatView"), { ssr: false, loading: ViewLoader });
+const NotificationListView = dynamic(() => import("@/components/dashboard/NotificationListView"), { ssr: false, loading: ViewLoader });
+
+type ViewType = "pro-database" | "search" | "trend" | "analysis" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "store" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "media-management" | "admin" | "ai-chat" | "notifications";
 
 /** Connectivity banner — auto-hides after successful check, dismissible on error */
 function ConnectivityBanner() {
@@ -56,7 +76,7 @@ function ConnectivityBanner() {
           setStatus("ok");
         } else {
           setStatus("error");
-          setDetail(`Backend: ${data.backend_error || data.database_error || "unreachable"}`);
+          setDetail(`バックエンド: ${data.backend_error || data.database_error || "未接続"}`);
           return;
         }
       } catch (err) {
@@ -84,7 +104,7 @@ function ConnectivityBanner() {
         }
       } catch (err) {
         setDataTest("error");
-        setDataDetail(`Data fetch: ${String(err)}`);
+        setDataDetail(`データ取得: ${String(err)}`);
       }
     };
     checkHealth();
@@ -146,14 +166,32 @@ function ConnectivityBanner() {
 }
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>("pro-database");
+  const [currentView, setCurrentView] = useUrlParam("view", "pro-database") as [ViewType, (v: string) => void];
   const [selectedAdId, setSelectedAdId] = useState<number | null>(null);
   const [showProductDetail, setShowProductDetail] = useState(false);
   const [selectedAdvertiser, setSelectedAdvertiser] = useState<string>("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Prefetch critical data for the default view on mount
+  useEffect(() => {
+    prefetchApi("/rankings/genre-master");
+    prefetchApi("/rankings/search-collections");
+    prefetchApi("/rankings/pro-ranking", { page: 1, page_size: 50, period: "7d", sort_by: "cumulative_views" });
+
+    // Register ServiceWorker for offline caching
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
 
   const handleAdSelect = (adId: number) => {
     setSelectedAdId(adId);
     setShowProductDetail(true);
+  };
+
+  const handleViewAdvertiser = (name: string) => {
+    setSelectedAdvertiser(name);
+    setCurrentView("advertiser-profile");
   };
 
   const renderView = () => {
@@ -190,8 +228,14 @@ export default function Home() {
         return <CalendarView />;
       case "creative-brief":
         return <CreativeBriefGenerator />;
-      case "analytics-dashboard":
-        return <AnalyticsDashboard />;
+      case "media-management":
+        return <MediaExtractionDashboard />;
+      case "admin":
+        return <BatchOperationsPanel />;
+      case "ai-chat":
+        return <AIChatView onAdSelect={handleAdSelect} />;
+      case "notifications":
+        return <NotificationListView onAdSelect={handleAdSelect} />;
       case "settings":
         return (
           <div className="flex flex-col h-full">
@@ -228,8 +272,8 @@ export default function Home() {
         return <AdComparisonTool onAdSelect={handleAdSelect} />;
       case "advertiser-profile":
         return (
-          <AdvertiserProfile
-            advertiserName={selectedAdvertiser || "Unknown"}
+            <AdvertiserProfile
+            advertiserName={selectedAdvertiser || "不明"}
             onAdSelect={handleAdSelect}
             onBack={() => setCurrentView("pro-database")}
           />
@@ -243,9 +287,23 @@ export default function Home() {
     <div className="flex h-screen overflow-hidden flex-col">
       <ConnectivityBanner />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentView={currentView} onViewChange={(v) => setCurrentView(v as ViewType)} />
+        <Sidebar currentView={currentView} onViewChange={(v) => setCurrentView(v as ViewType)} mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
         <main className="flex-1 overflow-hidden flex flex-col">
-          {renderView()}
+          {/* Mobile header bar */}
+          <div className="flex md:hidden items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white shrink-0">
+            <button onClick={() => setMobileMenuOpen(true)} aria-label="メニューを開く" aria-expanded={mobileMenuOpen} className="p-1.5 text-gray-600 hover:text-gray-900">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <div className="w-6 h-6 rounded-md bg-[#4A7DFF] flex items-center justify-center">
+              <span className="text-white text-[9px] font-black">V</span>
+            </div>
+            <span className="text-[13px] font-bold text-gray-900">VAAP</span>
+          </div>
+          <ErrorBoundary key={currentView} label={`画面: ${currentView}`}>
+            {renderView()}
+          </ErrorBoundary>
         </main>
       </div>
 

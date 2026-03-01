@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import SyncSessionLocal
+from app.core.distributed_lock import acquire_distributed_lock, release_distributed_lock
 from app.models.ad import Ad
 
 
@@ -84,6 +85,11 @@ def _best_like_increase(ad):
 
 
 def main():
+    _lock_token = acquire_distributed_lock("aggregate_metrics", ttl=600)
+    if _lock_token is None:
+        print("SKIPPED: aggregate_metrics is already running.")
+        return
+
     print("=" * 60)
     print("Metrics Aggregation for Ranking Table")
     print("Executed at: %s" % datetime.now(timezone.utc).isoformat())
@@ -105,7 +111,24 @@ def main():
         has_view_increase = 0
         has_spend_increase = 0
 
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        skipped_same_day = 0
+
         for ad in ads:
+            # Idempotency guard: skip if already aggregated today
+            existing_rm = (ad.ad_metadata or {}).get("ranking_metrics", {})
+            existing_at = existing_rm.get("aggregated_at", "")
+            if existing_at and existing_at[:10] == today_str:
+                skipped_same_day += 1
+                # Still count for stats
+                total_views_sum += existing_rm.get("total_views", 0)
+                total_spend_sum += existing_rm.get("total_spend_jpy", 0)
+                if existing_rm.get("view_increase", 0) > 0:
+                    has_view_increase += 1
+                if existing_rm.get("spend_increase_jpy", 0) > 0:
+                    has_spend_increase += 1
+                continue
+
             tv = _best_total_views(ad)
             ts = _best_total_spend(ad)
             vi = _best_view_increase(ad)
@@ -137,6 +160,8 @@ def main():
 
         session.commit()
         print("\nUpdated %d/%d ads with ranking_metrics. Committed." % (updated, total))
+        if skipped_same_day > 0:
+            print("Skipped %d ads (already aggregated today %s)." % (skipped_same_day, today_str))
 
         avg_views = total_views_sum / total if total > 0 else 0
         avg_spend = total_spend_sum / total if total > 0 else 0
@@ -219,6 +244,7 @@ def main():
         raise
     finally:
         session.close()
+        release_distributed_lock("aggregate_metrics", _lock_token)
 
 
 if __name__ == "__main__":

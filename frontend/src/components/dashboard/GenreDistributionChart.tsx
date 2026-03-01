@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 // ─── Types ───
 
@@ -27,6 +28,11 @@ const GENRE_COLORS = [
 
 function getColor(index: number): string {
   return GENRE_COLORS[index % GENRE_COLORS.length];
+}
+
+/** Guard against NaN/Infinity in SVG coordinates */
+function safeNum(n: number, fallback = 0): number {
+  return Number.isFinite(n) ? n : fallback;
 }
 
 // ─── SVG Pie Chart ───
@@ -64,14 +70,14 @@ function PieChart({
     const offsetX = Math.cos(midAngle) * expandOffset;
     const offsetY = Math.sin(midAngle) * expandOffset;
 
-    const outerStartX = cx + offsetX + radius * Math.cos(startAngle);
-    const outerStartY = cy + offsetY + radius * Math.sin(startAngle);
-    const outerEndX = cx + offsetX + radius * Math.cos(endAngle);
-    const outerEndY = cy + offsetY + radius * Math.sin(endAngle);
-    const innerStartX = cx + offsetX + innerRadius * Math.cos(endAngle);
-    const innerStartY = cy + offsetY + innerRadius * Math.sin(endAngle);
-    const innerEndX = cx + offsetX + innerRadius * Math.cos(startAngle);
-    const innerEndY = cy + offsetY + innerRadius * Math.sin(startAngle);
+    const outerStartX = safeNum(cx + offsetX + radius * Math.cos(startAngle));
+    const outerStartY = safeNum(cy + offsetY + radius * Math.sin(startAngle));
+    const outerEndX = safeNum(cx + offsetX + radius * Math.cos(endAngle));
+    const outerEndY = safeNum(cy + offsetY + radius * Math.sin(endAngle));
+    const innerStartX = safeNum(cx + offsetX + innerRadius * Math.cos(endAngle));
+    const innerStartY = safeNum(cy + offsetY + innerRadius * Math.sin(endAngle));
+    const innerEndX = safeNum(cx + offsetX + innerRadius * Math.cos(startAngle));
+    const innerEndY = safeNum(cy + offsetY + innerRadius * Math.sin(startAngle));
 
     const largeArc = sliceAngle > Math.PI ? 1 : 0;
 
@@ -376,21 +382,23 @@ export default function GenreDistributionChart({
         <div className="flex flex-col lg:flex-row items-start gap-4">
           {/* Chart area */}
           <div className="flex-1 w-full">
-            {mode === "pie" ? (
-              <PieChart
-                data={data}
-                onSliceClick={handleSliceClick}
-                hoveredIndex={hoveredIndex}
-                onHover={setHoveredIndex}
-              />
-            ) : (
-              <TreemapChart
-                data={data}
-                onSliceClick={handleSliceClick}
-                hoveredIndex={hoveredIndex}
-                onHover={setHoveredIndex}
-              />
-            )}
+            <ErrorBoundary fallback={<div className="flex items-center justify-center h-40 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
+              {mode === "pie" ? (
+                <PieChart
+                  data={data}
+                  onSliceClick={handleSliceClick}
+                  hoveredIndex={hoveredIndex}
+                  onHover={setHoveredIndex}
+                />
+              ) : (
+                <TreemapChart
+                  data={data}
+                  onSliceClick={handleSliceClick}
+                  hoveredIndex={hoveredIndex}
+                  onHover={setHoveredIndex}
+                />
+              )}
+            </ErrorBoundary>
           </div>
 
           {/* Legend */}

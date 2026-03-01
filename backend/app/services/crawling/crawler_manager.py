@@ -1,6 +1,7 @@
 """Unified crawler manager for multi-platform ad collection."""
 
 import asyncio
+from datetime import timezone
 from typing import Optional
 
 import structlog
@@ -19,6 +20,16 @@ from app.services.crawling.google_ads_crawler import GoogleAdsCrawler
 from app.services.crawling.gunosy_crawler import GunosyAdCrawler
 
 logger = structlog.get_logger()
+
+
+def _latest_sort_key(ad: CrawledAd) -> tuple[int, float]:
+    """Sort by first_seen/last_seen descending while handling naive datetimes."""
+    dt = ad.first_seen_at or ad.last_seen_at
+    if not dt:
+        return (0, 0.0)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (1, dt.timestamp())
 
 
 class CrawlerManager:
@@ -107,6 +118,7 @@ class CrawlerManager:
         platforms: Optional[list[str]] = None,
         category: Optional[str] = None,
         limit_per_platform: int = 20,
+        country: str = "JP",
     ) -> dict[str, list[CrawledAd]]:
         """Search across all registered platforms concurrently."""
         target_platforms = platforms or list(self._crawlers.keys())
@@ -119,6 +131,7 @@ class CrawlerManager:
                     query=query,
                     category=category,
                     limit=limit_per_platform,
+                    country=country,
                 )
 
         gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -128,7 +141,8 @@ class CrawlerManager:
                 logger.error("platform_search_failed", platform=platform, error=str(result))
                 results[platform] = []
             else:
-                results[platform] = result
+                # Keep downstream "top N" aligned to freshest ads.
+                results[platform] = sorted(result, key=_latest_sort_key, reverse=True)
 
         total = sum(len(ads) for ads in results.values())
         logger.info("multi_platform_search", query=query, total_results=total, platforms=list(results.keys()))

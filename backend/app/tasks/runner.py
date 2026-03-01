@@ -8,7 +8,10 @@ Example:
 """
 
 import json
+import os
+import signal
 import sys
+import uuid
 
 import structlog
 
@@ -44,6 +47,52 @@ def _get_task_map() -> dict:
     }
 
 
+class _FakeRequest:
+    """Minimal stand-in for celery.app.task.Context."""
+
+    def __init__(self):
+        self.id = f"ecs-{uuid.uuid4()}"
+        self.retries = 0
+
+
+class _FakeCeleryTask:
+    """Stand-in for Celery Task instance for ECS direct execution."""
+
+    def __init__(self, max_retries=2):
+        self.request = _FakeRequest()
+        self.max_retries = max_retries
+
+    def retry(self, exc=None, **kwargs):
+        if exc:
+            raise exc
+        raise RuntimeError("Task retry requested but no Celery broker (ECS)")
+
+
+def _is_bound_celery_task(task_func) -> bool:
+    """Check if a task function is a Celery task with bind=True."""
+    try:
+        from celery import Task
+        if isinstance(task_func, Task):
+            import inspect
+            sig = inspect.signature(task_func.run)
+            first_param = list(sig.parameters.keys())[0] if sig.parameters else None
+            return first_param == "self"
+    except Exception:
+        pass
+    return False
+
+
+TASK_TIMEOUT = int(os.environ.get("ECS_TASK_TIMEOUT", "1800"))  # 30 min default
+
+
+class TaskTimeoutError(Exception):
+    """Raised when a task exceeds its timeout."""
+
+
+def _timeout_handler(signum, frame):
+    raise TaskTimeoutError(f"Task exceeded {TASK_TIMEOUT}s timeout")
+
+
 def run_task(task_name: str, kwargs: dict) -> dict:
     """Execute a task function directly (bypassing Celery)."""
     task_map = _get_task_map()
@@ -51,13 +100,26 @@ def run_task(task_name: str, kwargs: dict) -> dict:
     if not task_func:
         raise ValueError(f"Unknown task: {task_name}. Available: {list(task_map.keys())}")
 
-    logger.info("ecs_task_starting", task=task_name, kwargs_keys=list(kwargs.keys()))
+    logger.info("ecs_task_starting", task=task_name, kwargs_keys=list(kwargs.keys()),
+                timeout_seconds=TASK_TIMEOUT)
 
-    # Celery tasks decorated with @celery_app.task(bind=True) expect `self` as first arg.
-    # When calling directly, we pass None — the task function should handle this gracefully,
-    # or we call the underlying function. For ECS execution, we call the raw function.
-    # The actual Celery task objects are callable and accept kwargs directly.
-    result = task_func(**kwargs)
+    # Set timeout via SIGALRM (Unix only; on Windows this is a no-op)
+    has_alarm = hasattr(signal, "SIGALRM")
+    if has_alarm:
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(TASK_TIMEOUT)
+
+    try:
+        if _is_bound_celery_task(task_func):
+            fake_self = _FakeCeleryTask()
+            logger.info("ecs_task_using_fake_self", task=task_name, task_id=fake_self.request.id)
+            result = task_func.run(fake_self, **kwargs)
+        else:
+            result = task_func(**kwargs)
+    finally:
+        if has_alarm:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
 
     logger.info("ecs_task_completed", task=task_name, result_type=type(result).__name__)
     return result if isinstance(result, dict) else {"status": "completed"}

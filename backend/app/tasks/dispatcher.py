@@ -106,11 +106,15 @@ def _dispatch_sqs(task_name: str, kwargs: dict[str, Any]) -> DispatchResult:
         "message_id": message_id,
     })
 
-    response = sqs.send_message(
-        QueueUrl=queue_url,
-        MessageBody=message_body,
-        MessageGroupId=task_name if queue_url.endswith(".fifo") else None,
-    )
+    send_kwargs = {
+        "QueueUrl": queue_url,
+        "MessageBody": message_body,
+    }
+    if queue_url.endswith(".fifo"):
+        send_kwargs["MessageGroupId"] = task_name
+        send_kwargs["MessageDeduplicationId"] = message_id
+
+    response = sqs.send_message(**send_kwargs)
 
     sqs_message_id = response.get("MessageId", message_id)
     logger.info(

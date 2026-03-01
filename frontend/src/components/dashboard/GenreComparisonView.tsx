@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 // ─── Types ───
 
@@ -590,32 +591,34 @@ export default function GenreComparisonView({
               ))}
             </div>
 
-            {viewMode === "bar" ? (
-              <>
-                {/* Grouped bar chart */}
-                <GroupedBarChart data={genreData} colors={colors} />
+            <ErrorBoundary fallback={<div className="flex items-center justify-center h-40 text-[12px] text-gray-400">グラフの描画に失敗しました</div>}>
+              {viewMode === "bar" ? (
+                <>
+                  {/* Grouped bar chart */}
+                  <GroupedBarChart data={genreData} colors={colors} />
 
-                {/* Individual metric comparisons */}
-                <div className="grid grid-cols-1 gap-4 mt-4">
-                  {METRICS.map((metric) => (
-                    <ComparisonBar
-                      key={metric.key}
-                      values={genreData.map((d) => {
-                        const v = d[metric.key] as number;
-                        return metric.key === "hit_rate" ? v * 100 : v;
-                      })}
-                      colors={colors}
-                      labels={genreData.map((d) => d.genre)}
-                      metricLabel={metric.label}
-                      formatValue={metric.format}
-                      suffix={metric.suffix}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : (
-              <RadarChart data={genreData} colors={colors} />
-            )}
+                  {/* Individual metric comparisons */}
+                  <div className="grid grid-cols-1 gap-4 mt-4">
+                    {METRICS.map((metric) => (
+                      <ComparisonBar
+                        key={metric.key}
+                        values={genreData.map((d) => {
+                          const v = d[metric.key] as number;
+                          return metric.key === "hit_rate" ? v * 100 : v;
+                        })}
+                        colors={colors}
+                        labels={genreData.map((d) => d.genre)}
+                        metricLabel={metric.label}
+                        formatValue={metric.format}
+                        suffix={metric.suffix}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <RadarChart data={genreData} colors={colors} />
+              )}
+            </ErrorBoundary>
 
             {/* Summary table */}
             <div className="mt-4 overflow-x-auto">

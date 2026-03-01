@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { copyToClipboard } from "@/lib/format";
 
 // ─── Types ───
 
@@ -100,8 +101,7 @@ export default function CopyVariations({ initialText }: CopyVariationsProps) {
   };
 
   const handleCopyText = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("コピーしました");
+    copyToClipboard(text).then(() => toast.success("コピーしました"));
   };
 
   return (

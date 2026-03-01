@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-// TODO: Use fetchApi when real API endpoint is available
-// import { fetchApi } from "@/lib/api";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { fetchApi } from "@/lib/api";
+import { ErrorState } from "@/components/common/StateDisplay";
 
 // ─── Types ───
 
@@ -21,42 +21,6 @@ interface AdSummary {
   is_hit: boolean;
   hit_score: number;
   cumulative_views: number;
-}
-
-// ─── Mock Data ───
-// TODO: Replace with real API data from /api/v1/rankings/pro-ranking with date filters
-
-function generateMockData(year: number, month: number): DayData[] {
-  const days: DayData[] = [];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const total = Math.floor(Math.random() * 30) + 1;
-    const hit = Math.floor(Math.random() * Math.min(total, 8));
-    days.push({
-      date,
-      totalAds: total,
-      hitAds: hit,
-      regularAds: total - hit,
-    });
-  }
-  return days;
-}
-
-function generateMockAdsForDay(date: string): AdSummary[] {
-  const count = Math.floor(Math.random() * 8) + 2;
-  const genres = ["美容", "健康", "ダイエット", "金融", "教育"];
-  const names = ["セラムV3", "スキンケアX", "サプリメントA", "ダイエットZ", "投資ナビ", "英語マスター", "保険プラン", "美白クリーム"];
-  const advertisers = ["株式会社ABC", "DEFコーポレーション", "GHI株式会社", "JKLカンパニー"];
-  return Array.from({ length: count }, (_, i) => ({
-    ad_id: Math.floor(Math.random() * 10000) + 1,
-    product_name: names[i % names.length],
-    advertiser_name: advertisers[i % advertisers.length],
-    genre: genres[i % genres.length],
-    is_hit: Math.random() > 0.6,
-    hit_score: Math.floor(Math.random() * 100),
-    cumulative_views: Math.floor(Math.random() * 500000) + 10000,
-  }));
 }
 
 // ─── Helpers ───
@@ -80,36 +44,52 @@ export default function CalendarView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDayAds, setSelectedDayAds] = useState<AdSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const monthLabel = `${year}年${month + 1}月`;
 
   // Fetch calendar data for current month
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // TODO: Replace with real API call
-        // const data = await fetchApi<{items: any[]}>("/rankings/pro-ranking", {
-        //   params: { date_from: `${year}-${String(month+1).padStart(2,"0")}-01`, date_to: `${year}-${String(month+1).padStart(2,"0")}-31` }
-        // });
-        const mockData = generateMockData(year, month);
-        const map: Record<string, DayData> = {};
-        mockData.forEach((d) => { map[d.date] = d; });
-        setDayDataMap(map);
-      } catch {
-        // Use mock data on error
-        const mockData = generateMockData(year, month);
-        const map: Record<string, DayData> = {};
-        mockData.forEach((d) => { map[d.date] = d; });
-        setDayDataMap(map);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+  const loadData = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    setCalendarError(null);
+    try {
+      const data = await fetchApi<{
+        days?: Array<{ day: number; total_ads: number; hit_ads: number }>;
+      }>("/rankings/calendar", { params: { year, month: month + 1 } });
+
+      if (controller.signal.aborted) return;
+
+      const map: Record<string, DayData> = {};
+      (data.days || []).forEach((d) => {
+        const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
+        map[date] = {
+          date,
+          totalAds: d.total_ads || 0,
+          hitAds: d.hit_ads || 0,
+          regularAds: Math.max(0, (d.total_ads || 0) - (d.hit_ads || 0)),
+        };
+      });
+      setDayDataMap(map);
+    } catch {
+      if (controller.signal.aborted) return;
+      setCalendarError("カレンダーデータの取得に失敗しました");
+      setDayDataMap({});
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, [year, month]);
+
+  useEffect(() => {
+    loadData();
+    return () => { if (abortRef.current) abortRef.current.abort(); };
+  }, [loadData]);
 
   // Calendar grid calculation
   const calendarDays = useMemo(() => {
@@ -126,11 +106,48 @@ export default function CalendarView() {
     return Math.max(...Object.values(dayDataMap).map((d) => d.totalAds), 1);
   }, [dayDataMap]);
 
-  const handleDayClick = useCallback((day: number) => {
+  const handleDayClick = useCallback(async (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     setSelectedDate(dateStr);
-    // TODO: Fetch real ads for this day
-    setSelectedDayAds(generateMockAdsForDay(dateStr));
+    try {
+      const res = await fetchApi<{
+        items?: Array<{
+          ad_id: number;
+          product_name?: string;
+          title?: string;
+          advertiser_name?: string;
+          fine_genre_en?: string;
+          genre?: string;
+          is_hit?: boolean;
+          hit_score?: number;
+          total_views?: number;
+          cumulative_views?: number;
+        }>;
+      }>("/rankings/pro-ranking", {
+        params: {
+          date_from: dateStr,
+          date_to: dateStr,
+          sort_by: "score",
+          per_page: 100,
+          page: 1,
+        },
+      });
+
+      const items = Array.isArray(res.items) ? res.items : [];
+      setSelectedDayAds(
+        items.map((ad) => ({
+          ad_id: ad.ad_id,
+          product_name: ad.product_name || ad.title || "不明",
+          advertiser_name: ad.advertiser_name || "不明",
+          genre: ad.fine_genre_en || ad.genre || "未分類",
+          is_hit: Boolean(ad.is_hit),
+          hit_score: Number(ad.hit_score || 0),
+          cumulative_views: Number(ad.cumulative_views || ad.total_views || 0),
+        }))
+      );
+    } catch {
+      setSelectedDayAds([]);
+    }
   }, [year, month]);
 
   const goToPrevMonth = () => {
@@ -160,6 +177,11 @@ export default function CalendarView() {
       </div>
 
       <div className="flex-1 overflow-auto custom-scrollbar p-5">
+        {calendarError && (
+          <div className="mb-4">
+            <ErrorState message={calendarError} onRetry={loadData} compact />
+          </div>
+        )}
         <div className="flex gap-5">
           {/* Calendar Grid */}
           <div className="flex-1">

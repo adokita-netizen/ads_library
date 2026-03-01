@@ -18,6 +18,19 @@ class CrawlJobStatusEnum(str, enum.Enum):
     FAILED = "failed"
 
 
+# CI-004: Standardized crawl failure reason codes
+class CrawlFailureReason(str, enum.Enum):
+    TIMEOUT = "timeout"
+    RATE_LIMIT = "rate_limit"
+    AUTH_EXPIRED = "auth_expired"
+    PARSE_ERROR = "parse_error"
+    NETWORK_ERROR = "network_error"
+    BROWSER_CRASH = "browser_crash"
+    NO_RESULTS = "no_results"
+    DUPLICATE_JOB = "duplicate_job"
+    UNKNOWN = "unknown"
+
+
 class CrawlJob(Base):
     """Tracks crawl job progress for real-time UI updates."""
 
@@ -41,6 +54,7 @@ class CrawlJob(Base):
     total_ads_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     current_platform: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     progress_detail: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

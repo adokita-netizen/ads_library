@@ -25,9 +25,22 @@ from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests as http_requests
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm.attributes import flag_modified
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, is_in_memory_mode
 from app.models.ad import Ad
+
+
+def _get_session() -> Session:
+    """Get a DB session, connecting to vaap_local.db if SQLite fallback is active."""
+    if not is_in_memory_mode():
+        return SyncSessionLocal()
+    db_path = os.path.join(os.path.dirname(__file__), "..", "vaap_local.db")
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"vaap_local.db not found at {db_path}")
+    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    return sessionmaker(bind=engine)()
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +405,7 @@ def main():
         print("  Install with: pip install playwright && python -m playwright install chromium")
     print()
 
-    session = SyncSessionLocal()
+    session = _get_session()
     try:
         # Find ads with destination_url
         ads = (

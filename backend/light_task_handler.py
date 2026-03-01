@@ -69,5 +69,13 @@ def _execute_task(task_name: str, kwargs: dict):
         from app.tasks.lp_tasks import batch_crawl_lps_task
         return batch_crawl_lps_task(**kwargs)
 
+    elif task_name == "download_thumbnail":
+        from app.tasks.media_tasks import download_thumbnail_task
+        return download_thumbnail_task(**kwargs)
+
+    elif task_name == "enrich_ad_creative":
+        from app.tasks.media_tasks import enrich_ad_creative_task
+        return enrich_ad_creative_task(**kwargs)
+
     else:
         raise ValueError(f"Unknown light task: {task_name}")

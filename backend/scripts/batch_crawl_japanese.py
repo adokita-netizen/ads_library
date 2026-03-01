@@ -169,8 +169,8 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                          limit_per_platform: int) -> dict:
     """Crawl all keywords for one genre.  Returns summary dict."""
     from app.core.database import SyncSessionLocal
-    from app.models.ad import Ad, AdStatusEnum, AdCategoryEnum
-    from app.tasks.crawl_tasks import _crawl_platforms, _map_platform
+    from app.models.ad import Ad, AdStatusEnum, AdCategoryEnum, MediaExtractionStatus
+    from app.tasks.crawl_tasks import _crawl_platforms, _map_platform, _extract_destination_url, _extract_text_fallback
     from sqlalchemy.orm.attributes import flag_modified
 
     label = genre_info.get("label", genre_key)
@@ -236,17 +236,14 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                             crawled_ad.image_urls or crawled_ad.video_url
                         )
                         if has_direct_media:
-                            extraction_status = "skipped"
+                            extraction_status = MediaExtractionStatus.SKIPPED
                         elif crawled_ad.snapshot_url:
-                            extraction_status = "pending"
+                            extraction_status = MediaExtractionStatus.PENDING
                         else:
-                            extraction_status = "skipped"
+                            extraction_status = MediaExtractionStatus.SKIPPED
 
-                        dest_url = crawled_ad.destination_url
-                        if not dest_url:
-                            dest_url = (crawled_ad.metadata or {}).get(
-                                "destination_url"
-                            )
+                        dest_url = _extract_destination_url(crawled_ad)
+                        title, description = _extract_text_fallback(crawled_ad)
 
                         # Map category
                         ad_category = None
@@ -264,11 +261,14 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                         # Build metadata with genre classification
                         ad_meta = _classify_genre(crawled_ad, genre_key, genre_info)
                         ad_meta["jp_genres"] = [genre_key]
+                        if dest_url:
+                            ad_meta["destination_url"] = dest_url
+                            ad_meta.setdefault("destination_type", "LP")
 
                         ad = Ad(
                             external_id=crawled_ad.external_id,
-                            title=crawled_ad.title,
-                            description=crawled_ad.description,
+                            title=title,
+                            description=description,
                             platform=_map_platform(platform),
                             creative_type=crawled_ad.creative_type,
                             video_url=crawled_ad.video_url,

@@ -281,7 +281,7 @@ export default function CreativeGalleryView({ ads, onAdSelect }: CreativeGallery
                         className="text-gray-300 hover:text-emerald-500 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank");
+                          window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank", "noopener,noreferrer");
                         }}
                         title="ダウンロード"
                       >

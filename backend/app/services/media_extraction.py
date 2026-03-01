@@ -10,6 +10,15 @@ from bs4 import BeautifulSoup
 
 logger = structlog.get_logger()
 
+# CI-118: Extractor version tracking
+EXTRACTOR_VERSION = "1.3.0"
+EXTRACTOR_CHANGELOG = {
+    "1.0.0": "Initial: HTTP+BS4 extraction",
+    "1.1.0": "Added Playwright fallback",
+    "1.2.0": "render_ad URL parser, fbcdn image filter",
+    "1.3.0": "CI-098 timeout presets, CI-064 health tracking",
+}
+
 # Limit concurrent Playwright browsers
 _playwright_semaphore = asyncio.Semaphore(2)
 
@@ -24,6 +33,8 @@ class ExtractedMedia:
     thumbnail_url: Optional[str] = None
     ad_text: Optional[str] = None  # extracted ad body text
     ad_title: Optional[str] = None  # extracted ad title
+    extractor_version: str = EXTRACTOR_VERSION  # CI-118: track which version extracted
+    extraction_method: str = ""  # "http_bs4" or "playwright"
 
 
 class MediaExtractor:
@@ -86,7 +97,7 @@ class MediaExtractor:
                         images=len(result.image_urls), videos=len(result.video_urls))
 
         except Exception as e:
-            logger.warning("media_http_extraction_failed", url=url, error=str(e))
+            logger.warning("media_http_extraction_failed", url=url, error=str(e), exc_info=True)
 
         return result
 
@@ -103,21 +114,54 @@ class MediaExtractor:
         async with _playwright_semaphore:
             try:
                 async with async_playwright() as p:
-                    browser = await p.chromium.launch(headless=True)
-                    page = await browser.new_page()
-                    await page.goto(url, wait_until="networkidle", timeout=int(self.timeout * 1000))
+                    browser = await p.chromium.launch(
+                        headless=True,
+                        args=[
+                            "--no-sandbox",
+                            "--disable-dev-shm-usage",
+                            "--disable-gpu",
+                        ],
+                    )
+                    page = None
+                    try:
+                        context = await browser.new_context(
+                            viewport={"width": 1920, "height": 1080},
+                            user_agent=(
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/121.0.0.0 Safari/537.36"
+                            ),
+                            locale="ja-JP",
+                        )
+                        page = await context.new_page()
+                        try:
+                            await page.goto(url, wait_until="domcontentloaded", timeout=int(self.timeout * 1000))
+                            await page.wait_for_timeout(5000)
+                        except Exception:
+                            logger.warning("page_load_timeout", url=url)
 
-                    html = await page.content()
-                    soup = BeautifulSoup(html, "html.parser")
-                    result = self._parse_html(soup)
-
-                    await browser.close()
+                        try:
+                            html = await page.content()
+                        except Exception:
+                            logger.warning("page_content_failed_after_timeout", url=url)
+                            return result
+                        soup = BeautifulSoup(html, "html.parser")
+                        if "/ads/archive/render_ad/" in url:
+                            result = self._parse_render_ad_html(soup)
+                        else:
+                            result = self._parse_html(soup)
+                    finally:
+                        if page:
+                            await page.close()
+                        if context:
+                            await context.close()
+                        await browser.close()
 
                 logger.info("media_playwright_extracted", url=url, type=result.creative_type,
                             images=len(result.image_urls), videos=len(result.video_urls))
 
             except Exception as e:
-                logger.warning("media_playwright_extraction_failed", url=url, error=str(e))
+                logger.warning("media_playwright_extraction_failed", url=url, error=str(e), exc_info=True)
 
         return result
 
@@ -214,5 +258,55 @@ class MediaExtractor:
                 # Take first meaningful chunk (up to 2000 chars)
                 if visible_text and len(visible_text) > 20:
                     result.ad_text = visible_text[:2000]
+
+        return result
+
+    def _parse_render_ad_html(self, soup: BeautifulSoup) -> ExtractedMedia:
+        """Parse Facebook render_ad page (server-rendered, specific structure)."""
+        result = ExtractedMedia()
+
+        for img in soup.find_all("img"):
+            src = img.get("src") or img.get("data-src")
+            if not src or not src.startswith("http"):
+                continue
+            if "fbcdn.net" in src or "facebook.com" in src:
+                width = img.get("width")
+                if width:
+                    try:
+                        if int(width) < 100:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                result.image_urls.append(src)
+
+        for video in soup.find_all("video"):
+            src = video.get("src")
+            if src and src.startswith("http"):
+                result.video_urls.append(src)
+            for source in video.find_all("source"):
+                src = source.get("src")
+                if src and src.startswith("http"):
+                    result.video_urls.append(src)
+
+        result.image_urls = list(dict.fromkeys(result.image_urls))
+        result.video_urls = list(dict.fromkeys(result.video_urls))
+
+        if result.video_urls:
+            result.creative_type = "video"
+        elif len(result.image_urls) > 1:
+            result.creative_type = "carousel"
+        elif result.image_urls:
+            result.creative_type = "image"
+
+        if not result.thumbnail_url and result.image_urls:
+            result.thumbnail_url = result.image_urls[0]
+
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            result.ad_text = og_desc["content"].strip()
+
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            result.ad_title = og_title["content"].strip()
 
         return result

@@ -27,18 +27,6 @@ const typeIcons: Record<string, { icon: string; color: string; label: string }> 
   crawl_done: { icon: "✓", color: "bg-gray-50 text-gray-700",     label: "クロール完了" },
 };
 
-// TODO: Replace mock data when /rankings/alerts API is fully available
-const MOCK_ALERTS: AlertItem[] = [
-  { id: "m1", type: "new_hit",    message: "新しいヒット広告を検出: 「美肌サプリ」がスコア85で急上昇中", ad_id: 1, created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(), is_read: false },
-  { id: "m2", type: "high_score", message: "「ダイエットドリンク」のスコアが72→91に変動しました", ad_id: 2, created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(), is_read: false },
-  { id: "m3", type: "competitor",  message: "競合「A社」が新規広告を3件出稿しました (美容・コスメ)", created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), is_read: false },
-  { id: "m4", type: "crawl_done", message: "定期クロール完了: 新規12件、更新45件のデータを取得", created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), is_read: true },
-  { id: "m5", type: "mega_hit",   message: "大ヒット検出: 「英会話アプリ」がメガヒット圏に到達 (スコア95)", ad_id: 3, created_at: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(), is_read: true },
-  { id: "m6", type: "new_hit",    message: "ヒット広告: 「プロテイン」がスコア78で配信継続中", ad_id: 4, created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), is_read: true },
-  { id: "m7", type: "competitor",  message: "競合「B社」が金融ジャンルで大型出稿を開始", created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), is_read: true },
-  { id: "m8", type: "trend_up",   message: "トレンド上昇: EC・D2Cジャンルの広告出稿が前週比+30%", created_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), is_read: true },
-];
-
 export default function AlertsPanel({ onAdSelect, fullPage }: AlertsPanelProps) {
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -48,18 +36,11 @@ export default function AlertsPanel({ onAdSelect, fullPage }: AlertsPanelProps) 
   const loadAlerts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchApi<{ items?: AlertItem[]; alerts?: AlertItem[] }>("/rankings/alerts").catch(() => null);
-      if (res) {
-        const items = res.items || res.alerts || (Array.isArray(res) ? res : []);
-        if (Array.isArray(items) && items.length > 0) {
-          setAlerts(items);
-        } else {
-          // TODO: Use real API data when available
-          setAlerts(MOCK_ALERTS);
-        }
-      } else {
-        setAlerts(MOCK_ALERTS);
-      }
+      const res = await fetchApi<{ items?: AlertItem[]; alerts?: AlertItem[] }>("/rankings/alerts");
+      const items = res.items || res.alerts || (Array.isArray(res) ? res : []);
+      setAlerts(Array.isArray(items) ? items : []);
+    } catch {
+      setAlerts([]);
     } finally {
       setLoading(false);
     }
@@ -89,16 +70,24 @@ export default function AlertsPanel({ onAdSelect, fullPage }: AlertsPanelProps) 
 
   const unreadCount = alerts.filter((a) => !a.is_read).length;
 
-  const toggleRead = (id: number | string) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, is_read: !a.is_read } : a))
-    );
-    // TODO: POST /rankings/alerts/{id}/read when API available
+  const markRead = async (id: number | string) => {
+    const alertId = Number(id);
+    if (!Number.isFinite(alertId)) return;
+    try {
+      await fetchApi(`/rankings/alerts/${alertId}/read`, { method: "POST" });
+      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, is_read: true } : a)));
+    } catch {
+      // Keep current UI state when API request fails.
+    }
   };
 
-  const markAllRead = () => {
-    setAlerts((prev) => prev.map((a) => ({ ...a, is_read: true })));
-    // TODO: POST /rankings/alerts/read-all when API available
+  const markAllRead = async () => {
+    try {
+      await fetchApi("/rankings/alerts/read-all", { method: "POST" });
+      setAlerts((prev) => prev.map((a) => ({ ...a, is_read: true })));
+    } catch {
+      // Keep current UI state when API request fails.
+    }
   };
 
   const formatTime = (dateStr?: string) => {
@@ -151,21 +140,17 @@ export default function AlertsPanel({ onAdSelect, fullPage }: AlertsPanelProps) 
               )}
             </div>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleRead(alert.id); }}
-            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-all p-0.5 shrink-0"
-            title={alert.is_read ? "未読にする" : "既読にする"}
-          >
-            {alert.is_read ? (
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51m16.5 1.615a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V8.844a2.25 2.25 0 011.183-1.98l7.5-4.04a2.25 2.25 0 012.134 0l7.5 4.04a2.25 2.25 0 011.183 1.98V18z" />
-              </svg>
-            ) : (
+          {!alert.is_read && (
+            <button
+              onClick={(e) => { e.stopPropagation(); void markRead(alert.id); }}
+              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-all p-0.5 shrink-0"
+              title="既読にする"
+            >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
               </svg>
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
     );

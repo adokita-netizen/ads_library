@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
+import { ErrorState } from "@/components/common/StateDisplay";
 import FunnelChart from "./FunnelChart";
 import PerformanceHeatmap from "./PerformanceHeatmap";
 import ScatterPlot from "./ScatterPlot";
@@ -35,6 +36,7 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
   const [period, setPeriod] = useState("30");
   const [genre, setGenre] = useState(propGenre || "all");
   const [kpi, setKpi] = useState<KPISummary | null>(null);
+  const [kpiError, setKpiError] = useState<string | null>(null);
   const [scoreData, setScoreData] = useState<number[]>([]);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
   }, [propGenre]);
 
   const loadKPI = useCallback(async () => {
+    setKpiError(null);
     try {
       const params: Record<string, string | number | undefined> = {};
       if (period !== "all") params.period = period;
@@ -49,12 +52,8 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
       const res = await fetchApi<KPISummary>("/rankings/dashboard-kpi", { params });
       setKpi(res);
     } catch {
-      setKpi({
-        total_ads: 12847,
-        hit_ads: 1523,
-        avg_score: 54.2,
-        active_rate: 69.5,
-      });
+      setKpiError("KPIデータの取得に失敗しました");
+      setKpi(null);
     }
   }, [period, genre]);
 
@@ -82,9 +81,17 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
     }
   }, [genre]);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     loadKPI();
     loadScoreDistribution();
+
+    return () => controller.abort();
   }, [loadKPI, loadScoreDistribution]);
 
   return (
@@ -143,7 +150,9 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
               {PERIOD_OPTIONS.find((p) => p.value === period)?.label || ""}
             </span>
           </div>
-          {kpi ? (
+          {kpiError ? (
+            <ErrorState message={kpiError} onRetry={loadKPI} compact />
+          ) : kpi ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-blue-50 rounded-lg px-3 py-3">
                 <p className="text-[10px] text-gray-500 mb-1">総広告数</p>

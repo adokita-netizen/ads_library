@@ -74,13 +74,19 @@ export default function ReportGenerator({ genre, onViewReport }: ReportGenerator
     }
   };
 
+  const [deletingReportId, setDeletingReportId] = useState<string | number | null>(null);
+
   const handleDelete = async (id: string | number) => {
+    if (deletingReportId !== null) return;
+    setDeletingReportId(id);
     try {
       await fetchApi(`/rankings/reports/${id}`, { method: "DELETE" });
       toast.success("レポートを削除しました");
       setReports((prev) => prev.filter((r) => r.id !== id));
     } catch {
       toast.error("削除に失敗しました");
+    } finally {
+      setDeletingReportId(null);
     }
   };
 
@@ -240,7 +246,7 @@ export default function ReportGenerator({ genre, onViewReport }: ReportGenerator
                         className="text-[10px] px-2 py-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
                         onClick={() => {
                           const url = r.download_url || `/api/v1/rankings/reports/${r.id}/download`;
-                          window.open(url, "_blank");
+                          window.open(url, "_blank", "noopener,noreferrer");
                         }}
                       >
                         DL

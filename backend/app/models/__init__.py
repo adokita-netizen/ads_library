@@ -1,6 +1,6 @@
 """SQLAlchemy models."""
 
-from app.models.ad import Ad, AdFrame, AdPlatformEnum
+from app.models.ad import Ad, AdFrame, AdPlatformEnum, MediaExtractionStatus
 from app.models.analysis import (
     AdAnalysis,
     DetectedObject,
@@ -42,6 +42,7 @@ __all__ = [
     "Ad",
     "AdFrame",
     "AdPlatformEnum",
+    "MediaExtractionStatus",
     "AdAnalysis",
     "DetectedObject",
     "SceneBoundary",

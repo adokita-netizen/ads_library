@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
+import { copyToClipboard } from "@/lib/format";
 
 // ─── Types ───
 
@@ -199,8 +201,8 @@ export default function ScenarioBuilder() {
       // });
       await new Promise((r) => setTimeout(r, 1500));
       setGenerated(MOCK_GENERATED);
-    } catch (err) {
-      console.error("シナリオ生成に失敗しました", err);
+    } catch {
+      toast.error("シナリオ生成に失敗しました");
     } finally {
       setGenerating(false);
     }
@@ -210,14 +212,10 @@ export default function ScenarioBuilder() {
     setGeneratingVariations(true);
     try {
       // TODO: Replace with actual API call when endpoint is ready
-      // const result = await fetchApi<{ variations: ScenarioVariation[] }>("/rankings/scenario-variations", {
-      //   method: "POST",
-      //   body: { scenario: generated, genre, archetype: selectedArchetype },
-      // });
       await new Promise((r) => setTimeout(r, 1200));
       setVariations(MOCK_VARIATIONS);
-    } catch (err) {
-      console.error("バリエーション生成に失敗しました", err);
+    } catch {
+      toast.error("バリエーション生成に失敗しました");
     } finally {
       setGeneratingVariations(false);
     }
@@ -228,15 +226,12 @@ export default function ScenarioBuilder() {
     setSaving(true);
     try {
       // TODO: Replace with actual API call when endpoint is ready
-      // await fetchApi("/rankings/saved-scenarios", {
-      //   method: "POST",
-      //   body: { name: scenarioName, genre, archetype: selectedArchetype, scenario: generated, variation: selectedVariation },
-      // });
       await new Promise((r) => setTimeout(r, 800));
       setSaved(true);
       setShowSaveModal(false);
-    } catch (err) {
-      console.error("保存に失敗しました", err);
+      toast.success("シナリオを保存しました");
+    } catch {
+      toast.error("保存に失敗しました");
     } finally {
       setSaving(false);
     }
@@ -247,10 +242,6 @@ export default function ScenarioBuilder() {
     setPredicting(true);
     try {
       // TODO: Replace with actual API call when endpoint is ready
-      // const result = await fetchApi<PerformancePrediction>("/rankings/predict-scenario-performance", {
-      //   method: "POST",
-      //   body: { text: customText, genre, platform },
-      // });
       await new Promise((r) => setTimeout(r, 1000));
       setPrediction({
         predicted_score: 72,
@@ -259,8 +250,8 @@ export default function ScenarioBuilder() {
         weaknesses: ["社会的証明が不足", "緊急性が弱い"],
         suggestions: ["数字データを追加すると信頼性が向上します", "限定感を出すことで行動率がUPします", "ユーザーの口コミを追加しましょう"],
       });
-    } catch (err) {
-      console.error("パフォーマンス予測に失敗しました", err);
+    } catch {
+      toast.error("パフォーマンス予測に失敗しました");
     } finally {
       setPredicting(false);
     }
@@ -271,7 +262,7 @@ export default function ScenarioBuilder() {
     const text = generated.sections.map((s) => `[${s.time_range}] ${s.label}\n${s.text}`).join("\n\n");
     const title = generated.title_options[selectedTitle] || "";
     const full = `タイトル: ${title}\n\n${text}`;
-    navigator.clipboard.writeText(full);
+    copyToClipboard(full);
   };
 
   const handleDownloadText = () => {
