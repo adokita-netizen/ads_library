@@ -111,10 +111,7 @@ def _build_render_ad_url(ad: "Ad") -> str | None:
     if not external_id:
         return ad.snapshot_url
 
-    # If snapshot_url already points to render_ad, use as-is
-    if ad.snapshot_url and "/ads/archive/render_ad/" in ad.snapshot_url:
-        return ad.snapshot_url
-
+    # Always rebuild render_ad URL with current token (tokens expire)
     # Try to get access_token from config
     try:
         from app.core.config import get_settings
