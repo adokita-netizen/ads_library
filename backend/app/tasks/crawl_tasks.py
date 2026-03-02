@@ -176,42 +176,20 @@ def _extract_text_fallback(crawled_ad) -> tuple[str | None, str | None]:
 
 # ── Genre Rotation for Scheduled Crawls ──────────────────────
 
-GENRE_ROTATION = {
-    0: ["beauty", "cosmetics"],        # Monday
-    1: ["health_food", "supplements"],  # Tuesday
-    2: ["diet", "fitness"],             # Wednesday
-    3: ["hair_growth", "skincare"],     # Thursday
-    4: None,                            # Friday = all genres
-}
-
 GENRE_KEYWORDS = {
-    "beauty": ["美容", "美白", "シミ", "シワ"],
-    "cosmetics": ["コスメ", "化粧品", "ファンデーション"],
-    "health_food": ["健康食品", "サプリ", "青汁"],
-    "supplements": ["サプリメント", "ビタミン", "プロテイン"],
-    "diet": ["ダイエット", "痩せる", "減量"],
-    "fitness": ["筋トレ", "フィットネス", "ジム"],
-    "hair_growth": ["育毛", "発毛", "薄毛"],
-    "skincare": ["スキンケア", "保湿", "美肌"],
+    "diet": ["ダイエット", "痩せる", "GLP-1", "医療ダイエット", "メディカルダイエット", "減量"],
+    "fitness": ["ジム", "パーソナルジム", "パーソナルトレーニング", "フィットネス"],
+    "meo": ["MEO対策", "MEO", "Googleマップ 集客", "Google口コミ"],
+    "glass": ["窓ガラスフィルム", "窓ガラス", "ガラスコーティング", "窓 断熱"],
 }
 
 
 def get_today_keywords() -> list[str]:
-    """Return keyword list based on today's weekday (Mon=0)."""
-    day = datetime.now().weekday()
-    genres = GENRE_ROTATION.get(day)
-
-    if genres is None:
-        # Friday or unmapped day: all genres
-        all_keywords = []
-        for kws in GENRE_KEYWORDS.values():
-            all_keywords.extend(kws)
-        return all_keywords
-
-    keywords = []
-    for g in genres:
-        keywords.extend(GENRE_KEYWORDS.get(g, []))
-    return keywords
+    """Return all keyword list — all genres every day."""
+    all_keywords = []
+    for kws in GENRE_KEYWORDS.values():
+        all_keywords.extend(kws)
+    return all_keywords
 
 
 def is_duplicate_crawl(session, keyword: str, hours: int = 6) -> bool:
