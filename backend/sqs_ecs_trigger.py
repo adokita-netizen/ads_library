@@ -56,7 +56,6 @@ def handler(event, context):
                         {
                             "name": CONTAINER_NAME,
                             "command": [
-                                "python", "-m", "app.tasks.runner",
                                 task_name,
                                 json.dumps(task_kwargs),
                             ],
