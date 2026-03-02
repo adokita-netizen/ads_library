@@ -143,6 +143,26 @@ def _cloudfront_url(s3_key: str) -> str | None:
     return f"{scheme}://{domain}/{s3_key}"
 
 
+def _s3_presigned_url(s3_key: str) -> str | None:
+    """Generate an S3 presigned URL as fallback when CloudFront is not configured."""
+    if not s3_key:
+        return None
+    try:
+        from app.core.storage import get_storage_client
+        storage = get_storage_client()
+        return storage.get_presigned_url(s3_key, expires=3600)
+    except Exception:
+        return None
+
+
+def _media_redirect_url(s3_key: str) -> str | None:
+    """Get redirect URL for an S3 key: CloudFront first, then S3 presigned URL."""
+    url = _cloudfront_url(s3_key)
+    if url:
+        return url
+    return _s3_presigned_url(s3_key)
+
+
 def _get_ad_media_info(ad_id: int, media_type: str) -> dict | None:
     """Fetch S3 key and original URLs for an ad from DB.
 
@@ -217,11 +237,11 @@ async def get_thumbnail(ad_id: int):
     """
     info = _get_ad_media_info(ad_id, "thumbnail")
 
-    # Try CloudFront redirect first
+    # Try CloudFront or S3 presigned URL redirect first
     s3_key = info["s3_key"] if info else None
-    cf_url = _cloudfront_url(s3_key)
-    if cf_url:
-        return RedirectResponse(url=cf_url, status_code=302)
+    redirect_url = _media_redirect_url(s3_key)
+    if redirect_url:
+        return RedirectResponse(url=redirect_url, status_code=302)
 
     path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
     if os.path.exists(path):
@@ -275,11 +295,11 @@ async def get_image(ad_id: int):
     """
     info = _get_ad_media_info(ad_id, "image")
 
-    # Try CloudFront redirect first
+    # Try CloudFront or S3 presigned URL redirect first
     s3_key = info["s3_key"] if info else None
-    cf_url = _cloudfront_url(s3_key)
-    if cf_url:
-        return RedirectResponse(url=cf_url, status_code=302)
+    redirect_url = _media_redirect_url(s3_key)
+    if redirect_url:
+        return RedirectResponse(url=redirect_url, status_code=302)
 
     path = os.path.join(CACHE_DIR, "images", f"{ad_id}.jpg")
     if os.path.exists(path):
@@ -334,11 +354,11 @@ async def get_video(ad_id: int):
     """
     info = _get_ad_media_info(ad_id, "video")
 
-    # Try CloudFront redirect first
+    # Try CloudFront or S3 presigned URL redirect first
     s3_key = info["s3_key"] if info else None
-    cf_url = _cloudfront_url(s3_key)
-    if cf_url:
-        return RedirectResponse(url=cf_url, status_code=302)
+    redirect_url = _media_redirect_url(s3_key)
+    if redirect_url:
+        return RedirectResponse(url=redirect_url, status_code=302)
 
     result = _find_video_path(ad_id)
     if result:
