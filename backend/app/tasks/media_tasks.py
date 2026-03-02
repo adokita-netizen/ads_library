@@ -266,6 +266,32 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
         if extracted.ad_title and not ad.title:
             ad.title = extracted.ad_title
 
+        # Fallback: if extraction found nothing but ad has thumbnail_url from API, use it
+        if not extracted.image_urls and not extracted.video_urls and ad.thumbnail_url:
+            # Try to get full-size image by removing size restrictions from fbcdn URLs
+            full_url = _upgrade_fbcdn_thumbnail(ad.thumbnail_url)
+            logger.info("media_extraction_fallback_to_thumbnail", ad_id=ad_id,
+                        thumbnail_url=_sanitize_url_for_log(full_url))
+            try:
+                thumb_data = _download_sync(full_url)
+                if thumb_data and len(thumb_data) > 500:
+                    from app.core.storage import get_storage_client
+                    storage = get_storage_client()
+                    url_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+                    s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
+                    storage.upload_bytes(s3_key, thumb_data, content_type="image/jpeg")
+                    ad.image_s3_key = s3_key
+                    ad.thumbnail_s3_key = s3_key
+                    ad.image_url = ad.thumbnail_url
+                    ad.creative_type = "image"
+                    extracted.creative_type = "image"
+                    extracted.image_urls = [ad.thumbnail_url]
+                    _save_to_local_cache(thumb_data, "images", ad_id)
+                    logger.info("media_fallback_thumbnail_uploaded", ad_id=ad_id, s3_key=s3_key,
+                                size_bytes=len(thumb_data))
+            except Exception as e:
+                logger.warning("media_fallback_thumbnail_failed", ad_id=ad_id, error=str(e))
+
         # Try to download and store the primary image
         if extracted.image_urls:
             try:
@@ -661,6 +687,21 @@ def _escalate_to_extract_media(ad_id: int):
         logger.info("enrich_escalated_to_extract_media", ad_id=ad_id)
     except Exception as e:
         logger.warning("enrich_escalation_failed", ad_id=ad_id, error=str(e))
+
+
+def _upgrade_fbcdn_thumbnail(url: str) -> str:
+    """Remove size restrictions from fbcdn thumbnail URLs to get full-size image.
+
+    Facebook CDN URLs contain 'stp=dst-jpg_s60x60' or similar size params.
+    Removing the size suffix returns the original resolution image.
+    """
+    if not url or "fbcdn" not in url:
+        return url
+    # Replace stp=dst-jpg_s60x60 (or similar sizes) with just stp=dst-jpg
+    upgraded = re.sub(r'(stp=dst-jpg)_s\d+x\d+', r'\1', url)
+    # Also handle stp=dst-jpg_s60x60_tt6 patterns
+    upgraded = re.sub(r'(stp=dst-jpg)_tt\d+', r'\1', upgraded)
+    return upgraded
 
 
 def _download_sync(url: str, timeout: float = 15.0) -> bytes | None:

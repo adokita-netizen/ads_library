@@ -93,6 +93,10 @@ def handler(event, context):
     if isinstance(event, dict) and event.get("action") == "crawl":
         return _run_crawl(event)
 
+    # Direct invocation for updating API keys in DB
+    if isinstance(event, dict) and event.get("action") == "update_api_key":
+        return _update_api_key(event)
+
     return _mangum_handler(event, context)
 
 
@@ -508,3 +512,37 @@ def _run_extract_media(event: dict) -> dict:
         return {"statusCode": 500, "body": json.dumps({"error": _safe_error(e)})}
     finally:
         session.close()
+
+
+def _update_api_key(event: dict) -> dict:
+    """Update API key in platform_api_keys table."""
+    from sqlalchemy import text
+    from app.core.database import SyncSessionLocal
+
+    platform = event.get("platform", "")
+    key_name = event.get("key_name", "access_token")
+    key_value = event.get("key_value", "")
+
+    if not platform or not key_value:
+        return {"statusCode": 400, "body": json.dumps({"error": "platform and key_value required"})}
+
+    db = SyncSessionLocal()
+    try:
+        result = db.execute(text(
+            "UPDATE platform_api_keys SET key_value = :value, updated_at = NOW() "
+            "WHERE platform = :platform AND key_name = :key_name"
+        ), {"value": key_value, "platform": platform, "key_name": key_name})
+
+        if result.rowcount == 0:
+            db.execute(text(
+                "INSERT INTO platform_api_keys (platform, key_name, key_value, is_active) "
+                "VALUES (:platform, :key_name, :value, true)"
+            ), {"platform": platform, "key_name": key_name, "value": key_value})
+
+        db.commit()
+        return {"statusCode": 200, "body": json.dumps({"status": "updated", "platform": platform, "key_name": key_name})}
+    except Exception as e:
+        db.rollback()
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+    finally:
+        db.close()
