@@ -135,7 +135,7 @@ jobs:
 
       - name: Build and push Worker image
         run: |
-          docker build -f docker/Dockerfile.worker \
+          docker build --platform linux/amd64 -f docker/Dockerfile.worker \
             -t $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
             -t $ECR_REGISTRY/$ECR_WORKER_REPO:latest .
           docker push $ECR_REGISTRY/$ECR_WORKER_REPO --all-tags

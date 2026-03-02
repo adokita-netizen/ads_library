@@ -111,7 +111,9 @@ def _dispatch_sqs(task_name: str, kwargs: dict[str, Any]) -> DispatchResult:
         "MessageBody": message_body,
     }
     if queue_url.endswith(".fifo"):
-        send_kwargs["MessageGroupId"] = task_name
+        # Use per-message group ID to allow parallel processing
+        # (task_name would serialize all tasks of the same type)
+        send_kwargs["MessageGroupId"] = str(kwargs.get("ad_id", message_id))
         send_kwargs["MessageDeduplicationId"] = message_id
 
     response = sqs.send_message(**send_kwargs)

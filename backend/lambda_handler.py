@@ -452,6 +452,7 @@ def _run_extract_media(event: dict) -> dict:
     """Batch dispatch media extraction for ads with pending status."""
     from sqlalchemy import text
     from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad, MediaExtractionStatus
     from app.tasks.dispatcher import dispatch_task
 
     limit = event.get("limit", 50)
@@ -474,10 +475,18 @@ def _run_extract_media(event: dict) -> dict:
             ad_id = row[0]
             try:
                 result = dispatch_task("extract_media", ad_id=ad_id)
+                # Mark as dispatched to prevent re-dispatching
+                session.execute(text(
+                    "UPDATE ads SET media_extraction_status = :status WHERE id = :id"
+                ), {"status": MediaExtractionStatus.DISPATCHED, "id": ad_id})
                 dispatched.append({"ad_id": ad_id, "message_id": result.id})
             except Exception as e:
                 errors.append({"ad_id": ad_id, "error": str(e)})
                 logger.error("extract_media_dispatch_failed", ad_id=ad_id, error=str(e))
+
+        # Commit all status updates
+        if dispatched:
+            session.commit()
 
         remaining = session.execute(text("""
             SELECT count(*) FROM ads
