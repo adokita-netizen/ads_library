@@ -46,10 +46,6 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "META_ACCESS_TOKEN", value = var.meta_access_token },
       ]
 
-      linuxParameters = {
-        sharedMemorySize = 2048
-      }
-
       logConfiguration = {
         logDriver = "awslogs"
         options = {
