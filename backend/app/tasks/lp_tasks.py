@@ -3,8 +3,10 @@
 import asyncio
 import hashlib
 import os
+from html import unescape
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import structlog
 from sqlalchemy import or_
@@ -72,6 +74,48 @@ def _load_lp_analysis_summary(session, lp_id: int):
         reusable_patterns=analysis.reusable_patterns,
         improvement_suggestions=analysis.improvement_suggestions,
     )
+
+
+def _synthesize_terminal_lp_content(url: str, error_message: str, error_code: str) -> tuple[dict, dict]:
+    raw_url = str(url or "").strip()
+    raw_error = str(error_message or "").strip()
+    raw_code = str(error_code or "unknown").strip() or "unknown"
+
+    placeholder_text = raw_url if raw_url and not raw_url.startswith(("http://", "https://")) else ""
+    parsed = urlparse(raw_url) if raw_url.startswith(("http://", "https://")) else None
+    domain = parsed.netloc if parsed else ""
+    title = placeholder_text or (domain or raw_url or "LP unavailable")
+    description = raw_error or f"Terminal LP state recorded: {raw_code}"
+    lines = [
+        f"Terminal LP state: {raw_code}",
+        f"Destination: {raw_url or 'unknown'}",
+    ]
+    if raw_error:
+        lines.append(f"Message: {raw_error}")
+    if placeholder_text:
+        lines.append(f"Visible content: {placeholder_text}")
+    full_text = "\n".join(lines).strip()
+
+    lp_info = {
+        "final_url": raw_url,
+        "title": unescape(title)[:500],
+        "description": unescape(description)[:500],
+        "terminal_state": True,
+    }
+    lp_data = {
+        "url": raw_url,
+        "final_url": raw_url,
+        "title": unescape(title)[:500],
+        "description": unescape(description)[:1000],
+        "full_text_content": unescape(full_text)[:5000],
+        "hero_headline": unescape(title)[:500],
+        "terminal_state": True,
+        "error_code": raw_code,
+    }
+    if domain:
+        lp_info["domain"] = domain
+        lp_data["domain"] = domain
+    return lp_info, lp_data
 
 
 def reuse_existing_lp_for_ad(
@@ -145,11 +189,20 @@ def _sync_lp_failure_to_ad(
     meta["lp_fetch_reason"] = error_code
     meta["lp_checked_at"] = datetime.now(timezone.utc).isoformat()
     meta["last_lp_fetch_at"] = meta["lp_checked_at"]
-    meta.setdefault("lp_info", {})
+    terminal_info, terminal_data = _synthesize_terminal_lp_content(
+        ad.destination_url or url,
+        error_message,
+        meta["lp_fetch_error_code"],
+    )
     meta["lp_info"] = {
         **(meta["lp_info"] if isinstance(meta.get("lp_info"), dict) else {}),
-        "final_url": ad.destination_url or url,
+        **terminal_info,
     }
+    meta["lp_data"] = {
+        **(meta["lp_data"] if isinstance(meta.get("lp_data"), dict) else {}),
+        **terminal_data,
+    }
+    meta["lp_terminal"] = True
     if error_message:
         meta["lp_error_message"] = error_message[:500]
     ad.ad_metadata = meta

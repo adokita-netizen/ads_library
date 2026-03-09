@@ -40,6 +40,10 @@ def _has_lp_content(meta: dict) -> bool:
     )
 
 
+def _lp_terminal(meta: dict) -> bool:
+    return bool(meta.get("lp_terminal"))
+
+
 def build_report(session) -> dict:
     ads = session.query(Ad).order_by(Ad.id.asc()).all()
     total = len(ads)
@@ -62,6 +66,9 @@ def build_report(session) -> dict:
         has_destination = bool(ad.destination_url or info.get("final_url") or data.get("final_url"))
         has_lp_metadata = bool(info.get("final_url") or info.get("title") or info.get("description") or info.get("og_image"))
         has_lp_content = _has_lp_content(meta)
+        lp_terminal = _lp_terminal(meta)
+        resolved_destination = bool(has_destination or lp_terminal)
+        resolved_lp_content = bool(has_lp_content or lp_terminal)
 
         counts["has_thumbnail"] += int(has_thumbnail)
         counts["has_image"] += int(has_image)
@@ -71,6 +78,8 @@ def build_report(session) -> dict:
         counts["has_destination"] += int(has_destination)
         counts["has_lp_metadata"] += int(has_lp_metadata)
         counts["has_lp_content"] += int(has_lp_content)
+        counts["resolved_destination"] += int(resolved_destination)
+        counts["resolved_lp_content"] += int(resolved_lp_content)
 
         media_statuses[str(ad.media_extraction_status or "null")] += 1
         creative_reasons[str(meta.get("creative_fetch_reason") or "null")] += 1
@@ -106,8 +115,10 @@ def build_report(session) -> dict:
         "creative_any_rate": pct(counts["has_any_creative"]),
         "downloadable_creative_rate": pct(counts["downloadable_creative"]),
         "destination_rate": pct(counts["has_destination"]),
+        "resolved_destination_rate": pct(counts["resolved_destination"]),
         "lp_metadata_rate": pct(counts["has_lp_metadata"]),
         "lp_content_rate": pct(counts["has_lp_content"]),
+        "resolved_lp_content_rate": pct(counts["resolved_lp_content"]),
         "full_completion_rate": pct(
             sum(
                 1
@@ -117,6 +128,23 @@ def build_report(session) -> dict:
                     and bool(ad.thumbnail_s3_key or ad.image_s3_key or ad.video_s3_key or ad.s3_key)
                     and bool(ad.destination_url or _lp_info(_meta(ad)).get("final_url") or _lp_data(_meta(ad)).get("final_url"))
                     and _has_lp_content(_meta(ad))
+                )
+            )
+        ),
+        "resolved_full_completion_rate": pct(
+            sum(
+                1
+                for ad in ads
+                if (
+                    bool(ad.thumbnail_url or ad.thumbnail_s3_key or ad.image_url or ad.image_s3_key or ad.video_url or ad.video_s3_key or ad.s3_key)
+                    and bool(ad.thumbnail_s3_key or ad.image_s3_key or ad.video_s3_key or ad.s3_key)
+                    and bool(
+                        ad.destination_url
+                        or _lp_info(_meta(ad)).get("final_url")
+                        or _lp_data(_meta(ad)).get("final_url")
+                        or _lp_terminal(_meta(ad))
+                    )
+                    and (_has_lp_content(_meta(ad)) or _lp_terminal(_meta(ad)))
                 )
             )
         ),
@@ -151,9 +179,12 @@ def main() -> None:
     print(f"image_rate:                 {summary['image_rate']:.2%}")
     print(f"video_rate:                 {summary['video_rate']:.2%}")
     print(f"destination_rate:           {summary['destination_rate']:.2%}")
+    print(f"resolved_destination_rate:  {summary['resolved_destination_rate']:.2%}")
     print(f"lp_metadata_rate:           {summary['lp_metadata_rate']:.2%}")
     print(f"lp_content_rate:            {summary['lp_content_rate']:.2%}")
+    print(f"resolved_lp_content_rate:   {summary['resolved_lp_content_rate']:.2%}")
     print(f"full_completion_rate:       {summary['full_completion_rate']:.2%}")
+    print(f"resolved_full_rate:         {summary['resolved_full_completion_rate']:.2%}")
 
     if args.json_report:
         with open(args.json_report, "w", encoding="utf-8") as fh:

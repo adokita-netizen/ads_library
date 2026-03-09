@@ -214,3 +214,45 @@ def test_c101_recover_lp_content_reuses_one_crawl_for_duplicate_urls(session, mo
     for ad in ads:
         refreshed = session.get(Ad, ad.id)
         assert refreshed.ad_metadata["lp_data"]["full_text_content"] == "Recovered content"
+
+
+def test_c101_lp_failure_sync_persists_terminal_lp_state(session):
+    ad = _mk_ad(
+        external_id="c101_lp_failure",
+        destination_url="https://unreachable.example.com",
+    )
+    session.add(ad)
+    session.commit()
+
+    lp_tasks._sync_lp_failure_to_ad(
+        session,
+        ad_id=ad.id,
+        url=ad.destination_url,
+        status="unreachable",
+        error_code="unknown",
+        error_message="DNS lookup failed",
+    )
+
+    refreshed = session.get(Ad, ad.id)
+    assert refreshed.ad_metadata["lp_terminal"] is True
+    assert refreshed.ad_metadata["lp_data"]["full_text_content"].startswith("Terminal LP state:")
+    assert refreshed.ad_metadata["lp_info"]["final_url"] == "https://unreachable.example.com"
+
+
+def test_c101_recover_missing_destination_terminal_marks_ads_complete(session):
+    ad = _mk_ad(
+        external_id="c101_no_destination",
+        destination_url=None,
+    )
+    session.add(ad)
+    session.commit()
+
+    result = recover_creative_lp_completeness._recover_missing_destination_terminal(session, limit=10)
+
+    session.expire_all()
+    refreshed = session.get(Ad, ad.id)
+    assert result["completed"] >= 1
+    assert ad.id in result["ids"]
+    assert refreshed.ad_metadata["lp_terminal"] is True
+    assert refreshed.ad_metadata["lp_data"]["terminal_state"] is True
+    assert refreshed.ad_metadata["lp_data"]["full_text_content"].startswith("Terminal LP state:")

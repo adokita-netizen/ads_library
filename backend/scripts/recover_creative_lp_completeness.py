@@ -167,11 +167,44 @@ def _recover_lp_content(session, limit: int, auto_analyze: bool) -> dict:
     return {"scanned": scanned, "completed": completed, "failed": failed, "ids": completed_ids}
 
 
+def _recover_missing_destination_terminal(session, limit: int) -> dict:
+    if limit <= 0:
+        return {"scanned": 0, "completed": 0, "failed": 0, "ids": []}
+
+    ads = (
+        session.query(Ad)
+        .filter(or_(Ad.destination_url.is_(None), Ad.destination_url == ""))
+        .order_by(Ad.created_at.desc(), Ad.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    completed = 0
+    completed_ids: list[int] = []
+    for ad in ads:
+        meta = ad.ad_metadata if isinstance(ad.ad_metadata, dict) else {}
+        if meta.get("lp_terminal") and meta.get("lp_fetch_error_code") == "no_destination_url":
+            continue
+        lp_tasks._sync_lp_failure_to_ad(
+            session,
+            ad_id=int(ad.id),
+            url="",
+            status="missing_destination",
+            error_code="no_destination_url",
+            error_message="No destination URL was available in the source ad metadata.",
+        )
+        completed += 1
+        completed_ids.append(int(ad.id))
+
+    return {"scanned": len(ads), "completed": completed, "failed": 0, "ids": completed_ids}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Recover missing creative/LP completeness")
     parser.add_argument("--media-limit", type=int, default=50)
     parser.add_argument("--thumb-limit", type=int, default=50)
     parser.add_argument("--lp-limit", type=int, default=50)
+    parser.add_argument("--terminal-limit", type=int, default=50)
     parser.add_argument("--auto-analyze", action="store_true")
     args = parser.parse_args()
 
@@ -180,6 +213,7 @@ def main() -> None:
         media = _recover_media_assets(session, args.media_limit)
         thumb = _materialize_still_images(session, args.thumb_limit)
         lp = _recover_lp_content(session, args.lp_limit, args.auto_analyze)
+        terminal = _recover_missing_destination_terminal(session, args.terminal_limit)
         print(
             "recovery_run",
             {
@@ -187,6 +221,7 @@ def main() -> None:
                 "media": media,
                 "thumb": thumb,
                 "lp": lp,
+                "terminal": terminal,
             },
         )
     finally:

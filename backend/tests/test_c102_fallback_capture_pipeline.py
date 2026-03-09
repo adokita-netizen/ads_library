@@ -44,6 +44,42 @@ def test_c102_media_task_persists_rendered_screenshot_fallback(session, monkeypa
     assert refreshed.media_extraction_status == MediaExtractionStatus.COMPLETED
 
 
+def test_c102_media_task_uses_direct_snapshot_capture_when_extractor_has_no_media(session, monkeypatch, tmp_path):
+    ad = _mk_ad(
+        external_id="c102_direct_snapshot",
+        snapshot_url="https://www.facebook.com/ads/library/?id=789",
+        media_extraction_status=MediaExtractionStatus.PENDING_HEAVY,
+    )
+    session.add(ad)
+    session.commit()
+
+    storage_mod = importlib.import_module("app.core.storage")
+
+    class _FakeStorage:
+        def upload_bytes(self, key, data, content_type="image/jpeg"):
+            return None
+
+    class _FakeExtractor:
+        async def extract(self, snapshot_url, use_playwright=True):
+            extracted = importlib.import_module("app.services.media_extraction").ExtractedMedia()
+            extracted.extraction_method = "playwright"
+            return extracted
+
+    monkeypatch.setattr(storage_mod, "get_storage_client", lambda: _FakeStorage())
+    monkeypatch.setattr(media_tasks, "_save_to_local_cache", lambda data, media_type, ad_id: str(tmp_path / f"{ad_id}-{media_type}.jpg"))
+    monkeypatch.setattr(media_tasks, "_capture_snapshot_still_bytes", lambda snapshot_url: (b"jpeg-bytes", "image/jpeg"))
+    monkeypatch.setattr(importlib.import_module("app.services.media_extraction"), "MediaExtractor", lambda: _FakeExtractor())
+
+    result = media_tasks.extract_media_task.run(ad_id=ad.id, use_playwright=True)
+
+    session.expire_all()
+    refreshed = session.get(type(ad), ad.id)
+    assert result["status"] == "completed"
+    assert refreshed.image_s3_key is not None
+    assert refreshed.thumbnail_s3_key is not None
+    assert refreshed.media_extraction_status == MediaExtractionStatus.COMPLETED
+
+
 def test_c102_lp_crawler_falls_back_to_playwright(monkeypatch):
     crawler = LPCrawler()
 

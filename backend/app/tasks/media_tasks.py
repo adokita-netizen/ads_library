@@ -581,6 +581,23 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                 download_failures.append(_classify_download_error(e))
                 logger.warning("rendered_screenshot_fallback_failed", ad_id=ad_id, error=str(e))
 
+        # Some Meta pages time out before MediaExtractor captures a screenshot.
+        # Retry with a dedicated snapshot-only browser session before marking pending_heavy.
+        if not _is_downloadable(ad) and ad.snapshot_url:
+            try:
+                screenshot_bytes, screenshot_content_type = _capture_snapshot_still_bytes(ad.snapshot_url)
+                if screenshot_bytes:
+                    fallback_key = _persist_rendered_screenshot_fallback(
+                        ad,
+                        ad_id=ad_id,
+                        screenshot_bytes=screenshot_bytes,
+                        screenshot_content_type=screenshot_content_type,
+                    )
+                    logger.info("direct_snapshot_fallback_uploaded", ad_id=ad_id, s3_key=fallback_key)
+            except Exception as e:
+                download_failures.append(_classify_download_error(e))
+                logger.warning("direct_snapshot_fallback_failed", ad_id=ad_id, error=str(e))
+
         downloadable = _is_downloadable(ad)
         has_any_media = bool(ad.thumbnail_url or ad.image_url or ad.video_url)
         failure_reason = download_failures[0] if download_failures else None
