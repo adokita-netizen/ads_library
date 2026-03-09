@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -11,6 +12,7 @@ from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _config_logger = logging.getLogger(__name__)
+_BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 def _normalize_database_url(url: str, driver: str = "asyncpg") -> str:
@@ -51,20 +53,32 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = "change-this-to-a-secure-random-string"
     api_v1_prefix: str = "/api/v1"
+    api_v2_prefix: str = "/api/v2"
+    api_dual_case_output: bool = True
+    api_compression_enabled: bool = True
+    api_compression_min_size_bytes: int = 1024
+    api_compression_gzip_enabled: bool = True
+    api_compression_brotli_enabled: bool = True
+    api_compression_gzip_level: int = 6
+    api_compression_brotli_quality: int = 5
+    api_gateway_auth_enabled: bool = False
+    api_gateway_api_keys: str = ""
+    api_gateway_protected_prefixes: str = "/api/v2,/api/v1/graphql"
+    cache_key_version: str = "v1"
+    api_db_query_timeout_ms: int = 30_000
 
     @field_validator("secret_key")
     @classmethod
     def _validate_secret_key(cls, v):
-        if v in _INSECURE_SECRET_KEYS:
-            if os.getenv("APP_ENV", "").lower() in ("production", "prod"):
-                raise ValueError("SECRET_KEY must be set to a secure value in production")
-            import secrets
-            return secrets.token_urlsafe(32)
+        if v in _INSECURE_SECRET_KEYS and os.getenv("APP_ENV", "").lower() in ("production", "prod"):
+            raise ValueError("SECRET_KEY must be set to a secure value in production")
         return v
 
     # Rate limiting
     rate_limit_login: str = "5/minute"
     rate_limit_register: str = "3/minute"
+    rate_limit_rankings_read: str = "60/minute"
+    rate_limit_rankings_heavy: str = "20/minute"
 
     @property
     def is_secret_key_secure(self) -> bool:
@@ -162,6 +176,11 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4-turbo-preview"
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-sonnet-4-5-20250929"
+    ai_chat_use_claude: bool = True
+    ai_chat_claude_max_tokens: int = 1200
+    ai_chat_claude_timeout_seconds: float = 30.0
+    ai_chat_requests_per_hour: int = 60
+    ai_chat_tokens_per_day: int = 120_000
 
     # Ad Platform API Keys
     meta_access_token: Optional[str] = None
@@ -214,9 +233,25 @@ class Settings(BaseSettings):
     def ocr_languages_list(self) -> list[str]:
         return [lang.strip() for lang in self.ocr_languages.split(",")]
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "case_sensitive": False}
+    @property
+    def api_gateway_api_keys_list(self) -> list[str]:
+        return [item.strip() for item in self.api_gateway_api_keys.split(",") if item.strip()]
+
+    @property
+    def api_gateway_protected_prefixes_list(self) -> list[str]:
+        return [item.strip() for item in self.api_gateway_protected_prefixes.split(",") if item.strip()]
+
+    model_config = {
+        "env_file": str(_BACKEND_ENV_FILE),
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+    }
 
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+
+

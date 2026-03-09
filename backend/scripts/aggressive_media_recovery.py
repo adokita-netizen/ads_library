@@ -17,6 +17,7 @@ import os
 import sys
 import time
 import logging
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -116,6 +117,7 @@ def _download_url(url: str, dest_path: str) -> bool:
 def _set_thumbnail(ad, source_label: str, session, also_set_image: bool = False):
     """Update DB fields after successful thumbnail recovery."""
     ad.thumbnail_s3_key = f"media_cache/thumbnails/{ad.id}.jpg"
+    ad.media_extraction_status = "completed"
 
     if also_set_image and not ad.image_s3_key:
         # Copy thumbnail to image dir as well
@@ -133,6 +135,39 @@ def _set_thumbnail(ad, source_label: str, session, also_set_image: bool = False)
     meta["media_cached"] = True
     meta["thumbnail_recovery_source"] = source_label
     meta["thumbnail_fixed"] = True
+    meta["last_recovery_attempt_at"] = datetime.now(timezone.utc).isoformat()
+    meta["last_recovery_outcome"] = "success"
+    meta["creative_fetch_status"] = "success"
+    meta["creative_fetch_source"] = source_label
+    meta["creative_fetch_reason"] = None
+    meta["downloadable"] = bool(ad.thumbnail_s3_key or ad.image_s3_key or ad.video_s3_key or ad.s3_key)
+    meta["viewable"] = bool(ad.thumbnail_url or ad.image_url or ad.video_url or ad.snapshot_url)
+    completeness = 0
+    if ad.video_url or ad.video_s3_key or ad.s3_key:
+        completeness += 35
+    if ad.image_url or ad.image_s3_key:
+        completeness += 30
+    if ad.thumbnail_url or ad.thumbnail_s3_key:
+        completeness += 20
+    if ad.snapshot_url:
+        completeness += 10
+    if ad.destination_url:
+        completeness += 5
+    meta["media_completeness_score"] = min(completeness, 100)
+    ad.ad_metadata = meta
+    flag_modified(ad, "ad_metadata")
+
+
+def _mark_recovery_failure(ad, reason: str):
+    meta = dict(ad.ad_metadata or {})
+    ad.media_extraction_status = "pending_heavy" if ad.snapshot_url or ad.destination_url else "failed"
+    meta["last_recovery_attempt_at"] = datetime.now(timezone.utc).isoformat()
+    meta["last_recovery_outcome"] = "failed"
+    meta["creative_fetch_status"] = "failed"
+    meta["creative_fetch_source"] = meta.get("creative_fetch_source") or "aggressive_media_recovery"
+    meta["creative_fetch_reason"] = reason
+    meta["downloadable"] = bool(ad.thumbnail_s3_key or ad.image_s3_key or ad.video_s3_key or ad.s3_key)
+    meta["viewable"] = bool(ad.thumbnail_url or ad.image_url or ad.video_url or ad.snapshot_url)
     ad.ad_metadata = meta
     flag_modified(ad, "ad_metadata")
 
@@ -167,6 +202,7 @@ def phase1_retry_thumbnail_url(session, missing_ads):
             size_kb = os.path.getsize(thumb_path) / 1024
             print(f"{label}: OK ({size_kb:.1f}KB)")
         else:
+            _mark_recovery_failure(ad, "download_failed")
             print(f"{label}: FAIL")
 
         time.sleep(REQUEST_DELAY)
@@ -213,6 +249,7 @@ def phase2_image_url_fallback(session, missing_ads, already_recovered):
             size_kb = os.path.getsize(thumb_path) / 1024
             print(f"{label}: OK from image_url ({size_kb:.1f}KB)")
         else:
+            _mark_recovery_failure(ad, "download_failed")
             print(f"{label}: FAIL")
 
         time.sleep(REQUEST_DELAY)
@@ -287,6 +324,7 @@ def phase3_snapshot_og_image(session, missing_ads, already_recovered):
                         break
 
             if not og_url:
+                _mark_recovery_failure(ad, "media_url_missing")
                 print(f"{label}: no og:image in snapshot")
                 time.sleep(REQUEST_DELAY)
                 continue
@@ -299,9 +337,11 @@ def phase3_snapshot_og_image(session, missing_ads, already_recovered):
                 size_kb = os.path.getsize(thumb_path) / 1024
                 print(f"{label}: OK from og:image ({size_kb:.1f}KB)")
             else:
+                _mark_recovery_failure(ad, "download_failed")
                 print(f"{label}: og:image download failed")
 
         except Exception as e:
+            _mark_recovery_failure(ad, "download_failed")
             print(f"{label}: error - {e}")
 
         time.sleep(REQUEST_DELAY)
@@ -366,29 +406,33 @@ def phase4_playwright_screenshot(session, missing_ads, already_recovered):
 
                     page.wait_for_timeout(4000)
 
-                    # Try to find the largest image on the page
-                    img_src = page.evaluate("""() => {
-                        const imgs = document.querySelectorAll('img');
-                        let best = null;
-                        let bestArea = 0;
-                        imgs.forEach(img => {
-                            const rect = img.getBoundingClientRect();
-                            const src = img.currentSrc || img.src || '';
-                            if (src && src.startsWith('http')
-                                && rect.width > 80 && rect.height > 80
-                                && !src.includes('favicon')
-                                && !src.includes('pixel')
-                                && !src.includes('emoji')
-                                && !src.includes('logo')) {
-                                const area = rect.width * rect.height;
-                                if (area > bestArea) {
-                                    bestArea = area;
-                                    best = src;
+                    # Try to find the largest image on the page, but fall back
+                    # to a screenshot if the page navigates during evaluation.
+                    try:
+                        img_src = page.evaluate("""() => {
+                            const imgs = document.querySelectorAll('img');
+                            let best = null;
+                            let bestArea = 0;
+                            imgs.forEach(img => {
+                                const rect = img.getBoundingClientRect();
+                                const src = img.currentSrc || img.src || '';
+                                if (src && src.startsWith('http')
+                                    && rect.width > 80 && rect.height > 80
+                                    && !src.includes('favicon')
+                                    && !src.includes('pixel')
+                                    && !src.includes('emoji')
+                                    && !src.includes('logo')) {
+                                    const area = rect.width * rect.height;
+                                    if (area > bestArea) {
+                                        bestArea = area;
+                                        best = src;
+                                    }
                                 }
-                            }
-                        });
-                        return best;
-                    }""")
+                            });
+                            return best;
+                        }""")
+                    except Exception:
+                        img_src = None
 
                     saved = False
                     source = None
@@ -410,6 +454,7 @@ def phase4_playwright_screenshot(session, missing_ads, already_recovered):
                         size_kb = os.path.getsize(thumb_path) / 1024
                         print(f"{label}: OK ({source}, {size_kb:.1f}KB)")
                     else:
+                        _mark_recovery_failure(ad, "download_failed")
                         if os.path.exists(thumb_path):
                             os.remove(thumb_path)
                         print(f"{label}: screenshot failed")
@@ -417,6 +462,7 @@ def phase4_playwright_screenshot(session, missing_ads, already_recovered):
                     page.close()
 
                 except Exception as e:
+                    _mark_recovery_failure(ad, "download_failed")
                     print(f"{label}: error - {e}")
 
                 time.sleep(REQUEST_DELAY)
@@ -466,9 +512,12 @@ def main():
             print("\n  All thumbnails cached! Nothing to do.")
             return
 
-        # Get all ads missing thumbnails
+        # Get ads that are still not downloadable and have some recovery surface.
         missing_ads = session.query(Ad).filter(
-            Ad.thumbnail_s3_key.is_(None)
+            Ad.thumbnail_s3_key.is_(None),
+            Ad.image_s3_key.is_(None),
+            Ad.video_s3_key.is_(None),
+            Ad.s3_key.is_(None),
         ).order_by(Ad.id).all()
 
         all_recovered = set()
@@ -505,6 +554,10 @@ def main():
         print(f"  Phase 3 (snapshot og:image):     {p3_count}")
         print(f"  Phase 4 (playwright screenshot): {p4_count}")
         total_recovered = p1_count + p2_count + p3_count + p4_count
+        for ad in missing_ads:
+            if ad.id not in all_recovered:
+                _mark_recovery_failure(ad, "media_url_missing" if ad.snapshot_url else "download_failed")
+        session.commit()
         print(f"  ----------------------------------------")
         print(f"  Total recovered:                 {total_recovered}")
         print()

@@ -98,3 +98,7 @@ tmp/
 temp/
 *.tmp
 backend/vaap_local.db.bak_*
+.checkpoints/
+
+*storybook.log
+storybook-static

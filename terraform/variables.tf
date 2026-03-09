@@ -49,13 +49,13 @@ variable "db_password" {
 variable "lambda_memory_size" {
   description = "API Lambda function memory in MB"
   type        = number
-  default     = 512
+  default     = 1024
 }
 
 variable "lambda_timeout" {
   description = "API Lambda function timeout in seconds"
   type        = number
-  default     = 60
+  default     = 300
 }
 
 variable "lambda_light_memory_size" {
@@ -105,4 +105,82 @@ variable "meta_access_token" {
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "alert_email" {
+  description = "Email for AWS operational alerts (SNS/Budget). Leave empty to disable email subscription."
+  type        = string
+  default     = ""
+}
+
+variable "enable_budget_guardrails" {
+  description = "Enable monthly AWS cost budget alerts."
+  type        = bool
+  default     = true
+}
+
+variable "monthly_budget_limit_usd" {
+  description = "Monthly AWS budget limit (USD) for alerting."
+  type        = number
+  default     = 500
+}
+
+variable "budget_alert_threshold_percent" {
+  description = "Budget alert threshold percentage."
+  type        = number
+  default     = 80
+}
+
+variable "rds_backup_retention_days" {
+  description = "RDS automated backup retention days."
+  type        = number
+  default     = 7
+}
+
+variable "rds_max_allocated_storage" {
+  description = "RDS max autoscaled storage in GB."
+  type        = number
+  default     = 200
+}
+
+variable "rds_performance_insights_enabled" {
+  description = "Enable RDS Performance Insights."
+  type        = bool
+  default     = true
+}
+
+variable "s3_transition_to_ia_days" {
+  description = "Days before transitioning S3 current objects to STANDARD_IA."
+  type        = number
+  default     = 30
+}
+
+variable "s3_transition_to_glacier_days" {
+  description = "Days before transitioning S3 current objects to GLACIER_IR."
+  type        = number
+  default     = 180
+}
+
+variable "s3_noncurrent_transition_days" {
+  description = "Days before transitioning S3 noncurrent object versions to GLACIER_IR."
+  type        = number
+  default     = 30
+}
+
+variable "s3_noncurrent_expiration_days" {
+  description = "Days before expiring noncurrent S3 object versions."
+  type        = number
+  default     = 365
+}
+
+variable "sqs_message_retention_seconds" {
+  description = "Message retention for primary SQS queues."
+  type        = number
+  default     = 345600
+}
+
+variable "sqs_dlq_retention_seconds" {
+  description = "Message retention for SQS dead-letter queues."
+  type        = number
+  default     = 1209600
 }

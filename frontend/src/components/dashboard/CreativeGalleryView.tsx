@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { getMediaReasonMessage, normalizeMediaReasons, openCreativeDownload, type MediaStatus } from "@/lib/media";
 import { platformLabels, platformColors, genreOptions } from "@/lib/constants";
 import { formatYen } from "@/lib/format";
 
@@ -41,11 +42,13 @@ interface HitAd {
   estimation_method?: string;
   hook_type?: string;
   offer_type?: string;
+  media_status?: MediaStatus;
 }
 
 interface CreativeGalleryViewProps {
   ads: HitAd[];
   onAdSelect: (adId: number) => void;
+  onRecoveryRequest?: (adId: number) => void;
 }
 
 // ─── Label helpers ───
@@ -81,9 +84,19 @@ const genreLabel = (value: string | null | undefined): string => {
   return genreOptions.find((g) => g.value === value)?.label || value;
 };
 
+const stateBadgeClass = (active: boolean, tone: "emerald" | "blue" | "amber" | "rose") => {
+  const map = {
+    emerald: active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400",
+    blue: active ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-400",
+    amber: active ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-400",
+    rose: active ? "bg-rose-50 text-rose-700" : "bg-gray-100 text-gray-400",
+  };
+  return map[tone];
+};
+
 // ─── Main Component ───
 
-export default function CreativeGalleryView({ ads, onAdSelect }: CreativeGalleryViewProps) {
+export default function CreativeGalleryView({ ads, onAdSelect, onRecoveryRequest }: CreativeGalleryViewProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | "video" | "image">("all");
   const [hookFilter, setHookFilter] = useState("all");
 
@@ -165,6 +178,18 @@ export default function CreativeGalleryView({ ads, onAdSelect }: CreativeGallery
                 onClick={() => onAdSelect(ad.ad_id)}
                 className="group cursor-pointer rounded-lg overflow-hidden bg-white border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all"
               >
+                {(() => {
+                  const mediaStatus = ad.media_status || {};
+                  const canView = mediaStatus.viewable !== false;
+                  const canDownload = mediaStatus.downloadable === true;
+                  const hasLp = mediaStatus.has_lp === true;
+                  const reasons = normalizeMediaReasons(mediaStatus.missing_reasons);
+                  const shortage = reasons.includes("missing_creative");
+                  const snapshotOnly = reasons.includes("snapshot_only") || (!canDownload && !ad.video_url && !ad.image_url && Boolean(ad.snapshot_url));
+                  const lpUnresolved = !hasLp || reasons.includes("lp_missing") || reasons.includes("lp_unresolved");
+                  const needsRecovery = snapshotOnly || !canDownload || lpUnresolved || shortage;
+                  return (
+                    <>
                 {/* Thumbnail area */}
                 <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                   {thumbSrc ? (
@@ -257,41 +282,89 @@ export default function CreativeGalleryView({ ads, onAdSelect }: CreativeGallery
                   </div>
 
                   {/* Quick stats + actions */}
-                  <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-100">
-                    <span className="text-[9px] text-gray-400">{formatYen(ad.cumulative_spend || 0)}</span>
-                    <div className="flex items-center gap-1">
-                      {ad.days_running != null && (
+                    <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium ${stateBadgeClass(canView, "blue")}`}>閲覧可</span>
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium ${stateBadgeClass(canDownload, "emerald")}`}>DL可</span>
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium ${stateBadgeClass(hasLp, "amber")}`}>LPあり</span>
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium ${stateBadgeClass(shortage, "rose")}`}>素材不足</span>
+                        {snapshotOnly && (
+                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium bg-blue-50 text-blue-700">スナップショットのみ</span>
+                        )}
+                        {lpUnresolved && (
+                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium bg-amber-50 text-amber-700">LP未解決</span>
+                        )}
+                      </div>
+                      {!canDownload && reasons.length > 0 && (
+                        <p className="text-[9px] text-rose-500">{getMediaReasonMessage(reasons[0])}</p>
+                      )}
+                      {!canDownload && snapshotOnly && reasons.length === 0 && (
+                        <p className="text-[9px] text-blue-600">スナップショットのみ確認できます</p>
+                      )}
+                      {lpUnresolved && (
+                        <p className="text-[9px] text-amber-600">
+                          {hasLp ? "LPの解決先を確認中です" : "LP遷移先がまだ取得できていません"}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-gray-400">{formatYen(ad.cumulative_spend || 0)}</span>
+                        {ad.days_running != null && (
                         <span className="text-[9px] text-gray-400">{ad.days_running}日</span>
                       )}
+                    </div>
+                    <div className={`grid gap-1 ${needsRecovery ? "grid-cols-4" : "grid-cols-3"}`}>
                       <button
-                        className="text-gray-300 hover:text-amber-500 transition-colors"
+                        className="min-h-8 rounded-md bg-gray-900 text-white text-[10px] font-medium hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAdSelect(ad.ad_id);
+                        }}
+                        disabled={!canView}
+                      >
+                        見る
+                      </button>
+                      <button
+                        className="min-h-8 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-medium hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!canDownload) {
+                            toast.error(getMediaReasonMessage(reasons[0] || "download_unavailable"));
+                            return;
+                          }
+                          openCreativeDownload(ad.ad_id);
+                        }}
+                        disabled={!canDownload}
+                      >
+                        DL
+                      </button>
+                      <button
+                        className="min-h-8 rounded-md bg-amber-50 text-amber-700 text-[10px] font-medium hover:bg-amber-100 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           fetchApi("/rankings/bookmarks", { method: "POST", body: { ad_id: ad.ad_id } })
                             .then(() => toast.success("ブックマークに追加しました"))
                             .catch(() => toast.error("ブックマーク追加に失敗しました"));
                         }}
-                        title="ブックマーク"
                       >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-                        </svg>
+                        保存
                       </button>
-                      <button
-                        className="text-gray-300 hover:text-emerald-500 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank", "noopener,noreferrer");
-                        }}
-                        title="ダウンロード"
-                      >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                        </svg>
-                      </button>
+                      {needsRecovery && (
+                        <button
+                          className="min-h-8 rounded-md bg-sky-50 text-sky-700 text-[10px] font-medium hover:bg-sky-100 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            (onRecoveryRequest || onAdSelect)(ad.ad_id);
+                          }}
+                        >
+                          再取得
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
+                    </>
+                  );
+                })()}
               </div>
             );
           })}

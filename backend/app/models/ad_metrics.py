@@ -103,6 +103,7 @@ class ProductRanking(Base):
     # Hit detection
     is_hit: Mapped[bool] = mapped_column(default=False, nullable=False)
     hit_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-100
+    score_delta: Mapped[float | None] = mapped_column(Float, nullable=True)  # change from previous refresh
     trend_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # velocity of growth
 
     # Extra data

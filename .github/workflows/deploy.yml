@@ -7,20 +7,32 @@ on:
       - 'terraform/**'
       - '*.md'
   workflow_dispatch:
+    inputs:
+      run_e2e_smoke:
+        description: "Run frontend Playwright smoke tests before deploy"
+        required: false
+        type: boolean
+        default: false
 
 env:
   AWS_REGION: ap-northeast-1
   ECR_REGISTRY: 271669411511.dkr.ecr.ap-northeast-1.amazonaws.com
   ECR_API_REPO: vaap-production-api
   ECR_WORKER_REPO: vaap-production-worker
+  ECS_WORKER_TASK_FAMILY: vaap-production-worker
+  ECS_WORKER_CONTAINER_NAME: vaap-production-worker
   S3_FRONTEND_BUCKET: vaap-production-frontend
   CLOUDFRONT_DISTRIBUTION_ID: ERPIU1B8ZZ5ZA
 
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-vaap-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  test-backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +49,33 @@ jobs:
           cd backend
           pytest tests/ -v --tb=short
 
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Contract type checks
+        run: npm run test:contracts
+      - name: Install Playwright browser
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_e2e_smoke }}
+        run: npx playwright install --with-deps chromium
+      - name: Run smoke E2E
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_e2e_smoke }}
+        run: npm run test:e2e:smoke
+
   deploy-lambda:
-    needs: test
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +154,7 @@ jobs:
           "
 
   deploy-worker:
-    needs: test
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,22 +175,45 @@ jobs:
           docker build --platform linux/amd64 -f docker/Dockerfile.worker \
             -t $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
             -t $ECR_REGISTRY/$ECR_WORKER_REPO:latest .
+      - name: Verify worker image can run MLOps monitoring task
+        run: |
+          docker run --rm \
+            --entrypoint python \
+            $ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }} \
+            -m app.tasks.runner mlops_monitoring '{}'
+      - name: Push Worker image
+        run: |
           docker push $ECR_REGISTRY/$ECR_WORKER_REPO --all-tags
 
       - name: Update ECS task definition
+        id: register-worker-taskdef
         run: |
           WORKER_IMAGE="$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}"
           TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition vaap-production-worker \
+            --task-definition $ECS_WORKER_TASK_FAMILY \
             --query 'taskDefinition' --output json)
           NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
             --arg IMAGE "$WORKER_IMAGE" \
             '.containerDefinitions[0].image = $IMAGE |
              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
-          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager
+          REGISTERED=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager)
+          TASK_DEF_ARN=$(echo "$REGISTERED" | jq -r '.taskDefinition.taskDefinitionArn')
+          echo "task_definition_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Verify registered task definition points at new worker image
+        run: |
+          TASK_DEF_ARN="${{ steps.register-worker-taskdef.outputs.task_definition_arn }}"
+          IMAGE=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --query "taskDefinition.containerDefinitions[?name=='$ECS_WORKER_CONTAINER_NAME'].image | [0]" \
+            --output text)
+          if [ "$IMAGE" != "$ECR_REGISTRY/$ECR_WORKER_REPO:${{ github.sha }}" ]; then
+            echo "ERROR: worker task definition image mismatch: $IMAGE"
+            exit 1
+          fi
 
   deploy-frontend:
-    needs: test
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -192,3 +252,48 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
             --paths "/*"
+
+  notify:
+    if: always()
+    needs: [deploy-lambda, deploy-worker, deploy-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build deployment summary
+        id: summary
+        run: |
+          if [[ "${{ needs.deploy-lambda.result }}" == "success" && "${{ needs.deploy-worker.result }}" == "success" && "${{ needs.deploy-frontend.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "text=VAAP deploy succeeded: ${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "text=VAAP deploy failed: ${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Slack notification
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MSG: ${{ steps.summary.outputs.text }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          payload = {
+              "text": os.environ.get("MSG", "VAAP deploy notification"),
+          }
+          req = urllib.request.Request(
+              os.environ["SLACK_WEBHOOK_URL"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req, timeout=10).read()
+          PY
+
+      - name: GitHub summary
+        run: |
+          echo "## Deploy Result: ${{ steps.summary.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.summary.outputs.text }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Rollback guide: .github/DEPLOY_ROLLBACK.md" >> $GITHUB_STEP_SUMMARY

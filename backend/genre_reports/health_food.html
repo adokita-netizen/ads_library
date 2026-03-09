@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>健康食品 - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>健康食品</h1>
+<p class="summary">health_food | 31 ads | Avg views: 46.7K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">31</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">19</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">31</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">19</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">19</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in 健康食品 ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>statistic</span>
+            <span style="color:#f59e0b;font-weight:600">16%</span>
+        </div>
+        <div class="pattern-bar" style="width:16.129032258064516%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>pain_point</span>
+            <span style="color:#f59e0b;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:9.67741935483871%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>social_proof</span>
+            <span style="color:#f59e0b;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>urgency</span>
+            <span style="color:#f59e0b;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">23%</span>
+        </div>
+        <div class="pattern-bar" style="width:22.58064516129032%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>purchase</span>
+            <span style="color:#22c55e;font-weight:600">16%</span>
+        </div>
+        <div class="pattern-bar" style="width:16.129032258064516%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">13%</span>
+        </div>
+        <div class="pattern-bar" style="width:12.903225806451612%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>line_add</span>
+            <span style="color:#22c55e;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>signup</span>
+            <span style="color:#22c55e;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">26%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.806451612903224%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>desire</span>
+            <span style="color:#8b5cf6;font-weight:600">13%</span>
+        </div>
+        <div class="pattern-bar" style="width:12.903225806451612%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:9.67741935483871%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>relief</span>
+            <span style="color:#8b5cf6;font-weight:600">6%</span>
+        </div>
+        <div class="pattern-bar" style="width:6.451612903225806%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>excitement</span>
+            <span style="color:#8b5cf6;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">61%</span>
+        </div>
+        <div class="pattern-bar" style="width:61.29032258064516%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>numbers</span>
+            <span style="color:#3b82f6;font-weight:600">35%</span>
+        </div>
+        <div class="pattern-bar" style="width:35.483870967741936%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">35%</span>
+        </div>
+        <div class="pattern-bar" style="width:35.483870967741936%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>testimonial</span>
+            <span style="color:#3b82f6;font-weight:600">13%</span>
+        </div>
+        <div class="pattern-bar" style="width:12.903225806451612%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">45%</span>
+        </div>
+        <div class="pattern-bar" style="width:45.16129032258064%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">39%</span>
+        </div>
+        <div class="pattern-bar" style="width:38.70967741935484%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>article_lp</span>
+            <span style="color:#60a5fa;font-weight:600">13%</span>
+        </div>
+        <div class="pattern-bar" style="width:12.903225806451612%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>EC_site</span>
+            <span style="color:#60a5fa;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">35%</span>
+        </div>
+        <div class="pattern-bar" style="width:35.483870967741936%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">29%</span>
+        </div>
+        <div class="pattern-bar" style="width:29.03225806451613%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">29%</span>
+        </div>
+        <div class="pattern-bar" style="width:29.03225806451613%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">16%</span>
+        </div>
+        <div class="pattern-bar" style="width:16.129032258064516%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>form</span>
+            <span style="color:#22c55e;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:9.67741935483871%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" class=active>健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1495630048079982" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/120.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">14時までのご注文は365日年中無休で発送しています。</div>
+            <div class="ad-desc">巣鴨のお茶屋さん山年園の公式通販サイト。日本茶・健康茶・健康食品など、数多くの商品を取り揃え、全品送料無料でお届け。14時までのご注文は365日年中無休で発送しています。
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+FB.COM
+巣鴨のお茶屋さん山年園の公式通販サイト
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">284.4K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 93</span><span>巣鴨のお茶屋さん山年園</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1495630048079982" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">93</strong> (longevity:40, spend:20, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.01075268817204%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:21.50537634408602%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:21.50537634408602%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:10.75268817204301%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.225806451612903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://fb.com/canvas_doc/840194821647352" target="_blank">https://fb.com/canvas_doc/840194821647352</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1196017732538252" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/111.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">CA-AILP.CALPIS-SHOP.JP</div>
+            <div class="ad-desc">【高めの血圧】乳由来の健康成分で今すぐ始められる注目の方法
+CA-AILP.CALPIS-SHOP.JP
+血圧が130台になった方に
+高めの血圧と今、話題の注目成分についてのアンケートご協力のお願い
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">217.8K views</span><span class="badge-hit">HIT 89</span><span>カルピス健康通販</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1196017732538252" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://ca-ailp.calpis-shop.jp/shinayaka/db5868f6/index.html?cid=QD045&amp;utm_source=meta&amp;utm_medium=sns&amp;utm_campaign=shinayaka_WebCV_PC-SP_ASC&amp;utm_term=shinayaka_WebCV_PC-SP_ASC&amp;utm_content=250606_ShinaCare_Meta_st_1080_1080_03_kiwami_Text0001&amp;argument=6SZGujIC&amp;dmai=a685bbdac46c5a" target="_blank">https://ca-ailp.calpis-shop.jp/shinayaka/db5868f6/index.html?cid=QD045&amp;utm_source=meta&amp;utm_medium=sn</a>
+            <div class="lp-detail">
+                <div><strong>é«ãã®è¡å§ã¨ä»ãè©±é¡ã®æ³¨ç®æåã«ã¤ãã¦ã®ã¢ã³ã±ã¼ããååã®ãé¡ã</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/111.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1910283099514703" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/112.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">100%】×【ホシノ天然酵母】×【ベーグル伝統製法】</div>
+            <div class="ad-desc">【トモヱベーグル通販のご案内：７２時間かけて作るベーグル】
+シンプルな素材に手間と時間をかけたベーグルで、忙しいあなたの食卓を健康的に、ちょっとだけ豊かにします…
+トモヱベーグルは北海道恵庭市にある
+【道産小麦100%】×【ホシノ天然酵母】×【ベーグル伝統製法】
+が特徴のベーグル専門店です。
+［生地と素材のこだわり］
+• 卵やバターなどの乳製品不使用（中に包む具材には一部使用しています）
+• 道産小麦・有機砂糖・国産塩と水のみで作る生地
+• その他具材には有機食材を可能な限り取り入れ、高品質で味わいと食感豊かなベーグルを追求
+［時間と手間をかけた製法］
+• 48時間の酵母発酵と熟成
+• 20時間の冷蔵生地熟成
+• 4時間の人の手による成形と最終発酵
+その後、一つずつ有機砂糖水で茹でてから焼き上げるベーグル。
+２０１７年開業より現在８年目。地元の方々に日々ご利用頂き、大変好評をいただいてます</div>
+            <div class="ad-meta"><span class="badge-views">210.6K views</span><span class="badge-hit">HIT 89</span><span>トモエベーグル</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1910283099514703" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://tomoebagel.com/" target="_blank">https://tomoebagel.com/</a>
+            <div class="lp-detail">
+                <div><strong>åæµ·éå°éº¦ï¼ï¼ï¼ï¼ã¨å¤©ç¶éµæ¯ã®ä¼çµ±è£½æ³ãã¼ã°ã«å°éåºããã¢ã¨ãã¼ã°ã«ããã¢ã¨ãã¼</strong></div>
+                <div>åæµ·éç£å°éº¦ï¼ï¼ï¼ï¼ï¼ãã·ãå¤©ç¶éµæ¯ã¨ãªã¼ã¬ããã¯ã·ã¥ã¬ã¼ãå¡©ã¨æ°´ã ããä½¿ç¨ããä¼çµ±è£½æ³ã§ä½ããããã¼ã°ã«ãææ©é£æãå¤ç¨ããå®å¿å®å</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#0000FF;border-radius:2px;border:1px solid #333" title="#0000FF"></span><span style="display:inline-block;width:14px;height:14px;background:#FF0000;border-radius:2px;border:1px solid #333" title="#FF0000"></span><span style="display:inline-block;width:14px;height:14px;background:#66CCFF;border-radius:2px;border:1px solid #333" title="#66CCFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/112.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=766663009633785" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/50.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">LINE登録で無料プレゼント中！</div>
+            <div class="ad-desc">お腹いっぱい食べたいけど、体のことも気になる・・・
+そんな方へ、新しい選択肢。
+【まんぷく組み替えダイエット】は  
+✔️ 運動なし  
+✔️ 食事制限なし  
+✔️ サプリも特別な食品もなし
+なのに、「なんだかラク」「自然に整ってきた」と感じる人が続出中。
+実は、食べる量ではなく  
+『組み合わせ』を少し変えるだけで、  
+体はちゃんと反応してくれるんです。
+今なら「ダイエット疲れてしまった方必見！スルスル痩せるまんぷく組み替えダイエット解説動画」を、LINE登録で無料プレゼント中！
+50代からでもムリなく、自分らしく整えていける。  
+「頑張らないダイエット」を、あなたも体感しませんか？
+UTAGE-SYSTEM.COM
+【まんぷくなのに整う】仕組みを無料公開中
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">179.1K views</span><span class="badge-hit">HIT 89</span><span>Yoshiki Diet</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=766663009633785" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: pain_point</span><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://utage-system.com/p/Jah6847zOPqN" target="_blank">https://utage-system.com/p/Jah6847zOPqN</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/50.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=756714460496952" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/114.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">80年を超える水産会社です。</div>
+            <div class="ad-desc">キョクヨーは創業80年を超える水産会社です。
+公式通販サイトでは品質にとことんこだわり抜いた缶詰や海鮮品、水産会社ならではの健康食品などを幅広く取り揃えております。
+キョクヨーが自信を持っておすすめする商品をぜひ一度ご賞味くださいませ。
+MARCHE.KYOKUYO.CO.JP
+赤貝味付【24缶セット】
+魚の缶詰・海鮮品・冷凍食品の通販なら、創業80年を越える老舗水産会社「極洋」の公式通販サイト「キョクヨーマルシェ」。さばの缶詰やカツオ・エビなどの海鮮品、チャーハンなどの冷凍食品まで豊富な品揃え。ここで....
+Shop Now</div>
+            <div class="ad-meta"><span class="badge-views">153.9K views</span><span class="badge-hit">HIT 89</span><span>株式会社極洋</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=756714460496952" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: bundle</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (EC_site)</h4>
+            <a class="lp-url" href="https://www.marche.kyokuyo.co.jp/shop/g/g100225" target="_blank">https://www.marche.kyokuyo.co.jp/shop/g/g100225</a>
+            <div class="lp-detail">
+                <div><strong>缶詰・海鮮品・冷凍食品の通販なら極洋公式通販サイト赤貝味付【24缶セット】(24缶(225円/缶)): 缶詰・瓶詰 | キョクヨーマルシェ</strong></div>
+                <div>極洋公式通販サイトの「赤貝味付 【24缶セット】」。良質な赤貝を甘辛醤油でやわらかく煮付けた、ご飯にもお酒にもぴったりの逸品です。親しみやすい懐かしい味わいで、毎日の食卓やおつまみに大活躍。長期保存も可能で、全国送料無料でお届けします。（※一部地域対象外）</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> 買い物かごへ入れる, この商品について問い合わせる, お気に入りに登録する, OK, お気に入り一覧へ</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1132978245461483" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/105.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#6</span>
+            <div class="ad-title">Wakasapri for Pro.】／</div>
+            <div class="ad-desc">＼ランキング１位【Wakasapri for Pro.】／
+高濃度ビタミンC+ビタミンD
+1包にVC3000mg、VD4000IU含有
+製品特長:
+◎ 1包にビタミンCを3000mg配合
+◎ 1包にビタミンDを4000IU（100μg）配合
+◎ 持ち運びやすく、賦形剤を極力使わない顆粒タイプ
+◎ 国内の大学や研究所及び専門医師の監修のもと開発
+◎ 品質と安全性を確認した原料のみ使用
+◎ 安全性や品質が確保された国内の健康食品GMP認定工場で製造
+※Wakasapri（ワカサプリ）商品は医療機関専売のサプリメントです。
+お買い求めにはクリニックでの診療が必要となります。
+ご購入はこちらから
+LESAGE-STORE.JP
+【ドクターズコスメ】ランキング１位
+Wakasapri for Pro. シリーズ ビタミンC + ビタミンD｜ドクターズコスメ・クリニック専売品通販サイトのレサージュ｜皮</div>
+            <div class="ad-meta"><span class="badge-views">134.1K views</span><span class="badge-hit">HIT 89</span><span>Lesage</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1132978245461483" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: social_proof</span><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">Offer: comparison</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://www.lesage-store.jp/products/detail/970?utm_source=facebook_ch&amp;utm_medium=cpc" target="_blank">https://www.lesage-store.jp/products/detail/970?utm_source=facebook_ch&amp;utm_medium=cpc</a>
+            <div class="lp-detail">
+                <div><strong>［通販］Wakasapri for Pro. シリーズ ビタミンC + ビタミンD｜ドクターズコスメ・クリニック専売品通販サイトのレサージュ</strong></div>
+                <div>Wakasapri for Pro. シリーズ ビタミンC + ビタミンD｜ドクターズコスメ・クリニック専売品通販サイトのレサージュ｜皮膚科院内処方の化粧品でエイジレスなお肌に。レサージュ - Lesage - では、アトピー性皮膚炎の方にも安心してお使い頂けるヴォーテール（BEAUTEL）を始め、医療機関専売品やクリニック専売品を取り扱っております。</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> もっと見る, チェックした項目で絞り込む, more, NEWS LIST, カートに入れる</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#F2B098;border-radius:2px;border:1px solid #333" title="#F2B098"></span><span style="display:inline-block;width:14px;height:14px;background:#98B3F2;border-radius:2px;border:1px solid #333" title="#98B3F2"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/105.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1579801070112414" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/58.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#7</span>
+            <div class="ad-title">25年の視点と、子どもの発達障害を大きく改善させた「分子栄養学」の実践力！その詳細を無料メールセミナーで紹介！</div>
+            <div class="ad-desc">【期間限定！特典プレゼント中】細胞レベルであなたとお子さんの腸と脳をリセットできる、「腸と脳ダブルアプローチダイエット」とは？食品業界歴25年の視点と、子どもの発達障害を大きく改善させた「分子栄養学」の実践力！その詳細を無料メールセミナーで紹介！
+4年間「分子栄養学」を学びながら実践！！
+「腸と脳のダブルアプローチダイエット」を「7ステップ」でお伝えします！
+【メールセミナーの内容】
+ステップ1：腸と脳のWアプローチ！私が考える「頑張らない」ダイエットメソッドとは？
+ステップ2：99％の人が意外と知らない？！腸と脳を脅かす5つの食品
+ステップ3：腸と脳の力を120％引き出して、勝手に痩せる食事とは？
+ステップ4：腸と脳に悪い食品を摂り続けると起こる恐ろしい現実
+ステップ5：腸と脳の力を効率よく引き出す！「痩せ体質になる」サプリの賢い選び方
+ステップ6：不用意に「食べない」脳を作る、3つの脳</div>
+            <div class="ad-meta"><span class="badge-views">99.9K views</span><span class="badge-hit">HIT 88</span><span>巴 由紀子</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1579801070112414" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: urgency</span><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">88</strong> (longevity:38, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.0%;background:#22c55e" title="longevity: 38"></div><div class="score-seg" style="width:22.857142857142858%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.857142857142858%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.857142857142858%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.428571428571429%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://hahanote04.info/" target="_blank">https://hahanote04.info/</a>
+            <div class="lp-detail">
+                <div><strong>腸と脳Wアプローチダイエット</strong></div>
+                <div>食品業界歴25年の視点と子供の発達を大きく改善させた分子栄養学の実践力！細胞レベルであなたをやせ体質へと理論的に導きます！</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#E8412E;border-radius:2px;border:1px solid #333" title="#E8412E"></span><span style="display:inline-block;width:14px;height:14px;background:#FFF799;border-radius:2px;border:1px solid #333" title="#FFF799"></span><span style="display:inline-block;width:14px;height:14px;background:#730B57;border-radius:2px;border:1px solid #333" title="#730B57"></span><span style="display:inline-block;width:14px;height:14px;background:#F2F199;border-radius:2px;border:1px solid #333" title="#F2F199"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/58.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1881791066039500" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/104.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#8</span>
+            <div class="ad-title">CALPIS-SHOP.JP</div>
+            <div class="ad-desc">えっ、あのカルピス健康通販から青汁？気になるその中身の秘密に迫りました。
+CALPIS-SHOP.JP
+カルピス健康の青汁とは
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">47.4K views</span><span class="badge-hit">HIT 75</span><span>カルピス健康通販</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1881791066039500" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: pain_point</span><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">75</strong> (longevity:31, spend:15, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:41.56706507304117%;background:#22c55e" title="longevity: 31"></div><div class="score-seg" style="width:19.9203187250996%;background:#3b82f6" title="spend: 15"></div><div class="score-seg" style="width:26.560424966799467%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:7.968127490039841%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.9840637450199203%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.calpis-shop.jp/c/lp_aojiru_l92_03/?cid=ao40t&amp;utm_source=meta&amp;utm_medium=social&amp;utm_campaign=aojiru&amp;argument=asdtdGHL&amp;dmai=AOFB0067" target="_blank">https://www.calpis-shop.jp/c/lp_aojiru_l92_03/?cid=ao40t&amp;utm_source=meta&amp;utm_medium=social&amp;utm_campa</a>
+            <div class="lp-detail">
+                <div><strong>からだ想いの青汁に関するアンケート</strong></div>
+                <div>日本初!※1　L-92乳酸菌を配合した青汁 ※1「健康な人の免疫機能の維持に役立つ」ことと、「ホコリやハウスダストなどによる鼻の不快感軽減をサポートする」ことが報告されたL-92乳酸菌を配合した日本初の青汁。自社調べ（2023年10月）からだ想いの青汁に関するアンケート　全4問1分で完了</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#F0F0F0;border-radius:2px;border:1px solid #333" title="#F0F0F0"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/104.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=2025782058156235" target="_blank"><img class="ad-creative" src="https://scontent.fitm1-1.fna.fbcdn.net/v/t39.35426-6/605633574_2069707940557525_5596018765894172994_n.jpg?_tt6&amp;_nc_cat=101&amp;ccb=1-7&amp;_nc_sid=c53f8f&amp;_nc_ohc=BxgfuuAI8s0Q7kNvwGqnPSe&amp;_nc_oc=Adnk_GdDd-cF5QHsJokgWpLSAws-XQ35TCX6YZLbbuGI40vjqwuCvS3WRTJW8GL7xF4&amp;_nc_zt=14&amp;_nc_ht=scontent.fitm1-1.fna&amp;_nc_gid=55Wps-RmX7iwHW8ix3vwkA&amp;oh=00_Afv8583_QzWd4zam52J1bYVJg7dqK3W7pLiLZKDSJxdTaw&amp;oe=69A794F5" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#9</span>
+            <div class="ad-title">5万点以上掲載。コード【NEW20】のご利用で初回購入が20%OFF！</div>
+            <div class="ad-desc">サプリメントからコスメ・食品・日用品まで、美容と健康のための商品を5万点以上掲載。コード【NEW20】のご利用で初回購入が20%OFF！
+JP.IHERB.COM
+アーサーアンドアンドリューメディカル Arthur Andrew Medical, Nattovena（ナットベナ）、ピュアナットウキナーゼ、200mg、30粒
+厳選されたブランドから品質に自信の50,000点以上の健康・ウェルネス製品を掲載。毎週行われるお得なセール、迅速でお手頃な送料、紹介プログラムなどお客様にご満足いただけるサービスを提供しています。
+Shop Now</div>
+            <div class="ad-meta"><span class="badge-views">26.1K views</span><span class="badge-hit">HIT 63</span><span>iHerb.com Japanese</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=2025782058156235" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">63</strong> (longevity:24, spend:15, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:38.388625592417064%;background:#22c55e" title="longevity: 24"></div><div class="score-seg" style="width:23.696682464454977%;background:#3b82f6" title="spend: 15"></div><div class="score-seg" style="width:23.696682464454977%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:9.47867298578199%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:4.739336492890995%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://jp.iherb.com/pr/arthur-andrew-medical-nattovena-pure-nattokinase-4-000-fus-30-capsules/53616?rcode=mkt1053&amp;ccode=JP&amp;currcode=JPY&amp;langcode=ja-JP&amp;fld=1" target="_blank">https://jp.iherb.com/pr/arthur-andrew-medical-nattovena-pure-nattokinase-4-000-fus-30-capsules/53616</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1440185057541567" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/46.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#10</span>
+            <div class="ad-title">AC.PERSONA-R.SITE</div>
+            <div class="ad-desc">この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+AC.PERSONA-R.SITE
+健康・美容ラボ
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">20.2K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 58</span><span>健康・美容ラボ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1440185057541567" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">58</strong> (longevity:20, spend:10, active_bonus:15, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:34.48275862068966%;background:#22c55e" title="longevity: 20"></div><div class="score-seg" style="width:17.24137931034483%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:25.862068965517242%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:17.24137931034483%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:5.172413793103448%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://ac.persona-r.site/cl/3a2aa1d8efa1HH46/?bid=eL5966d8ceLb7721&amp;cats_report1=metacp15017&amp;cr_id=15017_151" target="_blank">https://ac.persona-r.site/cl/3a2aa1d8efa1HH46/?bid=eL5966d8ceLb7721&amp;cats_report1=metacp15017&amp;cr_id=1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/46.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=862906016377714" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/109.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#11</span>
+            <div class="ad-title">20%引き。</div>
+            <div class="ad-desc">大腿骨で実証済。加齢とともに低下する骨密度を高める粒タイプの機能性表示食品「骨こつケア」。最大20%引き。
+SB-CALPIS-SHOP.OURPAGE.JP
+大腿骨の骨密度がカギだった？
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">16.2K views</span><span class="badge-hit">HIT 51</span><span>カルピス健康通販</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=862906016377714" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">51</strong> (longevity:17, spend:10, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:33.33333333333333%;background:#22c55e" title="longevity: 17"></div><div class="score-seg" style="width:19.607843137254903%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:29.411764705882355%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:11.76470588235294%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:5.88235294117647%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://sb-calpis-shop.ourpage.jp/ab/kotsukotsucare_article018_meta/?cid=ko40n&amp;utm_source=meta&amp;utm_medium=social&amp;utm_campaign=kotsucare&amp;argument=asdtdGHL&amp;dmai=HMeta1002" target="_blank">https://sb-calpis-shop.ourpage.jp/ab/kotsukotsucare_article018_meta/?cid=ko40n&amp;utm_source=meta&amp;utm_m</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFEE57;border-radius:2px;border:1px solid #333" title="#FFEE57"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#F4F4F4;border-radius:2px;border:1px solid #333" title="#F4F4F4"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FF0000;border-radius:2px;border:1px solid #333" title="#FF0000"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/109.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=921051920497525" target="_blank"><img class="ad-creative" src="https://scontent.cdninstagram.com/v/t51.2885-19/284385272_1414597825619334_1232654128243957390_n.jpg?stp=dst-jpg_s206x206_tt6&amp;_nc_cat=102&amp;ccb=7-5&amp;_nc_sid=525117&amp;efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&amp;_nc_ohc=urw8xhwolO4Q7kNvwHQrONP&amp;_nc_oc=AdnunnJOkJWvnTFp5Wj1QKmY6RieJ7bx_yKlfva59-315Z7QdbUVA8tE411bAoqBmlI&amp;_nc_zt=24&amp;_nc_ht=scontent.cdninstagram.com&amp;oh=00_AfvR5Wpi09QqV320rlwhugDFMGmCGFX8fYDD6kYwCrDOHA&amp;oe=69A77D4D" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#12</span>
+            <div class="ad-title">( @mayu_maru_life )です🐰</div>
+            <div class="ad-desc">こんにちは♡まゆ( @mayu_maru_life )です🐰
+お手軽にコスパよく内側からケアしたい人必見！！
+DHCの美サプリシリーズが1日15円〜始められて、
+毎日飲むだけの手軽さが忙しい女性におすすめ💕
+スキンケアだけじゃできないケアをできるのがサプリのいいところ！🫧
+栄養機能食品としてのビタミンCにはこんな働きが👇
+「皮膚や粘膜の健康維持を助ける」
+「抗酸化作用」
+ビタミンCは意識して取り入れてる人も多いと思うけど、
+実は身体に留まりにくいから一度にたくさん摂取しても持続しないと言われているのしってた？！😵
+だけど今回紹介した持続型ビタミンCはゆっくり溶けるから
+ビタミンCを長時間リリースすることができるの🍋
+凄すぎ！！😲
+●持続型ビタミンC
+30日分 450円（税込）/60日分810円（税込）
+最近お肌が疲れ気味の人や、いつものスキンケア以外でもケアをしたい人は是非取り入れてみてね</div>
+            <div class="ad-meta"><span class="badge-views">13.5K views</span><span>DHC</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=921051920497525" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">49</strong> (longevity:15, spend:10, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:30.612244897959183%;background:#22c55e" title="longevity: 15"></div><div class="score-seg" style="width:20.408163265306122%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:30.612244897959183%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:12.244897959183673%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:6.122448979591836%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.instagram.com/_u/mayu_maru_life" target="_blank">https://www.instagram.com/_u/mayu_maru_life</a>
+            <div class="lp-detail">
+                <div><strong>Instagram</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#F1F4F7;border-radius:2px;border:1px solid #333" title="#F1F4F7"></span><span style="display:inline-block;width:14px;height:14px;background:#0A1317;border-radius:2px;border:1px solid #333" title="#0A1317"></span><span style="display:inline-block;width:14px;height:14px;background:#0064E0;border-radius:2px;border:1px solid #333" title="#0064E0"></span><span style="display:inline-block;width:14px;height:14px;background:#5D6C7B;border-radius:2px;border:1px solid #333" title="#5D6C7B"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/108.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1582871149697822" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/103.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#13</span>
+            <div class="ad-title">( @mayu_maru_life )です🐰</div>
+            <div class="ad-desc">こんにちは♡まゆ( @mayu_maru_life )です🐰
+お手軽にコスパよく内側からケアしたい人必見！！
+DHCの美サプリシリーズが1日15円〜始められて、
+毎日飲むだけの手軽さが忙しい女性におすすめ💕
+スキンケアだけじゃできないケアをできるのがサプリのいいところ！🫧
+栄養機能食品としてのビタミンCにはこんな働きが👇
+「皮膚や粘膜の健康維持を助ける」
+「抗酸化作用」
+ビタミンCは意識して取り入れてる人も多いと思うけど、
+実は身体に留まりにくいから一度にたくさん摂取しても持続しないと言われているのしってた？！😵
+だけど今回紹介した持続型ビタミンCはゆっくり溶けるから
+ビタミンCを長時間リリースすることができるの🍋
+凄すぎ！！😲
+●持続型ビタミンC
+30日分 450円（税込）/60日分810円（税込）
+最近お肌が疲れ気味の人や、いつものスキンケア以外でもケアをしたい人は是非取り入れてみてね</div>
+            <div class="ad-meta"><span class="badge-views">13.5K views</span><span>mayu_maru_life スポンサー: DHC</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1582871149697822" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">49</strong> (longevity:15, spend:10, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:30.612244897959183%;background:#22c55e" title="longevity: 15"></div><div class="score-seg" style="width:20.408163265306122%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:30.612244897959183%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:12.244897959183673%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:6.122448979591836%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.instagram.com/_u/mayu_maru_life" target="_blank">https://www.instagram.com/_u/mayu_maru_life</a>
+            <div class="lp-detail">
+                <div><strong>Instagram</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#F1F4F7;border-radius:2px;border:1px solid #333" title="#F1F4F7"></span><span style="display:inline-block;width:14px;height:14px;background:#0A1317;border-radius:2px;border:1px solid #333" title="#0A1317"></span><span style="display:inline-block;width:14px;height:14px;background:#0064E0;border-radius:2px;border:1px solid #333" title="#0064E0"></span><span style="display:inline-block;width:14px;height:14px;background:#5D6C7B;border-radius:2px;border:1px solid #333" title="#5D6C7B"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/103.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1663351345024311" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/123.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#14</span>
+            <div class="ad-title">1食399円】新生活応援！今年こそ健康に🌸</div>
+            <div class="ad-desc">【1食399円】新生活応援！今年こそ健康に🌸
+話題沸騰中、コスパ最強の冷凍弁当。
+╲栄養×満足が叶う╱
+✅ 管理栄養士監修！おいしくて健康的
+✅ 1食350kcal以下、塩分2.0g以下
+✅ 野菜6品目以上
+このページ限定、総額3,000円OFF！
+「おぼんメシ」で心も温まる食事をしてみませんか？
+DELICIOUS-FOODIES.COM
+【1食399円】コスパもタイパも諦めない！
+「このクオリティでこの安さ！？」と 話題の「おぼんメシ」で、 新たなスタートを切りませんか？
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">8.1K views</span><span>食品・グルメ通販のベルーナグルメ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1663351345024311" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">42</strong> (longevity:13, spend:10, active_bonus:10, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:31.116389548693586%;background:#22c55e" title="longevity: 13"></div><div class="score-seg" style="width:23.75296912114014%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:23.75296912114014%;background:#f59e0b" title="active_bonus: 10"></div><div class="score-seg" style="width:14.251781472684085%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:7.1258907363420425%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://delicious-foodies.com/obon_i01_260130_fb_suothkxx61060330" target="_blank">https://delicious-foodies.com/obon_i01_260130_fb_suothkxx61060330</a>
+            <div class="lp-detail">
+                <div><strong>1食399円（税込）で新生活応援！「おぼんメシ」で おいしく健康習慣スタート！ &amp;#8211; Delicious Foodies</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#5E4347;border-radius:2px;border:1px solid #333" title="#5E4347"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#999999;border-radius:2px;border:1px solid #333" title="#999999"></span><span style="display:inline-block;width:14px;height:14px;background:#FF6600;border-radius:2px;border:1px solid #333" title="#FF6600"></span><span style="display:inline-block;width:14px;height:14px;background:#ABB8C3;border-radius:2px;border:1px solid #333" title="#ABB8C3"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/123.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=691990844000659&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/314.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#15</span>
+            <div class="ad-title">40歳で敵なし。46歳で抜け殻。</div>
+            <div class="ad-desc">40歳のとき、僕は会議を仕切る側の人間だった。46歳の今、会議中はただ座って、誰にも話を振られないことを祈っている。仕事は同じ。スケジュールも同じ。同じ自分のはずなのに。
+
+かかりつけ医には「ストレスですね」と言われた。4年間、その言葉を信じた。4年間と、危うく終わりかけた結婚生活。でも、ストレスなんかじゃなかった。
+
+その4年間がどんなものだったか、聞いてほしい。
+
+41歳、物忘れが始まった。大きなことじゃない。小さなこと。子どもの担任の先生の名前。キッチンに何を取りに来たか。昼ごはんを食べたかどうか。睡眠不足のせいだと思った。実際、よく眠れてなかったし。この歳になれば誰でもそうでしょ？
+
+42歳、物忘れはもっと重いものに変わった。15分以上の会議に集中できない。記事を最後まで読めない。同じメールを3回読み返してやっと内容がわかる。人事評価は「期待以上」から「期待通り」に下がった。たった</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Liven: Self-Discovery Community</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=691990844000659&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: signup</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:2, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:52.94117647058824%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:47.05882352941176%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://wellbeing-theliven.com" target="_blank">https://wellbeing-theliven.com</a>
+            <div class="lp-detail">
+                <div><strong>Liven</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/314.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=2043578369820265" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/64.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#16</span>
+            <div class="ad-title">70キロ妻も激変</div>
+            <div class="ad-desc">芸能人本気プロデュース【更年期太りもコレ一発で治します】70キロ妻も激変
+✅定期じゃないから安心
+✅お腹の脂肪を落とす方法
+✅脂肪を剥がし溶かすサプリ
+✅脂肪をどんどん排出
+体にこびりついた脂肪をガッツリ燃やしてくれるから好きなものを食べながら痩せられる！
+購入は急いで！
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+ARTICLE.TREPRO-DIET.COM
+芸能人本気プロデュース【更年期太りもコレ一発で治します】70キロ妻も激変
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">3.3K views</span><span class="badge-video">VIDEO</span><span>Beauty-tv</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=2043578369820265" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: pain_point</span><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: bundle</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">27</strong> (longevity:4, spend:5, active_bonus:5, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:14.49814126394052%;background:#22c55e" title="longevity: 4"></div><div class="score-seg" style="width:18.58736059479554%;background:#3b82f6" title="spend: 5"></div><div class="score-seg" style="width:18.58736059479554%;background:#f59e0b" title="active_bonus: 5"></div><div class="score-seg" style="width:37.17472118959108%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:11.152416356877325%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://article.trepro-diet.com/ab/asc2" target="_blank">https://article.trepro-diet.com/ab/asc2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span><span style="display:inline-block;width:14px;height:14px;background:#FFEE57;border-radius:2px;border:1px solid #333" title="#FFEE57"></span><span style="display:inline-block;width:14px;height:14px;background:#FF6E00;border-radius:2px;border:1px solid #333" title="#FF6E00"></span><span style="display:inline-block;width:14px;height:14px;background:#FFC266;border-radius:2px;border:1px solid #333" title="#FFC266"></span><span style="display:inline-block;width:14px;height:14px;background:#FFE6D9;border-radius:2px;border:1px solid #333" title="#FFE6D9"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/64.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=903996902237595&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/303.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#17</span>
+            <div class="ad-title">14ヶ月。ずっと祈り続けていた。</div>
+            <div class="ad-desc">教会では誰も「レス」の話なんてしない。だから私は1年以上、ずっと一人で抱え込んでいました。
+
+去年の春、牧師先生の部屋に座っていました。手を膝の上で組んで、目線は床に落としたまま。まさか自分がこんな言葉を口にするなんて、思ってもみなかった。
+
+「夫とは、もう14ヶ月、触れ合っていません」
+
+先生はゆっくり頷いて、椅子に深くもたれかかり、こう言いました。
+
+「祈りなさい。神様が壊れたものを修復してくださいます」
+
+だから祈りました。毎晩、毎晩。夫はベッドの右側、私は左側で眠る。その傍らで、膝をついて。14ヶ月間、祈り続けました。14ヶ月間、神様に「私の中の何かを直してください」とお願いし続けました。
+
+何も変わりませんでした。
+
+その14ヶ月がどんなものだったか、話させてください。
+
+夫は執事として奉仕しています。毎週日曜日、入り口でみんなに温かい笑顔で挨拶する、あの夫です。水曜日には男性の</div>
+            <div class="ad-meta"><span class="badge-views">2.7K views</span><span>Olivia Parker</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=903996902237595&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: consultation</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: limited_time</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:0, spend:1)
+        <div class="score-bar"><div class="score-seg" style="width:26.666666666666668%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:73.33333333333334%;background:#3b82f6" title="spend: 1"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://quiz.theliven.com" target="_blank">https://quiz.theliven.com</a>
+            <div class="lp-detail">
+                <div><strong>Liven</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/303.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=4317551148390212" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/130.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#18</span>
+            <div class="ad-title">。そんなあなたに。</div>
+            <div class="ad-desc">骨密度、そろそろケアしたいけど何から始めればいいのか分からない——。そんなあなたに。
+枯草菌C-3102株のチカラで、骨密度だけでなく、ひざ関節の動きや腸内環境までケアする一石三鳥のサプリ。
+まずは1日あたり約130円からお試し。
+※定期初回価格3,888円を元に換算。
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+SB-CALPIS-SHOP.OURPAGE.JP
+カルピス 健康通販
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">2.1K views</span><span class="badge-video">VIDEO</span><span>カルピス 健康通販</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=4317551148390212" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">26</strong> (longevity:2, spend:5, active_bonus:5, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:9.803921568627452%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:19.607843137254903%;background:#3b82f6" title="spend: 5"></div><div class="score-seg" style="width:19.607843137254903%;background:#f59e0b" title="active_bonus: 5"></div><div class="score-seg" style="width:39.21568627450981%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:11.76470588235294%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://sb-calpis-shop.ourpage.jp/ab/wuVSvFztgimRWRoThMQ?cid=ko40n&amp;utm_source=meta&amp;utm_medium=social&amp;utm_campaign=kotsucare&amp;argument=asdtdGHL&amp;dmai=HMeta0077" target="_blank">https://sb-calpis-shop.ourpage.jp/ab/wuVSvFztgimRWRoThMQ?cid=ko40n&amp;utm_source=meta&amp;utm_medium=social</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFEE57;border-radius:2px;border:1px solid #333" title="#FFEE57"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#F4F4F4;border-radius:2px;border:1px solid #333" title="#F4F4F4"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FF0000;border-radius:2px;border:1px solid #333" title="#FF0000"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/130.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=897989196326790" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/60.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#19</span>
+            <div class="ad-title">HEALTHLIVINGDAYS.COM</div>
+            <div class="ad-desc">もうビール腹とは言わせない！髙田延彦も愛用している機能性サプリ！
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+HEALTHLIVINGDAYS.COM
+髙田延彦「還暦でも体型維持する秘訣」
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>脂肪限界界隈</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=897989196326790" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">13</strong> (longevity:1, spend:1, active_bonus:2, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:10.44776119402985%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:7.462686567164178%;background:#3b82f6" title="spend: 1"></div><div class="score-seg" style="width:14.925373134328357%;background:#f59e0b" title="active_bonus: 2"></div><div class="score-seg" style="width:44.776119402985074%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:22.388059701492537%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="http://healthlivingdays.com/ab/wbuster_fb_22?utm_creative=debu" target="_blank">http://healthlivingdays.com/ab/wbuster_fb_22?utm_creative=debu</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#888888;border-radius:2px;border:1px solid #333" title="#888888"></span><span style="display:inline-block;width:14px;height:14px;background:#4EC4D3;border-radius:2px;border:1px solid #333" title="#4EC4D3"></span><span style="display:inline-block;width:14px;height:14px;background:#FFEE57;border-radius:2px;border:1px solid #333" title="#FFEE57"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#FF0000;border-radius:2px;border:1px solid #333" title="#FF0000"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/60.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1987595772139263&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#20</span>
+            <div class="ad-title">120g Pet Vitamin Multivitamin Nutrition Cream Gel Pet Health Care Multifunctional Supplements for Cats Dogs</div>
+            <div class="ad-desc">Source Pet Supplies on Alibaba.com. Alibaba.com-World&#x27;s Leading B2B Marketplace.</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>Alibaba.com</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1987595772139263&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://m.alibaba.com" target="_blank">https://m.alibaba.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1321495339813515&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#21</span>
+            <div class="ad-title">5 in 1 Herbal Supplement Betain Q10 Supplement Red Beet Root Powder High Beetroot Extract Beetroot 2000 Mg Capsules</div>
+            <div class="ad-desc">Source Health Care on Alibaba.com. Alibaba.com-World&#x27;s Leading B2B Marketplace.</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>Alibaba.com</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1321495339813515&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://m.alibaba.com" target="_blank">https://m.alibaba.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1846577516062003&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#22</span>
+            <div class="ad-title">🌿 Don’t Blame Your Lifestyle — Fix The Lymphatic System First</div>
+            <div class="ad-desc">Feeling bloated, puffy, swollen, sluggish, or constantly run down?
+
+Meet Nature Sunrise Wellness Drops — a fast-absorbing, science-inspired liquid formula designed to support natural lymphatic drainage and overall body vitality.
+
+💧 Helps support the removal of built-up waste
+💧 Promotes healthy circulation and immune support
+💧 Reduces puffiness and water retention
+💧 Supports clearer skin, less bloa</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>Florrenes</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1846577516062003&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://florrenes.com" target="_blank">https://florrenes.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1660043855172093&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#23</span>
+            <div class="ad-title">Say hello to the healthiest version of you 👉</div>
+            <div class="ad-desc">Finally Feel What Magnesium is Supposed to Do!
+The only 8-in-1 magnesium complex designed for calm energy, deeper sleep, and all-day clarity.
+
+🔬 10+ Years of Formulation Research
+🧠 Supports Sleep, Energy &amp; Focus
+🌿 Zero Artificial Fillers or GMOs
+❤️ Trusted by 100,000+ Customers
+
+Our biggest sale ever: 70% OFF + Free Worldwide Shipping - Last Day! 👉 https://inbeautymood.com/products/8-in-1-magnesiu</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>In Beauty Mood</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1660043855172093&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://inbeautymood.com" target="_blank">https://inbeautymood.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=816952858082056&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#24</span>
+            <div class="ad-title">🌿 Don’t Blame Your Lifestyle — Fix The Lymphatic System First</div>
+            <div class="ad-desc">🚨 Struggling with these issues no matter how clean you eat or how hard you work out?
+
+✔️ Constant bloating
+✔️ A puffy face that never seems to go away
+✔️ Stubborn cellulite
+✔️ Heavy, swollen legs
+✔️ Low energy + brain fog
+
+👉 The problem might not be your diet — it could be your lymphatic system.
+
+Your lymphatic system is your body’s natural “drainage network.”
+It helps flush out excess fluid, toxi</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>Florrenes</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=816952858082056&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://florrenes.com" target="_blank">https://florrenes.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1556622208741067&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#25</span>
+            <div class="ad-title">🌿 Don’t Blame Your Lifestyle — Fix The Lymphatic System First</div>
+            <div class="ad-desc">🚨 Struggling with these issues no matter how clean you eat or how hard you work out?
+
+✔️ Constant bloating
+✔️ A puffy face that never seems to go away
+✔️ Stubborn cellulite
+✔️ Heavy, swollen legs
+✔️ Low energy + brain fog
+
+👉 The problem might not be your diet — it could be your lymphatic system.
+
+Your lymphatic system is your body’s natural “drainage network.”
+It helps flush out excess fluid, toxi</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>Florrenes</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1556622208741067&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://florrenes.com" target="_blank">https://florrenes.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1478773760426117&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#26</span>
+            <div class="ad-title">Unlock Natural Calm &amp; Energy with Magnesium 💪✨</div>
+            <div class="ad-desc">Feel calmer, sleep deeper, and recover faster with PuraVita® Magnesium Complex — a full 12-in-1 magnesium blend that supports muscles, nerves &amp; energy.
+Designed for maximum absorption, vegan, non-GMO &amp; gentle on digestion — so you actually feel the difference.
+Boost your daily wellness naturally — more energy, better focus, and balanced body function in every capsule.</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>PuraVita</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1478773760426117&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://shoppuravita.com" target="_blank">https://shoppuravita.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=3344684959026535&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#27</span>
+            <div class="ad-title">85% of Americans have parasites. Most will never know. ⚠️</div>
+            <div class="ad-desc">⚠️ 85% of Americans are walking around with an active parasitic infection right now.
+Most will never connect it to the bloating 🫃, the fatigue 😴, the brain fog 🧠, or the sugar cravings they can&#x27;t explain. 🍬
+They&#x27;ll try another diet. Another supplement. Another reset.
+And nothing will work — because you can&#x27;t out-eat a parasite problem. ❌
+Purge is the 7-day digital protocol built around the two mos</div>
+            <div class="ad-meta"><span class="badge-views">780 views</span><span>Carolina Klein</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=3344684959026535&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.thepurgeprotocol.online" target="_blank">https://www.thepurgeprotocol.online</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1643694960411234&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#28</span>
+            <div class="ad-title">85% of Americans have parasites. Most will never know. ⚠️</div>
+            <div class="ad-desc">⚠️ 85% of Americans are walking around with an active parasitic infection right now.
+Most will never connect it to the bloating 🫃, the fatigue 😴, the brain fog 🧠, or the sugar cravings they can&#x27;t explain. 🍬
+They&#x27;ll try another diet. Another supplement. Another reset.
+And nothing will work — because you can&#x27;t out-eat a parasite problem. ❌
+Purge is the 7-day digital protocol built around the two mos</div>
+            <div class="ad-meta"><span class="badge-views">780 views</span><span>Carolina Klein</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1643694960411234&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.thepurgeprotocol.online" target="_blank">https://www.thepurgeprotocol.online</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1291369412891029&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#29</span>
+            <div class="ad-title">85% of Americans have parasites. Most will never know. ⚠️</div>
+            <div class="ad-desc">⚠️ 85% of Americans are walking around with an active parasitic infection right now.
+Most will never connect it to the bloating 🫃, the fatigue 😴, the brain fog 🧠, or the sugar cravings they can&#x27;t explain. 🍬
+They&#x27;ll try another diet. Another supplement. Another reset.
+And nothing will work — because you can&#x27;t out-eat a parasite problem. ❌
+Purge is the 7-day digital protocol built around the two mos</div>
+            <div class="ad-meta"><span class="badge-views">780 views</span><span>Carolina Klein</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1291369412891029&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.thepurgeprotocol.online" target="_blank">https://www.thepurgeprotocol.online</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1235267111528350&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#30</span>
+            <div class="ad-title">85% of Americans have parasites. Most will never know. ⚠️</div>
+            <div class="ad-desc">⚠️ 85% of Americans are walking around with an active parasitic infection right now.
+Most will never connect it to the bloating 🫃, the fatigue 😴, the brain fog 🧠, or the sugar cravings they can&#x27;t explain. 🍬
+They&#x27;ll try another diet. Another supplement. Another reset.
+And nothing will work — because you can&#x27;t out-eat a parasite problem. ❌
+Purge is the 7-day digital protocol built around the two mos</div>
+            <div class="ad-meta"><span class="badge-views">780 views</span><span>Carolina Klein</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1235267111528350&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.thepurgeprotocol.online" target="_blank">https://www.thepurgeprotocol.online</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=927675959743859&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#31</span>
+            <div class="ad-title">The problem might not be your diet — it could be your lymphatic system.</div>
+            <div class="ad-desc">Feeling bloated, puffy, swollen, sluggish, or constantly run down?
+
+Meet Nature Sunrise Wellness Drops — a fast-absorbing, science-inspired liquid formula designed to support natural lymphatic drainage and overall body vitality.
+
+💧 Helps support the removal of built-up waste
+💧 Promotes healthy circulation and immune support
+💧 Reduces puffiness and water retention
+💧 Supports clearer skin, less bloa</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Florrenes</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=927675959743859&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://florrenes.com" target="_blank">https://florrenes.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
 import { ErrorState } from "@/components/common/StateDisplay";
+import { NumericProvenanceBadge } from "@/components/common/NumericProvenance";
+import { deriveBedrockStatus, ProvenanceBadge, PriorityBadge, ReviewRequiredBadge } from "@/components/common/BedrockStatus";
 import FunnelChart from "./FunnelChart";
 import PerformanceHeatmap from "./PerformanceHeatmap";
 import ScatterPlot from "./ScatterPlot";
@@ -23,6 +25,13 @@ interface KPISummary {
   active_rate: number;
 }
 
+interface BedrockOpsSummary {
+  highPriority: number;
+  reviewRequired: number;
+  aiClassified: number;
+  ruleOnly: number;
+}
+
 const PERIOD_OPTIONS = [
   { value: "7", label: "7日" },
   { value: "30", label: "30日" },
@@ -38,6 +47,7 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
   const [kpi, setKpi] = useState<KPISummary | null>(null);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [scoreData, setScoreData] = useState<number[]>([]);
+  const [bedrockOps, setBedrockOps] = useState<BedrockOpsSummary | null>(null);
 
   useEffect(() => {
     if (propGenre) setGenre(propGenre);
@@ -72,14 +82,33 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
         throw new Error("empty");
       }
     } catch {
-      // Generate mock distribution data
-      const mock: number[] = [];
-      for (let i = 0; i < 150; i++) {
-        mock.push(Math.round(Math.random() * 40 + 30 + Math.random() * 30));
-      }
-      setScoreData(mock);
+      // API unavailable - show empty state
+      setScoreData([]);
     }
   }, [genre]);
+
+  const loadBedrockOps = useCallback(async () => {
+    try {
+      const params: Record<string, string | number | undefined> = { per_page: 200, period };
+      if (genre && genre !== "all") params.genre = genre;
+      const res = await fetchApi<{ items?: Record<string, unknown>[]; ads?: Record<string, unknown>[] }>("/rankings/pro-ranking", { params });
+      const items = res.items || res.ads || [];
+      const summary = items.reduce<BedrockOpsSummary>(
+        (acc, item) => {
+          const info = deriveBedrockStatus(item);
+          if (info.priority === "high") acc.highPriority += 1;
+          if (info.reviewRequired) acc.reviewRequired += 1;
+          if (info.provenance === "ai" || info.provenance === "manual") acc.aiClassified += 1;
+          if (info.provenance === "rule") acc.ruleOnly += 1;
+          return acc;
+        },
+        { highPriority: 0, reviewRequired: 0, aiClassified: 0, ruleOnly: 0 },
+      );
+      setBedrockOps(summary);
+    } catch {
+      setBedrockOps(null);
+    }
+  }, [genre, period]);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -90,9 +119,10 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
 
     loadKPI();
     loadScoreDistribution();
+    loadBedrockOps();
 
     return () => controller.abort();
-  }, [loadKPI, loadScoreDistribution]);
+  }, [loadKPI, loadScoreDistribution, loadBedrockOps]);
 
   return (
     <div className="space-y-4">
@@ -155,26 +185,38 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
           ) : kpi ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-blue-50 rounded-lg px-3 py-3">
-                <p className="text-[10px] text-gray-500 mb-1">総広告数</p>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <p className="text-[10px] text-gray-500">総広告数</p>
+                  <NumericProvenanceBadge state="real" />
+                </div>
                 <p className="text-[20px] font-bold text-[#4A7DFF] leading-tight">
                   {kpi.total_ads.toLocaleString()}
                 </p>
               </div>
               <div className="bg-orange-50 rounded-lg px-3 py-3">
-                <p className="text-[10px] text-gray-500 mb-1">ヒット広告数</p>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <p className="text-[10px] text-gray-500">ヒット広告数</p>
+                  <NumericProvenanceBadge state="real" />
+                </div>
                 <p className="text-[20px] font-bold text-orange-500 leading-tight">
                   {kpi.hit_ads.toLocaleString()}
                 </p>
               </div>
               <div className="bg-emerald-50 rounded-lg px-3 py-3">
-                <p className="text-[10px] text-gray-500 mb-1">平均スコア</p>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <p className="text-[10px] text-gray-500">平均スコア</p>
+                  <NumericProvenanceBadge state="estimated" />
+                </div>
                 <p className="text-[20px] font-bold text-emerald-600 leading-tight">
                   {kpi.avg_score.toFixed(1)}
                   <span className="text-[11px] text-gray-400 ml-1">pt</span>
                 </p>
               </div>
               <div className="bg-violet-50 rounded-lg px-3 py-3">
-                <p className="text-[10px] text-gray-500 mb-1">アクティブ率</p>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <p className="text-[10px] text-gray-500">アクティブ率</p>
+                  <NumericProvenanceBadge state="estimated" />
+                </div>
                 <p className="text-[20px] font-bold text-violet-600 leading-tight">
                   {kpi.active_rate.toFixed(1)}
                   <span className="text-[11px] text-gray-400 ml-1">%</span>
@@ -192,6 +234,37 @@ export default function AnalyticsDashboard({ genre: propGenre, onAdSelect }: Ana
             </div>
           )}
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 px-4 py-4">
+        <div className="mb-4 flex items-center gap-2">
+          <h3 className="text-[13px] font-bold text-gray-900">Bedrock運用サマリー</h3>
+          <ProvenanceBadge provenance="ai" />
+          <PriorityBadge priority="high" />
+          <ReviewRequiredBadge required />
+        </div>
+        {bedrockOps ? (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-lg bg-amber-50 px-3 py-3">
+              <p className="text-[10px] text-gray-500">高優先</p>
+              <p className="mt-1 text-[20px] font-bold text-amber-700">{bedrockOps.highPriority}</p>
+            </div>
+            <div className="rounded-lg bg-rose-50 px-3 py-3">
+              <p className="text-[10px] text-gray-500">要確認</p>
+              <p className="mt-1 text-[20px] font-bold text-rose-700">{bedrockOps.reviewRequired}</p>
+            </div>
+            <div className="rounded-lg bg-indigo-50 px-3 py-3">
+              <p className="text-[10px] text-gray-500">AI分類済み</p>
+              <p className="mt-1 text-[20px] font-bold text-indigo-700">{bedrockOps.aiClassified}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-3 py-3">
+              <p className="text-[10px] text-gray-500">ルール判定のみ</p>
+              <p className="mt-1 text-[20px] font-bold text-slate-700">{bedrockOps.ruleOnly}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[12px] text-gray-500">Bedrock 運用件数は未取得です。</p>
+        )}
       </div>
 
       {/* Middle: Performance Heatmap (full width) */}

@@ -77,50 +77,8 @@ export default function ActivityFeed({ onAdSelect }: ActivityFeedProps) {
       );
       setItems(res.items || res.alerts || []);
     } catch {
-      // TODO: API未実装時はモックデータを使用
-      const now = new Date();
-      setItems([
-        {
-          id: 1,
-          type: "new_ad",
-          title: "新規広告検出",
-          description: "新規広告検出: 美容液プレミアムケア",
-          ad_id: 101,
-          timestamp: new Date(now.getTime() - 5 * 60000).toISOString(),
-        },
-        {
-          id: 2,
-          type: "score_change",
-          title: "スコア変動",
-          description: "スコア変動: HealthCorp +15pt",
-          ad_id: 202,
-          timestamp: new Date(now.getTime() - 23 * 60000).toISOString(),
-        },
-        {
-          id: 3,
-          type: "hit_line",
-          title: "ヒットライン突破",
-          description: "ヒットライン突破: ダイエットサプリX",
-          ad_id: 303,
-          timestamp: new Date(now.getTime() - 45 * 60000).toISOString(),
-        },
-        {
-          id: 4,
-          type: "new_ad",
-          title: "新規広告検出",
-          description: "新規広告検出: 脱毛サロンLP",
-          ad_id: 404,
-          timestamp: new Date(now.getTime() - 2 * 3600000).toISOString(),
-        },
-        {
-          id: 5,
-          type: "score_change",
-          title: "スコア変動",
-          description: "スコア変動: BeautyLab -8pt",
-          ad_id: 505,
-          timestamp: new Date(now.getTime() - 4 * 3600000).toISOString(),
-        },
-      ]);
+      // API unavailable - show empty state
+      setItems([]);
     } finally {
       setLoading(false);
     }

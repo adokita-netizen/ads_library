@@ -1,31 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
-import { platformLabels, platformColors, platformBadgeColors, genreOptions } from "@/lib/constants";
-import { formatNumber, formatYen, copyToClipboard } from "@/lib/format";
+import { getMediaReasonMessage, openCreativeDownload } from "@/lib/media";
+import { platformBadgeColors, platformLabels, genreOptions } from "@/lib/constants";
+import { copyToClipboard, formatNumber, formatYen } from "@/lib/format";
+import type { AdMediaInfo, MetaTokenInfo } from "@/types";
 import { CreativeViewer } from "../common/CreativeViewer";
+import { NumericProvenanceBadge, NumericProvenanceMetricCard, type NumericProvenanceState } from "../common/NumericProvenance";
+import { deriveLanguageStatus, LanguageStatusBadges, LanguageStatusWarning } from "../common/LanguageStatus";
+import { deriveBedrockStatus, ProvenanceBadge, PriorityBadge, ConfidenceBandBadge, ReviewRequiredBadge } from "../common/BedrockStatus";
 import SimilarAdsPanel from "./SimilarAdsPanel";
 import CreativeIntelligence from "./CreativeIntelligence";
 import HitPrediction from "./HitPrediction";
 import AdAnnotations from "./AdAnnotations";
-
-// Signal label & color constants (shared with HitAdAnalysisView)
-const signalLabels: Record<string, string> = {
-  longevity: "配信継続力",
-  spend: "消化額",
-  active_bonus: "配信中ボーナス",
-  creative: "クリエイティブ",
-  trend: "トレンド",
-};
-const signalColors: Record<string, string> = {
-  longevity: "#3b82f6",
-  spend: "#22c55e",
-  active_bonus: "#f97316",
-  creative: "#a855f7",
-  trend: "#ec4899",
-};
 
 interface HitAd {
   rank: number;
@@ -38,11 +27,8 @@ interface HitAd {
   spend_increase: number;
   cumulative_views: number;
   cumulative_spend: number;
-  is_hit: boolean;
   hit_score: number;
   trend_score: number;
-  rank_change: number | null;
-  previous_rank: number | null;
   thumbnail: string;
   duration_seconds: number;
   image_url: string;
@@ -55,663 +41,747 @@ interface HitAd {
   ad_url: string;
   description: string;
   title: string;
-  days_running?: number;
-  is_still_running?: boolean;
-  hit_level?: string;
   video_url?: string;
   creative_type?: string;
   estimation_method?: string;
-  score_breakdown?: Record<string, number>;
+  hit_level?: string;
+  resolved_url?: string;
+  final_url?: string;
+  domain?: string;
+  lp_status?: string;
+  lp_score?: number;
+  language?: string;
+  language_source?: string;
+  exclude_from_analysis?: boolean;
+  exclude_reason?: string;
+  jp_char_ratio?: number;
+  metric_source?: string;
+  creative_source?: string;
+  lp_source?: string;
+  metric_status?: NumericProvenanceState;
+  creative_status?: NumericProvenanceState;
+  freshness_status?: "fresh" | "missing" | "stale" | string;
+  last_meta_success_at?: string;
+  meta_quality_state?: NumericProvenanceState;
+  meta_recovery_reason?: string;
 }
 
 interface AdDetailModalProps {
   ad: HitAd;
   onClose: () => void;
   onAdSelect: (adId: number) => void;
+  onRecoveryQueued?: () => void;
 }
 
 interface ScoreBreakdownData {
-  hit_score?: number;
   signals?: Record<string, { score: number; max: number; detail?: string }>;
 }
 
-const genreLabel = (value: string | null | undefined): string => {
+interface TopicClassifyResult {
+  confidence: number;
+  evidence_terms: string[];
+  hit_drivers: string[];
+}
+
+interface DictionarySuggestResult {
+  candidate_terms: Array<{ topic_label: string; term: string; confidence: number }>;
+}
+
+interface Ad360Section {
+  data: Record<string, unknown>;
+  missing_fields: string[];
+}
+
+interface Ad360Payload {
+  ad_id: number;
+  sections: {
+    core: Ad360Section;
+    creative: Ad360Section;
+    text: Ad360Section;
+    analysis: Ad360Section;
+    lp: Ad360Section;
+    quality: Ad360Section;
+  };
+}
+
+const signalLabels: Record<string, string> = {
+  longevity: "配信継続力",
+  spend: "消化額",
+  active_bonus: "配信中ボーナス",
+  creative: "クリエイティブ",
+  trend: "トレンド",
+};
+
+const signalColors: Record<string, string> = {
+  longevity: "#3b82f6",
+  spend: "#22c55e",
+  active_bonus: "#f97316",
+  creative: "#a855f7",
+  trend: "#ec4899",
+};
+
+const genreLabel = (value: string | null | undefined) => {
   if (!value || value === "未分類") return "未分類";
   return genreOptions.find((g) => g.value === value)?.label || value;
 };
 
-// B8: Creative DNA types and labels
-interface CreativeDNA {
-  ad_id: number;
-  hook_type?: string;
-  cta_type?: string;
-  offer_type?: string;
-  emotion?: string;
-  text_features?: string[];
-  pattern_hit_rate?: number;
-  pattern_count?: number;
-  similar_hit_ads?: Array<{ ad_id: number; product_name?: string; hit_score?: number }>;
+const asText = (value: unknown, fallback = "未取得") => {
+  const text = value == null ? "" : String(value).trim();
+  return text || fallback;
+};
+
+const asList = (value: unknown) =>
+  Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean))) : [];
+
+const asPercent = (value: unknown) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "未取得";
+  return `${Math.round((value <= 1 ? value * 100 : value))}%`;
+};
+
+const renderField = (value: string) => value.replaceAll("_", " ").replaceAll(".", " / ");
+
+const asNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getHostname = (value: string) => {
+  if (!value) return "";
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+
+const normalizeDomain = (value: string) => value.replace(/^www\./, "").toLowerCase();
+
+function buildLpTrust(lpData: Record<string, unknown> | null, ad: HitAd, mediaInfo: AdMediaInfo | null) {
+  const data = lpData || {};
+  const lpInfo = mediaInfo?.lp_info || {};
+  const sourceUrl = asText(lpInfo.destination_url, "") || asText(data.original_url, "") || ad.destination_url || "";
+  const finalUrl =
+    asText(lpInfo.resolved_url, "") ||
+    asText(data.resolved_url, "") ||
+    asText(data.final_url, "") ||
+    ad.resolved_url ||
+    ad.final_url ||
+    asText(data.url, "") ||
+    "";
+  const sourceDomain = asText(lpInfo.domain, "") || asText(data.source_domain, "") || getHostname(sourceUrl);
+  const finalDomain =
+    asText(lpInfo.final_domain, "") ||
+    asText(data.domain, "") ||
+    asText(data.final_domain, "") ||
+    ad.domain ||
+    getHostname(finalUrl);
+  const statusRaw =
+    asText(lpInfo.lp_status, "") ||
+    asText(data.lp_status, "") ||
+    asText(data.status, "") ||
+    asText(data.fetch_status, "") ||
+    ad.lp_status ||
+    "";
+  const lpScore = asNumber(lpInfo.lp_score) ?? asNumber(data.lp_score) ?? ad.lp_score ?? null;
+  const mismatch =
+    Boolean(sourceDomain && finalDomain) &&
+    normalizeDomain(sourceDomain) !== normalizeDomain(finalDomain);
+  const redirected = Boolean(sourceUrl && finalUrl && sourceUrl !== finalUrl);
+  const statusLower = statusRaw.toLowerCase();
+  const unresolved = !finalUrl || ["unresolved", "not_fetched", "pending", "unknown"].includes(statusLower);
+  const dead = ["dead", "error", "unreachable", "failed", "timeout", "404", "410", "500", "503"].includes(statusLower);
+
+  let label = "到達確認済み";
+  let tone = "emerald";
+  if (dead) {
+    label = "到達不可";
+    tone = "rose";
+  } else if (unresolved) {
+    label = "未解決";
+    tone = "gray";
+  } else if (mismatch) {
+    label = "ドメイン不一致";
+    tone = "amber";
+  } else if (redirected || statusLower === "redirect") {
+    label = "リダイレクトあり";
+    tone = "amber";
+  }
+
+  return {
+    sourceUrl,
+    finalUrl,
+    sourceDomain,
+    finalDomain,
+    statusRaw: statusRaw || "unknown",
+    lpScore,
+    mismatch,
+    redirected,
+    unresolved,
+    dead,
+    label,
+    tone,
+  };
 }
 
-const dnaHookLabels: Record<string, string> = {
-  question: "質問型", pain_point: "悩み訴求", benefit: "ベネフィット", curiosity: "好奇心",
-  social_proof: "社会的証明", urgency: "緊急性", storytelling: "ストーリー", number: "数字訴求",
-  comparison: "比較", authority: "権威性", shock: "衝撃・驚き", empathy: "共感型",
-};
-const dnaCtaLabels: Record<string, string> = {
-  purchase: "購入", consultation: "無料相談", free_trial: "無料お試し", line_add: "LINE追加",
-  download: "ダウンロード", register: "会員登録", inquiry: "問い合わせ", reserve: "予約", learn_more: "詳しく見る",
-};
-const dnaOfferLabels: Record<string, string> = {
-  discount: "割引", free: "無料", limited_time: "期間限定", bonus: "特典付き",
-  guarantee: "返金保証", comparison: "比較", trial: "お試し", bundle: "セット", exclusive: "限定",
-};
-const dnaEmotionLabels: Record<string, string> = {
-  fear: "不安", hope: "希望", anger: "怒り", joy: "喜び", surprise: "驚き",
-  trust: "信頼", desire: "欲望", relief: "安心", curiosity: "好奇心",
-};
-const dnaFeatureLabels: Record<string, string> = {
-  has_numbers: "数字あり", has_emoji: "絵文字あり", has_testimonial: "体験談あり",
-  has_question: "疑問文あり", has_urgency: "緊急性あり", has_price: "価格表示あり",
-  has_comparison: "比較表現", has_guarantee: "保証あり", has_social_proof: "社会的証明",
-};
+function buildMediaTrust(ad360: Ad360Payload | null, ad: HitAd, mediaInfo: AdMediaInfo | null) {
+  const creative = ad360?.sections.creative.data || {};
+  const quality = ad360?.sections.quality.data || {};
+  const mediaStatusCandidate = mediaInfo?.media_status ?? quality.media_status ?? creative.media_status;
+  const mediaStatus =
+    typeof mediaStatusCandidate === "object" && mediaStatusCandidate !== null
+      ? mediaStatusCandidate as Record<string, unknown>
+      : {};
+  const reasons = asList(mediaStatus.missing_reasons ?? quality.missing_reasons);
+  const canView =
+    typeof mediaStatus.viewable === "boolean"
+      ? Boolean(mediaStatus.viewable)
+      : Boolean(mediaInfo?.snapshot_url || mediaInfo?.image_url || mediaInfo?.video_url || ad.snapshot_url || ad.image_url || ad.video_url || creative.thumbnail_url);
+  const canDownload =
+    typeof mediaStatus.downloadable === "boolean"
+      ? Boolean(mediaStatus.downloadable)
+      : Boolean(mediaInfo?.image_url || mediaInfo?.video_url || ad.image_url || ad.video_url);
+  const snapshotOnly =
+    reasons.includes("snapshot_only") ||
+    (canView && !canDownload && Boolean(mediaInfo?.snapshot_url || ad.snapshot_url));
+  return {
+    canView,
+    canDownload,
+    snapshotOnly,
+    reasons,
+    primaryReason: reasons[0] || "download_unavailable",
+  };
+}
 
-export default function AdDetailModal({ ad, onClose, onAdSelect }: AdDetailModalProps) {
+function toneClasses(tone: string) {
+  if (tone === "rose") return "bg-rose-50 text-rose-700 border-rose-200";
+  if (tone === "amber") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (tone === "gray") return "bg-gray-100 text-gray-700 border-gray-200";
+  return "bg-emerald-50 text-emerald-700 border-emerald-200";
+}
+
+function isMetaPlatform(platform: string | undefined): boolean {
+  return platform === "facebook" || platform === "instagram" || platform === "meta";
+}
+
+function formatMetaSource(value: string | undefined): string {
+  const normalized = (value || "missing").replaceAll("_", " ");
+  if (normalized === "api") return "API";
+  if (normalized === "db") return "DB";
+  return normalized;
+}
+
+function formatMetaTimestamp(value?: string) {
+  if (!value) return "未取得";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Date(parsed).toLocaleString("ja-JP");
+}
+
+function isNewMetaAd(lastMetaSuccessAt?: string): boolean {
+  if (!lastMetaSuccessAt) return false;
+  const parsed = Date.parse(lastMetaSuccessAt);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed <= 1000 * 60 * 60 * 48;
+}
+
+export default function AdDetailModal({ ad, onClose, onAdSelect, onRecoveryQueued }: AdDetailModalProps) {
   const [scoreBreakdown, setScoreBreakdown] = useState<ScoreBreakdownData | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [mediaInfo, setMediaInfo] = useState<AdMediaInfo | null>(null);
+  const [ad360, setAd360] = useState<Ad360Payload | null>(null);
+  const [ad360Loading, setAd360Loading] = useState(false);
+  const [ad360Error, setAd360Error] = useState<string | null>(null);
+  const [classifyResult, setClassifyResult] = useState<TopicClassifyResult | null>(null);
+  const [dictionaryResult, setDictionaryResult] = useState<DictionarySuggestResult | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [metaTokenInfo, setMetaTokenInfo] = useState<MetaTokenInfo | null>(null);
 
-  // B8: Creative DNA state
-  const [creativeDna, setCreativeDna] = useState<CreativeDNA | null>(null);
-  const [dnaLoading, setDnaLoading] = useState(false);
-
-  // Fetch score breakdown + creative DNA on mount
   useEffect(() => {
     let cancelled = false;
     setScoreLoading(true);
     fetchApi<ScoreBreakdownData>(`/rankings/score-breakdown/${ad.ad_id}`)
-      .then((data) => {
-        if (!cancelled) setScoreBreakdown(data);
-      })
+      .then((data) => !cancelled && setScoreBreakdown(data))
+      .catch(() => !cancelled && setScoreBreakdown(null))
+      .finally(() => !cancelled && setScoreLoading(false));
+
+    fetchApi<AdMediaInfo>(`/ads/${ad.ad_id}/media`)
+      .then((data) => !cancelled && setMediaInfo(data))
+      .catch(() => !cancelled && setMediaInfo(null));
+
+    if (isMetaPlatform(ad.platform)) {
+      fetchApi<MetaTokenInfo>("/settings/meta/token-info")
+        .then((data) => !cancelled && setMetaTokenInfo(data))
+        .catch(() => !cancelled && setMetaTokenInfo(null));
+    } else {
+      setMetaTokenInfo(null);
+    }
+
+    setAd360Loading(true);
+    setAd360Error(null);
+    fetchApi<Ad360Payload>(`/rankings/ad360/${ad.ad_id}`)
+      .then((data) => !cancelled && setAd360(data))
       .catch(() => {
-        if (!cancelled) setScoreBreakdown(null);
+        if (!cancelled) {
+          setAd360(null);
+          setAd360Error("ad360詳細の取得に失敗しました");
+        }
       })
-      .finally(() => {
-        if (!cancelled) setScoreLoading(false);
-      });
+      .finally(() => !cancelled && setAd360Loading(false));
 
-    // B8: Fetch creative DNA
-    setDnaLoading(true);
-    fetchApi<CreativeDNA>(`/rankings/creative-dna/${ad.ad_id}`)
-      .then((data) => {
-        if (!cancelled) setCreativeDna(data);
-      })
-      .catch(() => {
-        if (!cancelled) setCreativeDna(null);
-      })
-      .finally(() => {
-        if (!cancelled) setDnaLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [ad.ad_id]);
-
-  // Close on Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    return () => {
+      cancelled = true;
     };
+  }, [ad.ad_id, refreshTick]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const scoreColor =
-    (ad.hit_score || 0) >= 80 ? "#ef4444" : (ad.hit_score || 0) >= 50 ? "#f59e0b" : "#4A7DFF";
+  const summary = useMemo(() => {
+    if (!ad360) return null;
+    const analysis = ad360.sections.analysis.data;
+    const lp = ad360.sections.lp.data;
+    const quality = ad360.sections.quality.data;
+    const creative = ad360.sections.creative.data;
+    const evidenceTerms = Array.from(new Set([...asList(classifyResult?.evidence_terms), ...asList(analysis.evidence_terms), ...asList(analysis.matched_terms)]));
+    const hitDrivers = Array.from(new Set([...asList(classifyResult?.hit_drivers), ...asList(analysis.hit_drivers)]));
+    const lpSummary = asText(lp.structure_summary, "") || asText(lp.appeal_strategy_summary, "") || asText(lp.target_persona_summary, "") || asText(lp.meta_description, "");
+    const badges = [];
+    if (typeof quality.extract_quality_score === "number" && quality.extract_quality_score < 40) badges.push("低品質");
+    if (quality.needs_media_retry === true) badges.push("再取得推奨");
+    if (creative.creative_type === "video" && quality.quality_flags && !(quality.quality_flags as Record<string, unknown>).has_video) badges.push("動画欠損");
+    return { evidenceTerms, hitDrivers, lpSummary, badges };
+  }, [ad360, classifyResult]);
+  const lpTrust = useMemo(() => buildLpTrust(ad360?.sections.lp.data || null, ad, mediaInfo), [ad360, ad, mediaInfo]);
+  const mediaTrust = useMemo(() => buildMediaTrust(ad360, ad, mediaInfo), [ad360, ad, mediaInfo]);
+  const qualitySection = ad360?.sections.quality;
+  const qualityValue = asNumber(qualitySection?.data.extract_quality_score);
+  const qualityMissing = qualitySection?.missing_fields.includes("extract_quality_score") ?? false;
+  const qualityState: NumericProvenanceState =
+    qualityMissing ? "missing" : qualitySection?.data.needs_media_retry === true ? "stale" : qualityValue != null ? "real" : "missing";
+  const lpScoreState: NumericProvenanceState =
+    lpTrust.dead ? "stale" : lpTrust.unresolved ? "missing" : lpTrust.lpScore != null ? "real" : "missing";
+  const spendState: NumericProvenanceState =
+    ad.estimation_method === "audience_based" ? "real" : ad.cumulative_spend > 0 || ad.spend_increase > 0 ? "estimated" : "missing";
+  const viewState: NumericProvenanceState = ad.cumulative_views > 0 || ad.view_increase > 0 ? "real" : "missing";
+  const trendState: NumericProvenanceState = ad.trend_score > 0 ? "estimated" : "missing";
+  const languageInfo = useMemo(() => deriveLanguageStatus(ad as unknown as Record<string, unknown>), [ad]);
+  const showMeta = isMetaPlatform(ad.platform);
+  const metaState = (ad.meta_quality_state || "missing") as NumericProvenanceState;
+  const creativeState = (ad.creative_status || (mediaTrust.snapshotOnly ? "estimated" : mediaTrust.canDownload ? "real" : "missing")) as NumericProvenanceState;
+  const metricState = (ad.metric_status || spendState) as NumericProvenanceState;
+  const freshnessState = ad.freshness_status === "stale" ? "stale" : ad.last_meta_success_at ? "real" : "missing";
+  const metaEmptyStates = useMemo(() => {
+    const states: string[] = [];
+    if (mediaTrust.snapshotOnly) states.push("snapshot only");
+    if (!mediaTrust.snapshotOnly && !mediaTrust.canDownload) states.push("creative pending");
+    if (!ad.destination_url || lpTrust.unresolved) states.push("lp missing");
+    if (ad.meta_recovery_reason === "detail_enrich_failed") states.push("detail enrich failed");
+    return states;
+  }, [ad.destination_url, ad.meta_recovery_reason, lpTrust.unresolved, mediaTrust.canDownload, mediaTrust.snapshotOnly]);
+  const bedrockInfo = useMemo(
+    () =>
+      deriveBedrockStatus({
+        ...ad,
+        ...(ad360?.sections.analysis.data || {}),
+      } as Record<string, unknown>),
+    [ad, ad360],
+  );
 
+  const scoreColor = ad.hit_score >= 80 ? "#ef4444" : ad.hit_score >= 50 ? "#f59e0b" : "#4A7DFF";
   const pLabel = platformLabels[ad.platform] || ad.platform;
   const pBadge = platformBadgeColors[ad.platform] || "bg-gray-100 text-gray-800";
 
+  const runAction = async (key: string, task: () => Promise<void>) => {
+    setActionLoading(key);
+    try {
+      await task();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const refreshAd360 = () => setRefreshTick((value) => value + 1);
+
+  const handleReclassify = async () => runAction("reclassify", async () => {
+    const result = await fetchApi<TopicClassifyResult>("/rankings/classify-topic", { method: "POST", body: { ad_id: ad.ad_id } });
+    setClassifyResult(result);
+    refreshAd360();
+    toast.success("再分類を実行しました");
+  });
+
+  const handleDictionarySuggest = async () => runAction("dictionary", async () => {
+    const topicLabel = ad360 ? asText(ad360.sections.analysis.data.topic_label, "") : "";
+    const result = await fetchApi<DictionarySuggestResult>("/rankings/dictionary/suggest", {
+      method: "POST",
+      body: { ad_ids: [ad.ad_id], topic_labels: topicLabel ? [topicLabel] : undefined, limit: 6 },
+    });
+    setDictionaryResult(result);
+    toast.success(`辞書候補を ${result.candidate_terms.length} 件取得しました`);
+  });
+
+  const handleKnowledgeRebuild = async () => runAction("knowledge", async () => {
+    await fetchApi("/rankings/knowledge/rebuild", { method: "POST", body: { source: "manual", include_recent_days: 30, max_ads: 500 } });
+    toast.success("知識スナップショットを再構築しました");
+  });
+
+  const handleMediaRetry = async () => runAction("media", async () => {
+    await fetchApi(`/rankings/meta-extraction/${ad.ad_id}/retry`, { method: "POST" });
+    refreshAd360();
+    onRecoveryQueued?.();
+    toast.success("再取得を投入しました");
+  });
+
+  const handleLPCrawl = async () => runAction("lp", async () => {
+    const lpUrl = ad360 ? asText(ad360.sections.lp.data.final_url, "") || asText(ad360.sections.lp.data.url, "") : "";
+    const url = lpUrl || ad.destination_url;
+    if (!url) throw new Error("missing lp url");
+    await fetchApi("/lp-analysis/crawl", { method: "POST", body: { url, ad_id: ad.ad_id, auto_analyze: true } });
+    onRecoveryQueued?.();
+    toast.success("LP再クロールを開始しました");
+  }).catch(() => toast.error("LP URL がありません"));
+
+  const retrySection = async (sectionKey: keyof Ad360Payload["sections"]) => {
+    if (sectionKey === "analysis") return handleReclassify();
+    if (sectionKey === "lp") return handleLPCrawl();
+    return handleMediaRetry();
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-3xl max-h-[90vh] rounded-xl bg-white shadow-2xl overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span
-              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded text-xs font-bold ${
-                ad.rank <= 3 ? "bg-[#4A7DFF] text-white" : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              {ad.rank}
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-[15px] font-bold text-gray-900 truncate">
-                  {ad.product_name || ad.title || "不明"}
-                </h2>
-                {ad.hit_level === "mega_hit" ? (
-                  <span className="shrink-0 rounded bg-red-100 text-red-700 px-1.5 py-0.5 text-[9px] font-bold">
-                    大HIT
-                  </span>
-                ) : ad.hit_level === "hit" ? (
-                  <span className="shrink-0 rounded bg-orange-100 text-orange-700 px-1.5 py-0.5 text-[9px] font-bold">
-                    HIT
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-[11px] text-gray-400 truncate">{ad.advertiser_name || "-"}</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">{ad.product_name || ad.title || "不明"}</h2>
+            <p className="truncate text-[11px] text-gray-400 dark:text-gray-500">{ad.advertiser_name || "-"}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200">×</button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
-          {/* Creative + Score Side by Side on desktop, stacked on mobile */}
-          <div className="flex flex-col md:flex-row gap-5">
-            {/* Creative viewer */}
-            <div className="w-full md:w-1/2">
+        <div className="custom-scrollbar flex-1 overflow-y-auto p-5">
+          <div className="grid gap-5 xl:grid-cols-[1.02fr_0.98fr]">
+            <div className="space-y-4">
               <CreativeViewer
-                imageUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (ad.image_url || ad.thumbnail || null)}
-                videoUrl={ad.ad_id ? `/api/v1/media/video/${ad.ad_id}` : (ad.video_url || null)}
-                snapshotUrl={ad.snapshot_url || null}
-                thumbnailUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (ad.thumbnail || null)}
+                imageUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (mediaInfo?.image_url || ad.image_url || ad.thumbnail || null)}
+                videoUrl={ad.ad_id ? `/api/v1/media/video/${ad.ad_id}` : (mediaInfo?.video_url || ad.video_url || null)}
+                snapshotUrl={mediaInfo?.snapshot_url || ad.snapshot_url || null}
+                thumbnailUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (ad.thumbnail || mediaInfo?.image_url || null)}
                 creativeType={ad.creative_type || null}
               />
-            </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className="min-h-10 rounded-lg bg-gray-900 text-[12px] font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  onClick={() => {
+                    if (!mediaTrust.canDownload) {
+                      toast.error(getMediaReasonMessage(mediaTrust.primaryReason));
+                      return;
+                    }
+                    openCreativeDownload(ad.ad_id);
+                  }}
+                  disabled={!mediaTrust.canDownload}
+                >
+                  クリエイティブDL
+                </button>
+                <button
+                  className="min-h-10 rounded-lg bg-gray-100 text-[12px] font-medium text-gray-700 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!mediaTrust.canView}
+                  onClick={() => window.open(ad.ad_url || mediaInfo?.snapshot_url || ad.snapshot_url || `/api/v1/media/creative/${ad.ad_id}`, "_blank", "noopener,noreferrer")}
+                >
+                  {mediaTrust.snapshotOnly ? "スナップショット確認" : "別タブで確認"}
+                </button>
+              </div>
+              {mediaTrust.snapshotOnly ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">snapshotのみで閲覧可です。DL可能素材は未取得です。</p> : null}
+              {!mediaTrust.snapshotOnly && !mediaTrust.canDownload ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">DL可能素材は未取得です。必要なら再取得を実行してください。</p> : null}
 
-            {/* Score & Key Info */}
-            <div className="w-full md:w-1/2 space-y-4">
-              {/* Hit Score */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] text-gray-400 font-medium">ヒットスコア</span>
-                  <span className="text-[18px] font-bold" style={{ color: scoreColor }}>
-                    {ad.hit_score || 0}<span className="text-[11px] text-gray-400 ml-1">/ 100</span>
-                  </span>
+              <Panel title="要点">
+                <div className="flex flex-wrap gap-1.5">
+                  <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${pBadge}`}>{pLabel}</span>
+                  <span className="rounded bg-sky-50 px-2 py-0.5 text-[10px] text-sky-700">{genreLabel(ad.genre)}</span>
+                  {showMeta ? <NumericProvenanceBadge state={metaState} /> : null}
+                  {showMeta && isNewMetaAd(ad.last_meta_success_at) ? <span className="rounded bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">NEW</span> : null}
+                  <LanguageStatusBadges info={languageInfo} />
+                  <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700 border border-indigo-200">AI商材 {bedrockInfo.aiProduct || "未分類"}</span>
+                  <ProvenanceBadge provenance={bedrockInfo.provenance} />
+                  <PriorityBadge priority={bedrockInfo.priority} />
+                  <ReviewRequiredBadge required={bedrockInfo.reviewRequired} />
+                  <ConfidenceBandBadge band={bedrockInfo.confidenceBand} />
+                  {(summary?.badges || []).map((badge) => <span key={badge} className="rounded bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700">{badge}</span>)}
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${ad.hit_score || 0}%`, backgroundColor: scoreColor }}
+                <LanguageStatusWarning info={languageInfo} />
+                <SummaryText label="review_reason" value={bedrockInfo.reviewReason || "なし"} />
+                <SummaryRow label="confidence_band" values={[bedrockInfo.confidenceBand]} />
+                {showMeta ? (
+                  <>
+                    <SummaryRow label="Meta provenance" values={[
+                      `metrics: ${formatMetaSource(ad.metric_source)}`,
+                      `creative: ${formatMetaSource(ad.creative_source)}`,
+                      `lp: ${formatMetaSource(ad.lp_source)}`,
+                      ...(metaTokenInfo ? [`token: ${formatMetaSource(metaTokenInfo.runtime_source || metaTokenInfo.token_source)}`] : []),
+                    ]} />
+                    <SummaryRow label="Meta states" values={metaEmptyStates.length > 0 ? metaEmptyStates : ["healthy"]} />
+                    <SummaryText label="last_meta_success_at" value={formatMetaTimestamp(ad.last_meta_success_at)} />
+                  </>
+                ) : null}
+                <MetricBar score={ad.hit_score} scoreColor={scoreColor} />
+                <SummaryRow label="HIT寄与要素" values={summary?.hitDrivers || []} />
+                <SummaryRow label="判定根拠語" values={summary?.evidenceTerms || []} />
+                <SummaryText label="LP要約" value={summary?.lpSummary || ""} />
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton label="再分類" busy={actionLoading === "reclassify"} onClick={handleReclassify} tone="blue" />
+                  <ActionButton label="辞書提案" busy={actionLoading === "dictionary"} onClick={handleDictionarySuggest} tone="amber" />
+                  <ActionButton label="知識更新" busy={actionLoading === "knowledge"} onClick={handleKnowledgeRebuild} tone="emerald" />
+                </div>
+              </Panel>
+
+              <Panel title="LP信頼">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${toneClasses(lpTrust.tone)}`}>{lpTrust.label}</span>
+                  {lpTrust.lpScore != null ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-medium text-sky-700">信頼スコア {Math.round(lpTrust.lpScore)}</span> : null}
+                  <NumericProvenanceBadge state={lpScoreState} />
+                  <NumericProvenanceBadge state={qualityState} />
+                  {lpTrust.redirected ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700">最終遷移先を表示</span> : null}
+                </div>
+                <SummaryText label="最終遷移先" value={lpTrust.finalUrl || "LP遷移先が未解決です"} />
+                <SummaryText label="元URL" value={lpTrust.sourceUrl || "未取得"} />
+                <SummaryRow label="ドメイン" values={[lpTrust.finalDomain || "未取得", ...(lpTrust.mismatch && lpTrust.sourceDomain ? [`元: ${lpTrust.sourceDomain}`] : [])]} />
+                <SummaryRow label="判定" values={[lpTrust.statusRaw || "unknown", ...(lpTrust.dead ? ["到達不可"] : []), ...(lpTrust.unresolved ? ["未解決"] : []), ...(lpTrust.mismatch ? ["domain mismatch"] : [])]} />
+                <div className="grid grid-cols-2 gap-3">
+                  <NumericProvenanceMetricCard
+                    label="LP score"
+                    value={lpTrust.lpScore != null ? Math.round(lpTrust.lpScore) : "-"}
+                    state={lpScoreState}
+                    note={lpScoreState === "real" ? "LP解析結果" : lpScoreState === "stale" ? "到達状態が古い可能性" : "LP解析待ち"}
+                  />
+                  <NumericProvenanceMetricCard
+                    label="quality score"
+                    value={qualityValue != null ? Math.round(qualityValue) : "-"}
+                    state={qualityState}
+                    note={qualityState === "real" ? "最新抽出結果" : qualityState === "stale" ? "再取得推奨" : "抽出待ち"}
+                    warning={qualitySection?.missing_fields.length ? "missing_numeric_count > 0 / backfill待ち" : undefined}
                   />
                 </div>
-              </div>
+                {!lpTrust.finalUrl ? <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-600">LP遷移先が未解決です。短縮URLや中継URLの場合は再クロール後に最終ドメインを確認してください。</p> : null}
+              </Panel>
 
-              {/* Score Breakdown */}
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-[11px] text-gray-500 font-medium mb-2">スコア内訳</p>
-                {scoreLoading ? (
-                  <div className="flex items-center justify-center py-3">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
-                    <span className="ml-2 text-[10px] text-gray-400">読み込み中...</span>
+              {showMeta ? (
+                <Panel title="Meta品質 / Provenance">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <NumericProvenanceBadge state={metaState} />
+                    <NumericProvenanceBadge state={metricState} />
+                    <NumericProvenanceBadge state={creativeState} />
+                    <NumericProvenanceBadge state={freshnessState} />
+                    {metaTokenInfo ? <span className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${metaTokenInfo.is_valid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>token {metaTokenInfo.runtime_source}</span> : null}
                   </div>
-                ) : scoreBreakdown?.signals ? (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <NumericProvenanceMetricCard label="metrics" value={formatMetaSource(ad.metric_source)} state={metricState} note={metricState === "real" ? "Meta API由来" : metricState === "estimated" ? "fallback / 推定" : "未取得"} />
+                    <NumericProvenanceMetricCard label="creative" value={formatMetaSource(ad.creative_source)} state={creativeState} note={creativeState === "real" ? "DL可能素材あり" : creativeState === "estimated" ? "snapshot / fallback" : "素材未取得"} />
+                    <NumericProvenanceMetricCard label="LP" value={formatMetaSource(ad.lp_source)} state={lpScoreState} note={lpTrust.finalUrl ? "LP解決済み" : "LP未解決"} />
+                    <NumericProvenanceMetricCard label="token" value={metaTokenInfo ? formatMetaSource(metaTokenInfo.runtime_source || metaTokenInfo.token_source) : "-"} state={metaTokenInfo?.is_valid ? "real" : metaTokenInfo ? "stale" : "missing"} note={metaTokenInfo?.fallback_reason || metaTokenInfo?.message || "token情報未取得"} warning={metaTokenInfo?.last_validation_error || undefined} />
+                  </div>
+                  {metaEmptyStates.length > 0 ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                      状態: {metaEmptyStates.join(" / ")}
+                    </p>
+                  ) : null}
+                  {ad.meta_recovery_reason ? (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
+                      recovery reason: {ad.meta_recovery_reason.replaceAll("_", " ")}
+                    </p>
+                  ) : null}
+                </Panel>
+              ) : null}
+
+              <Panel title="スコア内訳">
+                {scoreLoading ? <Loader /> : scoreBreakdown?.signals ? (
                   <div className="space-y-2">
                     {Object.entries(scoreBreakdown.signals).map(([key, sig]) => (
                       <div key={key}>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] w-20 text-gray-500 shrink-0">{signalLabels[key] || key}</span>
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${sig.max > 0 ? (sig.score / sig.max) * 100 : 0}%`,
-                                backgroundColor: signalColors[key] || "#6b7280",
-                              }}
-                            />
+                          <span className="w-20 shrink-0 text-[10px] text-gray-500 dark:text-gray-400">{signalLabels[key] || key}</span>
+                          <div className="h-2 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
+                            <div className="h-full rounded-full" style={{ width: `${sig.max > 0 ? (sig.score / sig.max) * 100 : 0}%`, backgroundColor: signalColors[key] || "#6b7280" }} />
                           </div>
-                          <span className="text-[10px] text-gray-600 w-10 text-right shrink-0">
-                            {sig.score}/{sig.max}
-                          </span>
+                          <span className="w-10 shrink-0 text-right text-[10px] text-gray-600 dark:text-gray-300">{sig.score}/{sig.max}</span>
                         </div>
-                        {sig.detail && (
-                          <p className="text-[9px] text-gray-400 ml-[88px] mt-0.5">{sig.detail}</p>
-                        )}
+                        {sig.detail ? <p className="ml-[88px] mt-0.5 text-[9px] text-gray-400 dark:text-gray-500">{sig.detail}</p> : null}
                       </div>
                     ))}
                   </div>
-                ) : ad.score_breakdown ? (
-                  <div className="space-y-2">
-                    {Object.entries(ad.score_breakdown).map(([key, val]) => {
-                      const maxMap: Record<string, number> = { longevity: 40, spend: 20, active_bonus: 20, creative: 10, trend: 10 };
-                      const mx = maxMap[key] || 20;
-                      return (
-                        <div key={key} className="flex items-center gap-2">
-                          <span className="text-[10px] w-20 text-gray-500 shrink-0">{signalLabels[key] || key}</span>
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${mx > 0 ? (val / mx) * 100 : 0}%`,
-                                backgroundColor: signalColors[key] || "#6b7280",
-                              }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-gray-600 w-10 text-right shrink-0">
-                            {val}/{mx}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-gray-400">内訳データなし</p>
-                )}
-              </div>
+                ) : <p className="text-[10px] text-gray-400 dark:text-gray-500">内訳データなし</p>}
+              </Panel>
 
-              {/* Tags */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${pBadge}`}>
-                  {pLabel}
-                </span>
-                <span className="badge-blue text-[10px]">{genreLabel(ad.genre)}</span>
-                {ad.creative_type && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600">
-                    {ad.creative_type === "video" ? "動画" : ad.creative_type === "image" ? "静止画" : ad.creative_type}
-                  </span>
-                )}
-                {ad.estimation_method === "audience_based" && (
-                  <span className="badge text-[9px] bg-green-100 text-green-700">実データ</span>
-                )}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <NumericProvenanceMetricCard label="消化額増加 (週)" value={formatYen(ad.spend_increase || 0)} state={spendState} note={spendState === "real" ? "媒体観測値" : spendState === "estimated" ? "CPMモデルによる推定値" : "未取得"} />
+                <NumericProvenanceMetricCard label="累計推定消化額" value={formatYen(ad.cumulative_spend || 0)} state={spendState} note={spendState === "real" ? "実績集計" : spendState === "estimated" ? "実データ未取得時は推定" : "未取得"} warning={spendState === "estimated" ? "estimated_only / 実データ未取得" : undefined} />
+                <NumericProvenanceMetricCard label="再生数増加 (週)" value={formatNumber(ad.view_increase || 0)} state={viewState} note={viewState === "real" ? "観測値ベース" : "観測値なし"} />
+                <NumericProvenanceMetricCard label="累計再生数" value={formatNumber(ad.cumulative_views || 0)} state={viewState} note={viewState === "real" ? "観測値ベース" : "観測値なし"} />
+                <NumericProvenanceMetricCard label="いいね数" value={formatNumber(ad.like_count || 0)} state={ad.like_count > 0 ? "real" : "missing"} note={ad.like_count > 0 ? "媒体観測値" : "未取得"} />
+                <NumericProvenanceMetricCard label="トレンドスコア" value={String(ad.trend_score || 0)} state={trendState} note={trendState === "estimated" ? "内部計算値" : "算出前"} />
               </div>
             </div>
-          </div>
 
-          {/* Full description */}
-          {(ad.title || ad.description) && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              {ad.title && (
-                <h3 className="text-[13px] font-semibold text-gray-900 mb-1">{ad.title}</h3>
-              )}
-              {ad.description && (
-                <p className="text-[12px] text-gray-600 leading-relaxed whitespace-pre-wrap">
-                  {ad.description}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <MetricCard label="消化額増加 (週)" value={formatYen(ad.spend_increase || 0)} />
-            <MetricCard label="累計推定消化額" value={formatYen(ad.cumulative_spend || 0)} />
-            <MetricCard label="再生数増加 (週)" value={formatNumber(ad.view_increase || 0)} />
-            <MetricCard label="累計再生数" value={formatNumber(ad.cumulative_views || 0)} />
-            <MetricCard label="いいね数" value={formatNumber(ad.like_count || 0)} />
-            <MetricCard label="トレンドスコア" value={String(ad.trend_score || 0)} />
-          </div>
-
-          {/* Meta Information */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <MetaItem label="配信日数">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[13px] font-semibold text-gray-900">
-                  {ad.days_running != null ? `${ad.days_running}日` : "-"}
-                </span>
-                {ad.is_still_running && (
-                  <span className="text-[10px] text-emerald-600 font-medium">● 配信中</span>
-                )}
-                {ad.is_still_running === false && (
-                  <span className="text-[10px] text-gray-400">○ 終了</span>
-                )}
-              </div>
-            </MetaItem>
-            <MetaItem label="クリエイティブタイプ">
-              <span className="text-[13px] text-gray-900">
-                {ad.creative_type === "video" ? "動画" : ad.creative_type === "image" ? "静止画" : ad.creative_type || "-"}
-              </span>
-            </MetaItem>
-            <MetaItem label="秒数">
-              <span className="text-[13px] text-gray-900">
-                {ad.duration_seconds > 0 ? `${ad.duration_seconds}秒` : "-"}
-              </span>
-            </MetaItem>
-            <MetaItem label="掲載開始">
-              <span className="text-[13px] text-gray-900">
-                {ad.published_date ? new Date(ad.published_date).toLocaleDateString("ja-JP") : "-"}
-              </span>
-            </MetaItem>
-            <MetaItem label="遷移先タイプ">
-              <span className="text-[13px] text-gray-900">
-                {ad.destination_type || "-"}
-              </span>
-            </MetaItem>
-            <MetaItem label="管理番号">
-              <span className="text-[13px] text-gray-900 font-mono">
-                {ad.management_id || "-"}
-              </span>
-            </MetaItem>
-          </div>
-
-          {/* B6-2: LP Destination Info Section (enhanced) */}
-          {ad.destination_url && (
-            <div className="bg-blue-50/60 rounded-lg px-4 py-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-[#4A7DFF] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                </svg>
-                <p className="text-[12px] font-bold text-gray-900">LP遷移先</p>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                  {(() => { try { return new URL(ad.destination_url).hostname.replace(/^www\./, ""); } catch { return "-"; } })()}
-                </span>
-                {ad.destination_type && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{ad.destination_type}</span>
-                )}
-              </div>
-              {/* Full URL */}
-              <a
-                href={ad.destination_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-[11px] text-[#4A7DFF] hover:underline break-all leading-relaxed"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {ad.destination_url}
-              </a>
-              {/* Action buttons row */}
-              <div className="flex items-center gap-2 pt-0.5">
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4A7DFF] text-white text-[11px] font-medium hover:bg-[#3a6ae8] transition-colors"
-                  onClick={(e) => { e.stopPropagation(); window.open(ad.destination_url, "_blank", "noopener,noreferrer"); }}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                  </svg>
-                  LPを開く
-                </button>
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 text-[11px] font-medium hover:bg-purple-100 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    fetchApi("/lp-analysis/crawl", {
-                      method: "POST",
-                      body: { url: ad.destination_url, ad_id: ad.ad_id, auto_analyze: true },
-                    })
-                      .then(() => { toast.success("LP分析を開始しました"); })
-                      .catch(() => { toast.error("LP分析の開始に失敗しました"); });
-                  }}
-                >
-                  LP分析を実行
-                </button>
-                <button
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/80 text-gray-600 text-[11px] hover:bg-white transition-colors border border-gray-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    copyToClipboard(ad.destination_url).then(() => toast.success("URLをコピーしました"));
-                  }}
-                  title="URLをコピー"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                  </svg>
-                  コピー
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* B15: LP Screenshot Preview */}
-          {ad.destination_url && (
-            <div className="space-y-2">
-              <p className="text-[10px] text-gray-400">LPプレビュー</p>
-              <div className="relative aspect-[3/2] bg-gray-100 rounded-lg overflow-hidden group cursor-pointer"
-                onClick={() => window.open(`/api/v1/media/lp-screenshot/${ad.ad_id}`, "_blank", "noopener,noreferrer")}
-              >
-                <img
-                  src={`/api/v1/media/lp-screenshot/${ad.ad_id}`}
-                  alt="LP Screenshot"
-                  className="w-full h-full object-cover object-top group-hover:opacity-90 transition-opacity"
-                  loading="lazy"
-                  onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10">
-                  <svg className="w-6 h-6 text-white drop-shadow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Rank Change */}
-          {ad.rank_change !== null && ad.rank_change !== undefined && (
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-2">
-              <span className="text-[11px] text-gray-400">順位変動</span>
-              {ad.rank_change > 0 ? (
-                <span className="text-emerald-600 text-[13px] font-semibold">
-                  ↑{ad.rank_change} ランクアップ
-                </span>
-              ) : ad.rank_change < 0 ? (
-                <span className="text-red-500 text-[13px] font-semibold">
-                  ↓{Math.abs(ad.rank_change)} ランクダウン
-                </span>
-              ) : (
-                <span className="text-gray-400 text-[13px]">→ 変動なし</span>
-              )}
-              {ad.previous_rank != null && (
-                <span className="text-[10px] text-gray-400 ml-auto">前回: {ad.previous_rank}位</span>
-              )}
-            </div>
-          )}
-
-          {/* B8: Creative DNA Section */}
-          {dnaLoading ? (
-            <div className="bg-indigo-50/50 rounded-lg px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-                <span className="text-[11px] text-gray-400">クリエイティブ分析を読み込み中...</span>
-              </div>
-            </div>
-          ) : creativeDna && (creativeDna.hook_type || creativeDna.cta_type || creativeDna.offer_type || creativeDna.emotion || (creativeDna.text_features && creativeDna.text_features.length > 0)) ? (
-            <div className="bg-indigo-50/50 rounded-lg px-4 py-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                </svg>
-                <p className="text-[12px] font-bold text-gray-900">クリエイティブ分析</p>
-              </div>
-
-              {/* DNA badges */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {creativeDna.hook_type && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">
-                    フック: {dnaHookLabels[creativeDna.hook_type] || creativeDna.hook_type}
-                  </span>
-                )}
-                {creativeDna.cta_type && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                    CTA: {dnaCtaLabels[creativeDna.cta_type] || creativeDna.cta_type}
-                  </span>
-                )}
-                {creativeDna.offer_type && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700">
-                    オファー: {dnaOfferLabels[creativeDna.offer_type] || creativeDna.offer_type}
-                  </span>
-                )}
-                {creativeDna.emotion && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-pink-100 text-pink-700">
-                    感情: {dnaEmotionLabels[creativeDna.emotion] || creativeDna.emotion}
-                  </span>
-                )}
-              </div>
-
-              {/* Text features */}
-              {creativeDna.text_features && creativeDna.text_features.length > 0 && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {creativeDna.text_features.map((feat) => (
-                    <span key={feat} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-gray-100 text-gray-600">
-                      {dnaFeatureLabels[feat] || feat}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Pattern hit rate */}
-              {creativeDna.pattern_hit_rate != null && (
-                <div className="flex items-center gap-3 bg-white/70 rounded-lg px-3 py-2">
-                  <span className="text-[10px] text-gray-500">このパターンのヒット率</span>
-                  <span className="text-[15px] font-bold" style={{
-                    color: (typeof creativeDna.pattern_hit_rate === "number" && creativeDna.pattern_hit_rate <= 1
-                      ? creativeDna.pattern_hit_rate * 100
-                      : creativeDna.pattern_hit_rate) >= 70
-                      ? "#22c55e"
-                      : (typeof creativeDna.pattern_hit_rate === "number" && creativeDna.pattern_hit_rate <= 1
-                        ? creativeDna.pattern_hit_rate * 100
-                        : creativeDna.pattern_hit_rate) >= 45
-                        ? "#f59e0b"
-                        : "#4A7DFF",
-                  }}>
-                    {typeof creativeDna.pattern_hit_rate === "number" && creativeDna.pattern_hit_rate <= 1
-                      ? Math.round(creativeDna.pattern_hit_rate * 100)
-                      : Math.round(creativeDna.pattern_hit_rate)}%
-                  </span>
-                  {creativeDna.pattern_count != null && (
-                    <span className="text-[9px] text-gray-400">{creativeDna.pattern_count}件中</span>
-                  )}
-                </div>
-              )}
-
-              {/* Similar hit ads */}
-              {creativeDna.similar_hit_ads && creativeDna.similar_hit_ads.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-gray-500 font-medium mb-1.5">同パターンのヒット広告</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {creativeDna.similar_hit_ads.slice(0, 6).map((sim) => (
-                      <button
-                        key={sim.ad_id}
-                        className="text-[9px] px-2 py-1 rounded bg-white text-indigo-600 hover:bg-indigo-50 transition-colors truncate max-w-[180px] border border-indigo-200"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAdSelect(sim.ad_id);
-                        }}
-                        title={sim.product_name || `#${sim.ad_id}`}
-                      >
-                        {sim.product_name || `#${sim.ad_id}`}
-                        {sim.hit_score != null && ` (${sim.hit_score})`}
-                      </button>
-                    ))}
-                  </div>
+                  <h3 className="text-[14px] font-bold text-gray-900 dark:text-gray-100">Ad360統合詳細</h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">概要 / クリエイティブ / テキスト / 分析 / LP / 品質</p>
                 </div>
-              )}
+                <button className="rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800" onClick={refreshAd360}>再読込</button>
+              </div>
+
+              {ad360Loading ? <Panel title="ad360"><Loader /></Panel> : null}
+              {ad360Error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-[12px] text-red-700">{ad360Error}</div> : null}
+              {ad360 ? (
+                <>
+                  <SectionPanel title="概要" section={ad360.sections.core} busy={actionLoading === "media"} onRetry={() => retrySection("core")} />
+                  <SectionPanel title="クリエイティブ" section={ad360.sections.creative} busy={actionLoading === "media"} onRetry={() => retrySection("creative")} />
+                  <SectionPanel title="テキスト" section={ad360.sections.text} busy={actionLoading === "media"} onRetry={() => retrySection("text")} />
+                  <SectionPanel title="分析" section={ad360.sections.analysis} busy={actionLoading === "reclassify"} onRetry={() => retrySection("analysis")} extra={dictionaryResult ? <TagList label="辞書候補" items={dictionaryResult.candidate_terms.map((item) => `${item.term} (${item.topic_label}, ${Math.round(item.confidence * 100)}%)`)} /> : null} />
+                  <SectionPanel title="LP" section={ad360.sections.lp} busy={actionLoading === "lp"} onRetry={() => retrySection("lp")} />
+                  <SectionPanel title="品質" section={ad360.sections.quality} busy={actionLoading === "media"} onRetry={() => retrySection("quality")} />
+                </>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-
-        {/* B14: AI Creative Intelligence */}
-        <div className="px-5 pb-2">
-          <CreativeIntelligence adId={ad.ad_id} />
-        </div>
-
-        {/* B14: Hit Prediction */}
-        <div className="px-5 pb-2">
-          <HitPrediction adId={ad.ad_id} />
-        </div>
-
-        {/* B12: Similar Ads Panel */}
-        <div className="px-5 pb-2">
-          <SimilarAdsPanel adId={ad.ad_id} onAdSelect={onAdSelect} />
-        </div>
-
-        {/* B26: Ad Annotations */}
-        <div className="px-5 pb-2">
-          <AdAnnotations adId={ad.ad_id} />
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-200 bg-gray-50 shrink-0 flex-wrap gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            {ad.destination_url && (
-              <button
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4A7DFF] text-white text-[12px] font-medium hover:bg-[#3a6ae8] transition-colors"
-                onClick={() => window.open(ad.destination_url, "_blank", "noopener,noreferrer")}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                </svg>
-                LPを見る
-              </button>
-            )}
-            {ad.ad_url && (
-              <button
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-[12px] font-medium hover:bg-gray-200 transition-colors"
-                onClick={() => window.open(ad.ad_url, "_blank", "noopener,noreferrer")}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                </svg>
-                広告を確認
-              </button>
-            )}
-            {ad.destination_url && (
-              <button
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 text-[12px] font-medium hover:bg-purple-100 transition-colors"
-                onClick={() => {
-                  fetchApi("/lp-analysis/crawl", {
-                    method: "POST",
-                    body: { url: ad.destination_url, ad_id: ad.ad_id, auto_analyze: true },
-                  }).catch(() => {});
-                }}
-              >
-                LP分析
-              </button>
-            )}
-            {/* B13: Bookmark button */}
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 text-[12px] font-medium hover:bg-amber-100 transition-colors"
-              onClick={() => {
-                fetchApi("/rankings/bookmarks", { method: "POST", body: { ad_id: ad.ad_id } })
-                  .then(() => toast.success("ブックマークに追加しました"))
-                  .catch(() => toast.error("ブックマーク追加に失敗しました"));
-              }}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-              </svg>
-              ブックマーク
-            </button>
-            {/* B10-2: Download button */}
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-[12px] font-medium hover:bg-emerald-100 transition-colors"
-              onClick={() => window.open(`/api/v1/media/download/${ad.ad_id}`, "_blank", "noopener,noreferrer")}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              ダウンロード
-            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-          >
-            閉じる
-          </button>
+        </div>
+
+        <div className="px-5 pb-2"><CreativeIntelligence adId={ad.ad_id} /></div>
+        <div className="px-5 pb-2"><HitPrediction adId={ad.ad_id} /></div>
+        <div className="px-5 pb-2"><SimilarAdsPanel adId={ad.ad_id} onAdSelect={onAdSelect} /></div>
+        <div className="px-5 pb-2"><AdAnnotations adId={ad.ad_id} /></div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-lg bg-[#4A7DFF] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3a6ae8] disabled:cursor-not-allowed disabled:bg-blue-200"
+              onClick={() => {
+                if (!lpTrust.finalUrl) {
+                  toast.error("LP遷移先が未解決です");
+                  return;
+                }
+                window.open(lpTrust.finalUrl, "_blank", "noopener,noreferrer");
+              }}
+              disabled={!lpTrust.finalUrl}
+            >
+              最終LPを見る
+            </button>
+            {ad.ad_url ? <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300" onClick={() => window.open(ad.ad_url, "_blank", "noopener,noreferrer")}>広告を確認</button> : null}
+            <button className="rounded-lg bg-purple-50 px-3 py-1.5 text-[12px] font-medium text-purple-600 hover:bg-purple-100" onClick={() => void handleLPCrawl()}>再クロール</button>
+            <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300" onClick={() => copyToClipboard(lpTrust.finalUrl || ad.destination_url || ad.ad_url || "").then(() => toast.success("URLをコピーしました"))}>URLコピー</button>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-4 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-200 dark:text-gray-300">閉じる</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ─── Sub-components ─── */
+function Loader() {
+  return (
+    <div className="flex items-center justify-center py-3">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4A7DFF] border-t-transparent" />
+      <span className="ml-2 text-[10px] text-gray-400 dark:text-gray-500">読み込み中...</span>
+    </div>
+  );
+}
+
+function ActionButton({ label, busy, onClick, tone }: { label: string; busy?: boolean; onClick: () => void; tone: "blue" | "amber" | "emerald" }) {
+  const styles = {
+    blue: "bg-blue-50 text-blue-700 hover:bg-blue-100",
+    amber: "bg-amber-50 text-amber-700 hover:bg-amber-100",
+    emerald: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+  }[tone];
+  return <button className={`rounded-lg px-3 py-1.5 text-[11px] font-medium disabled:opacity-60 ${styles}`} onClick={onClick} disabled={busy}>{busy ? "実行中..." : label}</button>;
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60">
+      <h3 className="mb-3 text-[13px] font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function MetricBar({ score, scoreColor }: { score: number; scoreColor: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] text-gray-500 dark:text-gray-400">ヒットスコア</span>
+        <span className="text-[18px] font-bold" style={{ color: scoreColor }}>{score}<span className="ml-1 text-[11px] text-gray-400 dark:text-gray-500">/ 100</span></span>
+      </div>
+      <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700">
+        <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="grid gap-2 md:grid-cols-[88px_1fr]">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">{label}</p>
+      {values.length > 0 ? <div className="flex flex-wrap gap-1.5">{values.map((item) => <span key={`${label}-${item}`} className="rounded-full bg-gray-100 px-2 py-1 text-[10px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">{item}</span>)}</div> : <p className="text-[11px] text-gray-400 dark:text-gray-500">未取得</p>}
+    </div>
+  );
+}
+
+function SummaryText({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-2 md:grid-cols-[88px_1fr]">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">{label}</p>
+      <p className="text-[12px] leading-relaxed text-gray-700 dark:text-gray-200">{value || "未取得"}</p>
+    </div>
+  );
+}
+
+function TagList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">{label}</p>
+      {items.length > 0 ? <div className="flex flex-wrap gap-1.5">{items.map((item) => <span key={`${label}-${item}`} className="rounded-full bg-gray-100 px-2 py-1 text-[10px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">{item}</span>)}</div> : <p className="text-[11px] text-gray-400 dark:text-gray-500">未取得</p>}
+    </div>
+  );
+}
+
+function SectionPanel({ title, section, busy, onRetry, extra }: { title: string; section: Ad360Section; busy?: boolean; onRetry: () => void; extra?: React.ReactNode }) {
+  const rows = Object.entries(section.data).slice(0, 8).map(([key, value]) => {
+    if (Array.isArray(value)) return [key, value.length > 0 ? value.join(", ") : "未取得"] as const;
+    if (typeof value === "object" && value !== null) return [key, JSON.stringify(value)] as const;
+    return [key, asText(value)] as const;
+  });
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/60">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+        <ActionButton label="再取得" busy={busy} onClick={onRetry} tone="blue" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500">{label}</p>
+            <p className="mt-0.5 break-words text-[12px] font-medium text-gray-800 dark:text-gray-100">{value}</p>
+          </div>
+        ))}
+      </div>
+      {extra}
+      <TagList label="欠損項目" items={section.missing_fields.map((item) => renderField(item))} />
+    </div>
+  );
+}
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2.5">
-      <p className="text-[10px] text-gray-400 font-medium">{label}</p>
-      <p className="text-[15px] font-bold text-gray-900 mt-0.5">{value}</p>
+    <div className="rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-gray-800">
+      <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{label}</p>
+      <p className="mt-0.5 text-[15px] font-bold text-gray-900 dark:text-gray-100">{value}</p>
     </div>
   );
 }
@@ -719,7 +789,7 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function MetaItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-2">
-      <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>
+      <p className="mb-0.5 text-[10px] text-gray-400 dark:text-gray-500">{label}</p>
       {children}
     </div>
   );

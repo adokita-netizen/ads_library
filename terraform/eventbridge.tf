@@ -1,5 +1,12 @@
 # ==================== EventBridge Scheduler ====================
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  api_lambda_arn  = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.name_prefix}-api"
+  api_lambda_name = "${local.name_prefix}-api"
+}
+
 # Daily crawl: 03:00 JST = 18:00 UTC → SQS heavy queue
 resource "aws_scheduler_schedule" "daily_crawl" {
   name       = "${local.name_prefix}-daily-crawl"
@@ -75,6 +82,105 @@ resource "aws_scheduler_schedule" "daily_alerts" {
   }
 }
 
+# Daily ops health check: 07:00 JST = 22:00 UTC -> Light tasks Lambda
+resource "aws_scheduler_schedule" "daily_ops_health_check" {
+  name       = "${local.name_prefix}-daily-ops-health-check"
+  group_name = "default"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 22 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.light_tasks.arn
+    role_arn = aws_iam_role.eventbridge_scheduler.arn
+
+    input = jsonencode({
+      task   = "daily_ops_health_check"
+      kwargs = {}
+    })
+  }
+}
+
+# Weekly MLOps retrain: Monday 02:30 JST = Sunday 17:30 UTC -> ECS worker
+resource "aws_scheduler_schedule" "weekly_mlops_retrain" {
+  name       = "${local.name_prefix}-weekly-mlops-retrain"
+  group_name = "default"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(30 17 ? * SUN *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_ecs_cluster.main.arn
+    role_arn = aws_iam_role.eventbridge_scheduler.arn
+
+    ecs_parameters {
+      task_definition_arn = aws_ecs_task_definition.worker.arn
+      launch_type         = "FARGATE"
+
+      network_configuration {
+        subnets          = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+        security_groups  = [aws_security_group.ecs.id]
+        assign_public_ip = true
+      }
+    }
+
+    input = jsonencode({
+      containerOverrides = [
+        {
+          name    = "${local.name_prefix}-worker"
+          command = ["mlops_retrain", "{\"min_accuracy\":0.6,\"max_accuracy_drop\":0.03}"]
+        }
+      ]
+    })
+  }
+}
+
+# Daily MLOps monitoring: 01:00 JST = 16:00 UTC -> ECS worker
+resource "aws_scheduler_schedule" "daily_mlops_monitoring" {
+  name       = "${local.name_prefix}-daily-mlops-monitoring"
+  group_name = "default"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 16 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_ecs_cluster.main.arn
+    role_arn = aws_iam_role.eventbridge_scheduler.arn
+
+    ecs_parameters {
+      task_definition_arn = aws_ecs_task_definition.worker.arn
+      launch_type         = "FARGATE"
+
+      network_configuration {
+        subnets          = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+        security_groups  = [aws_security_group.ecs.id]
+        assign_public_ip = true
+      }
+    }
+
+    input = jsonencode({
+      containerOverrides = [
+        {
+          name    = "${local.name_prefix}-worker"
+          command = ["mlops_monitoring", "{}"]
+        }
+      ]
+    })
+  }
+}
+
 # Daily genre rotation crawl: 04:00 JST weekdays = 19:00 UTC Mon-Fri → Lambda
 resource "aws_scheduler_schedule" "daily_genre_crawl" {
   name       = "${local.name_prefix}-daily-genre-crawl"
@@ -88,13 +194,13 @@ resource "aws_scheduler_schedule" "daily_genre_crawl" {
   schedule_expression_timezone = "UTC"
 
   target {
-    arn      = aws_lambda_function.api.arn
+    arn      = local.api_lambda_arn
     role_arn = aws_iam_role.eventbridge_scheduler.arn
 
     input = jsonencode({
-      action       = "crawl"
-      rotate_genre = true
-      platforms    = ["facebook", "instagram"]
+      action             = "crawl"
+      rotate_genre       = true
+      platforms          = ["facebook", "instagram"]
       limit_per_platform = 20
     })
   }
@@ -103,7 +209,7 @@ resource "aws_scheduler_schedule" "daily_genre_crawl" {
 resource "aws_lambda_permission" "eventbridge_genre_crawl" {
   statement_id  = "AllowEventBridgeGenreCrawl"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api.function_name
+  function_name = local.api_lambda_name
   principal     = "scheduler.amazonaws.com"
   source_arn    = aws_scheduler_schedule.daily_genre_crawl.arn
 }
@@ -121,7 +227,7 @@ resource "aws_scheduler_schedule" "weekly_media_extraction" {
   schedule_expression_timezone = "UTC"
 
   target {
-    arn      = aws_lambda_function.api.arn
+    arn      = local.api_lambda_arn
     role_arn = aws_iam_role.eventbridge_scheduler.arn
 
     input = jsonencode({
@@ -135,7 +241,7 @@ resource "aws_scheduler_schedule" "weekly_media_extraction" {
 resource "aws_lambda_permission" "eventbridge_media_extraction" {
   statement_id  = "AllowEventBridgeMediaExtraction"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api.function_name
+  function_name = local.api_lambda_name
   principal     = "scheduler.amazonaws.com"
   source_arn    = aws_scheduler_schedule.weekly_media_extraction.arn
 }
@@ -155,4 +261,12 @@ resource "aws_lambda_permission" "eventbridge_alerts" {
   function_name = aws_lambda_function.light_tasks.function_name
   principal     = "scheduler.amazonaws.com"
   source_arn    = aws_scheduler_schedule.daily_alerts.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_ops_health_check" {
+  statement_id  = "AllowEventBridgeOpsHealthCheck"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.light_tasks.function_name
+  principal     = "scheduler.amazonaws.com"
+  source_arn    = aws_scheduler_schedule.daily_ops_health_check.arn
 }

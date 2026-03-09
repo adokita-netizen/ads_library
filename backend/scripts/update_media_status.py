@@ -1,12 +1,11 @@
 """Update media_extraction_status for all ads based on actual media availability.
 
-Sets status based on media URL completeness:
-- video_url + image_url + thumbnail_url all present -> "completed"
-- some media present, some missing -> "partial"
-- all media URLs NULL -> "pending"
-- previous extraction error recorded in metadata -> "failed"
-
-Also records media_extraction_status and media_completeness_score in ad_metadata.
+Recomputes D96 creative-library recovery metadata:
+- `media_extraction_status`
+- `media_completeness_score`
+- `downloadable` / `viewable` / `has_lp`
+- `media_access_tier` (`viewable_only`, `downloadable`, `downloadable_with_lp`, ...)
+- `media_quality_issues` for snapshot-only / missing states
 
 Run from the backend directory:
     cd backend
@@ -23,7 +22,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import SyncSessionLocal, is_in_memory_mode
-from app.models.ad import Ad
+from app.models.ad import Ad, normalize_creative_fetch_reason
 
 
 def _get_session() -> Session:
@@ -43,17 +42,52 @@ def _get_session() -> Session:
 def _compute_completeness_score(ad: Ad) -> int:
     """Compute a 0-100 media completeness score for an ad."""
     score = 0
-    if ad.video_url:
+    if ad.video_url or ad.video_s3_key or ad.s3_key:
+        score += 35
+    if ad.image_url or ad.image_s3_key:
         score += 30
-    if ad.image_url:
-        score += 30
-    if ad.thumbnail_url:
+    if ad.thumbnail_url or ad.thumbnail_s3_key:
         score += 20
     if ad.snapshot_url:
         score += 10
-    if ad.thumbnail_s3_key or ad.image_s3_key:
-        score += 10
+    if ad.destination_url:
+        score += 5
     return min(score, 100)
+
+
+def _is_downloadable(ad: Ad) -> bool:
+    return bool(ad.video_s3_key or ad.s3_key or ad.image_s3_key or ad.thumbnail_s3_key)
+
+
+def _is_viewable(ad: Ad) -> bool:
+    return bool(ad.video_url or ad.image_url or ad.thumbnail_url)
+
+
+def _has_lp(ad: Ad) -> bool:
+    meta = ad.ad_metadata or {}
+    lp_info = meta.get("lp_info") if isinstance(meta.get("lp_info"), dict) else {}
+    return bool(ad.destination_url or lp_info.get("final_url"))
+
+
+def _access_tier(ad: Ad) -> str:
+    if _is_downloadable(ad):
+        return "downloadable_with_lp" if _has_lp(ad) else "downloadable"
+    if _is_viewable(ad):
+        return "viewable_only"
+    if ad.snapshot_url:
+        return "snapshot_only"
+    return "missing"
+
+
+def _quality_issues(ad: Ad) -> list[str]:
+    issues: list[str] = []
+    if _access_tier(ad) == "snapshot_only":
+        issues.append("snapshot_only")
+    elif _access_tier(ad) == "missing":
+        issues.append("media_missing")
+    if _is_viewable(ad) and not _is_downloadable(ad):
+        issues.append("not_downloadable")
+    return issues
 
 
 def _determine_status(ad: Ad) -> str:
@@ -61,39 +95,27 @@ def _determine_status(ad: Ad) -> str:
 
     Logic:
     - If ad_metadata contains extraction_error -> "failed"
-    - If video_url + image_url + thumbnail_url are all set -> "completed"
-    - If at least one of these is set -> "partial"
-    - If none are set -> "pending"
+    - downloadable な S3/local 対応素材があれば -> "completed"
+    - viewable だが downloadable でなければ -> "enriched"
+    - snapshot のみあれば -> "pending_heavy"
+    - 何も無ければ -> "pending"
     """
     meta = ad.ad_metadata or {}
+    reason = normalize_creative_fetch_reason(meta.get("creative_fetch_reason"))
 
     # Check for previous extraction errors in metadata
     if meta.get("extraction_error") or meta.get("media_extraction_error"):
         return "failed"
+    if reason in {"blocked_or_expired", "download_failed"} and not _is_viewable(ad) and not ad.snapshot_url:
+        return "failed"
 
-    has_video = bool(ad.video_url)
-    has_image = bool(ad.image_url)
-    has_thumbnail = bool(ad.thumbnail_url)
-
-    # For image-type ads, video_url is not expected
-    is_image_type = ad.creative_type == "image"
-
-    if is_image_type:
-        # Image ads: completed if image + thumbnail are present
-        if has_image and has_thumbnail:
-            return "completed"
-        elif has_image or has_thumbnail:
-            return "partial"
-        else:
-            return "pending"
-    else:
-        # Video/carousel/unknown ads: check all three
-        if has_video and has_image and has_thumbnail:
-            return "completed"
-        elif has_video or has_image or has_thumbnail:
-            return "partial"
-        else:
-            return "pending"
+    if _is_downloadable(ad):
+        return "completed"
+    if _is_viewable(ad):
+        return "enriched"
+    if ad.snapshot_url:
+        return "pending_heavy"
+    return "pending"
 
 
 # ── Main ──────────────────────────────────────────────────────────
@@ -119,7 +141,7 @@ def main():
         print()
 
         # Process all ads
-        stats = {"completed": 0, "partial": 0, "pending": 0, "failed": 0}
+        stats = {"completed": 0, "enriched": 0, "pending": 0, "pending_heavy": 0, "failed": 0}
         updated_count = 0
 
         for i, ad in enumerate(all_ads):
@@ -139,10 +161,23 @@ def main():
             meta = dict(ad.ad_metadata or {})
             old_meta_status = meta.get("media_extraction_status")
             old_meta_score = meta.get("media_completeness_score")
+            old_access_tier = meta.get("media_access_tier")
+            issues = _quality_issues(ad)
+            old_issues = meta.get("media_quality_issues")
 
-            if old_meta_status != new_status or old_meta_score != completeness:
+            if (
+                old_meta_status != new_status
+                or old_meta_score != completeness
+                or old_access_tier != _access_tier(ad)
+                or old_issues != issues
+            ):
                 meta["media_extraction_status"] = new_status
                 meta["media_completeness_score"] = completeness
+                meta["downloadable"] = _is_downloadable(ad)
+                meta["viewable"] = _is_viewable(ad)
+                meta["has_lp"] = _has_lp(ad)
+                meta["media_access_tier"] = _access_tier(ad)
+                meta["media_quality_issues"] = issues
                 ad.ad_metadata = meta
                 flag_modified(ad, "ad_metadata")
                 changed = True
@@ -176,8 +211,9 @@ def main():
         print()
         print("Status breakdown:")
         print(f"  completed: {stats.get('completed', 0)}")
-        print(f"  partial:   {stats.get('partial', 0)}")
+        print(f"  enriched:  {stats.get('enriched', 0)}")
         print(f"  pending:   {stats.get('pending', 0)}")
+        print(f"  p_heavy:   {stats.get('pending_heavy', 0)}")
         print(f"  failed:    {stats.get('failed', 0)}")
 
         # Also print completeness score distribution

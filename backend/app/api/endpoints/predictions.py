@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_sync
-from app.core.database import get_async_session
+from app.core.database import get_async_session, sync_session_scope
 from app.models.ad import Ad
 from app.models.analysis import AdAnalysis
 from app.models.user import User
@@ -15,8 +15,11 @@ from app.schemas.prediction import (
     PredictionRequest,
     PredictionResponse,
     BatchFatigueRequest,
+    MLHitScoreRequest,
+    MLHitScoreResponse,
 )
 from app.services.prediction.fatigue_detector import FatigueDetector
+from app.services.prediction.ml_scorer import MLHitScorer
 from app.services.prediction.performance_predictor import PerformancePredictor
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
@@ -93,3 +96,24 @@ async def batch_assess_fatigue(
     )
 
     return {"assessments": results}
+
+
+@router.post("/hit-score/ml", response_model=MLHitScoreResponse)
+async def score_hit_with_ml(
+    request: MLHitScoreRequest,
+    current_user: dict = Depends(get_current_user_sync),
+):
+    """Predict hit score using ML scorer with rule-based fallback and A/B routing."""
+    scorer = MLHitScorer()
+    with sync_session_scope() as session:
+        try:
+            result = scorer.score_ad(
+                session=session,
+                ad_id=request.ad_id,
+                user_id=current_user.get("user_id"),
+                ab_mode=request.ab_mode,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+    return MLHitScoreResponse(**result)

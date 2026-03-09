@@ -1,59 +1,41 @@
 "use client";
 
-import React, { useCallback } from "react";
-
-/* ─── Types ─── */
-
-interface QuickFilterChip {
-  key: string;
-  label: string;
-}
+export type QuickFilterKey =
+  | "hit_only"
+  | "video_only"
+  | "active_only"
+  | "new_week"
+  | "score_70_plus";
 
 interface QuickFilterBarProps {
-  activeFilters: string[];
-  onChange: (filters: string[]) => void;
+  active: QuickFilterKey[];
+  onToggle: (key: QuickFilterKey) => void;
 }
 
-/* ─── Default chips ─── */
-
-const DEFAULT_CHIPS: QuickFilterChip[] = [
-  { key: "hitOnly", label: "HIT広告のみ" },
-  { key: "videoOnly", label: "動画のみ" },
-  { key: "activeOnly", label: "配信中" },
-  { key: "recentOnly", label: "今週の新着" },
-  { key: "highScore", label: "スコア70+" },
+const FILTERS: Array<{ key: QuickFilterKey; label: string }> = [
+  { key: "hit_only", label: "HIT広告のみ" },
+  { key: "video_only", label: "動画のみ" },
+  { key: "active_only", label: "配信中" },
+  { key: "new_week", label: "今週の新着" },
+  { key: "score_70_plus", label: "スコア70+" },
 ];
 
-/* ─── Component ─── */
-
-export default function QuickFilterBar({ activeFilters, onChange }: QuickFilterBarProps) {
-  const handleToggle = useCallback(
-    (key: string) => {
-      const isActive = activeFilters.includes(key);
-      if (isActive) {
-        onChange(activeFilters.filter((f) => f !== key));
-      } else {
-        onChange([...activeFilters, key]);
-      }
-    },
-    [activeFilters, onChange],
-  );
-
+export default function QuickFilterBar({ active, onToggle }: QuickFilterBarProps) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-      {DEFAULT_CHIPS.map((chip) => {
-        const isActive = activeFilters.includes(chip.key);
+    <div className="mb-3 flex items-center gap-2 overflow-x-auto">
+      {FILTERS.map((f) => {
+        const isActive = active.includes(f.key);
         return (
           <button
-            key={chip.key}
-            onClick={() => handleToggle(chip.key)}
-            className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${
+            key={f.key}
+            onClick={() => onToggle(f.key)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] border transition-colors ${
               isActive
-                ? "bg-[#4A7DFF] text-white"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                ? "bg-[#4A7DFF] text-white border-[#4A7DFF]"
+                : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
             }`}
           >
-            {chip.label}
+            {f.label}
           </button>
         );
       })}

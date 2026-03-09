@@ -13,16 +13,117 @@ from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 logger = structlog.get_logger()
 
 JST = timezone(timedelta(hours=9))
+SIGNAL_KEYS = ("longevity", "spend", "active_bonus", "creative", "trend")
+DEFAULT_SCORE_PARAMETERS = {
+    "weights": {
+        "longevity": 1.0,
+        "spend": 1.0,
+        "active_bonus": 1.0,
+        "creative": 1.0,
+        "trend": 1.0,
+    },
+    "thresholds": {
+        "hit_score": 45.0,
+        "mega_hit_score": 70.0,
+        "hit_days_running": 30,
+        "mega_hit_days_running": 60,
+    },
+}
 
 
 def _today_jst() -> date:
     return datetime.now(JST).date()
 
 
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def get_default_score_parameters() -> dict:
+    return {
+        "weights": dict(DEFAULT_SCORE_PARAMETERS["weights"]),
+        "thresholds": dict(DEFAULT_SCORE_PARAMETERS["thresholds"]),
+    }
+
+
+def validate_score_parameters(score_params: dict | None) -> dict:
+    """Validate candidate ranking parameters for safe comparisons."""
+    if not score_params:
+        return get_default_score_parameters()
+
+    normalized = get_default_score_parameters()
+    weights = score_params.get("weights") if isinstance(score_params, dict) else None
+    thresholds = score_params.get("thresholds") if isinstance(score_params, dict) else None
+
+    if weights is not None:
+        if not isinstance(weights, dict):
+            raise ValueError("weights must be an object")
+        for key, value in weights.items():
+            if key not in SIGNAL_KEYS:
+                raise ValueError(f"Unsupported weight key: {key}")
+            try:
+                weight = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Weight for {key} must be numeric") from exc
+            if weight < 0 or weight > 3:
+                raise ValueError(f"Weight for {key} must be between 0 and 3")
+            normalized["weights"][key] = weight
+
+    if thresholds is not None:
+        if not isinstance(thresholds, dict):
+            raise ValueError("thresholds must be an object")
+        for key, value in thresholds.items():
+            if key not in normalized["thresholds"]:
+                raise ValueError(f"Unsupported threshold key: {key}")
+            try:
+                threshold_value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Threshold for {key} must be numeric") from exc
+            if key.endswith("days_running"):
+                if threshold_value < 0 or threshold_value > 365:
+                    raise ValueError(f"Threshold for {key} must be between 0 and 365")
+                normalized["thresholds"][key] = int(threshold_value)
+            else:
+                if threshold_value < 0 or threshold_value > 100:
+                    raise ValueError(f"Threshold for {key} must be between 0 and 100")
+                normalized["thresholds"][key] = threshold_value
+
+    if normalized["thresholds"]["mega_hit_score"] < normalized["thresholds"]["hit_score"]:
+        raise ValueError("mega_hit_score must be >= hit_score")
+    if normalized["thresholds"]["mega_hit_days_running"] < normalized["thresholds"]["hit_days_running"]:
+        raise ValueError("mega_hit_days_running must be >= hit_days_running")
+
+    return normalized
+
+
+def _apply_score_parameters(signals: dict[str, float], days_running: int, score_params: dict | None) -> tuple[float, bool, str, dict]:
+    params = validate_score_parameters(score_params)
+    weighted_signals: dict[str, float] = {}
+    for key in SIGNAL_KEYS:
+        weighted_signals[key] = round((signals.get(key, 0.0) or 0.0) * params["weights"][key], 2)
+
+    hit_score = min(100.0, max(0.0, round(sum(weighted_signals.values()), 1)))
+    thresholds = params["thresholds"]
+    if hit_score >= thresholds["mega_hit_score"] and days_running >= thresholds["mega_hit_days_running"]:
+        hit_level = "mega_hit"
+        is_hit = True
+    elif hit_score >= thresholds["hit_score"] and days_running >= thresholds["hit_days_running"]:
+        hit_level = "hit"
+        is_hit = True
+    else:
+        hit_level = "none"
+        is_hit = False
+    return hit_score, is_hit, hit_level, weighted_signals
+
+
 def compute_hit_score(
     ad: Ad,
     metrics: list | None = None,
     genre_stats: dict | None = None,
+    score_params: dict | None = None,
 ) -> tuple[float, bool, str, dict]:
     """マルチシグナル・ヒットスコア計算（v2: 配信日数重視モデル）。
 
@@ -164,21 +265,7 @@ def compute_hit_score(
     signals["trend"] = round(trend_score, 1)
 
     # ── 合計 ──
-    hit_score = sum(signals.values())
-    hit_score = min(100, max(0, round(hit_score, 1)))
-
-    # ── ヒット判定 ──
-    # hit:      score >= 45 かつ days_running >= 30
-    # mega_hit: score >= 70 かつ days_running >= 60
-    if hit_score >= 70 and days_running >= 60:
-        hit_level = "mega_hit"
-        is_hit = True
-    elif hit_score >= 45 and days_running >= 30:
-        hit_level = "hit"
-        is_hit = True
-    else:
-        hit_level = "none"
-        is_hit = False
+    hit_score, is_hit, hit_level, signals = _apply_score_parameters(signals, days_running, score_params)
 
     return hit_score, is_hit, hit_level, signals
 
@@ -246,7 +333,7 @@ def compute_genre_stats(
     ads_with_meta = session.query(Ad).filter(Ad.ad_metadata.isnot(None)).all()
     for ad in ads_with_meta:
         m = ad.ad_metadata or {}
-        audience_max = m.get("estimated_audience_max", 0) or 0
+        audience_max = _coerce_float(m.get("estimated_audience_max", 0) or 0)
         if audience_max > 0:
             # Map Ad.category to genre string
             g = str(ad.category.value) if ad.category else "other"
@@ -262,6 +349,7 @@ def compute_hit_score_with_details(
     ad: Ad,
     metrics: list | None = None,
     genre_stats: dict | None = None,
+    score_params: dict | None = None,
 ) -> dict:
     """Compute hit score and return enriched signal details for API display.
 
@@ -272,7 +360,7 @@ def compute_hit_score_with_details(
         is_still_running, estimated_spend_jpy, and enriched signals.
     """
     hit_score, is_hit, hit_level, signals = compute_hit_score(
-        ad, metrics=metrics, genre_stats=genre_stats,
+        ad, metrics=metrics, genre_stats=genre_stats, score_params=score_params,
     )
 
     meta = ad.ad_metadata or {}
@@ -324,6 +412,7 @@ def compute_hit_score_with_details(
         "hit_score": hit_score,
         "is_hit": is_hit,
         "hit_level": hit_level,
+        "applied_score_params": validate_score_parameters(score_params),
         "days_running": days_running,
         "is_still_running": is_still_running,
         "estimated_spend_jpy": int(total_spend),
@@ -432,8 +521,9 @@ class RankingService:
         # Order by total spend increase (primary ranking metric)
         results = query.order_by(desc("total_spend_increase")).limit(200).all()
 
-        # Get previous rankings for rank_change calculation
+        # Get previous rankings for rank_change and hit_score diff calculation
         prev_rankings = {}
+        prev_hit_scores = {}
         prev_period_start = start - (end - start)
         prev = session.query(ProductRanking).filter(
             ProductRanking.period == period,
@@ -441,6 +531,8 @@ class RankingService:
         ).all()
         for pr in prev:
             prev_rankings[pr.ad_id] = pr.rank_position
+            if pr.hit_score is not None:
+                prev_hit_scores[pr.ad_id] = pr.hit_score
 
         # Pre-fetch Ad objects for all result ad_ids to compute hit scores
         result_ad_ids = [r.ad_id for r in results]
@@ -523,6 +615,8 @@ class RankingService:
                 extra_metadata={
                     "hit_level": hit_level,
                     "score_breakdown": breakdown,
+                    "previous_hit_score": prev_hit_scores.get(row.ad_id),
+                    "hit_score_diff": round(hit_score - prev_hit_scores[row.ad_id], 1) if row.ad_id in prev_hit_scores else None,
                 },
             )
             rankings.append(ranking)

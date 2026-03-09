@@ -1,13 +1,11 @@
 """Authentication API endpoints."""
 
-import time
-from collections import defaultdict
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
+from app.core.rate_limit import check_rate_limit, _rate_limit_store
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -22,23 +20,9 @@ from app.schemas.auth import TokenResponse, UserCreate, UserLogin, UserResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# ==================== In-memory Rate Limiter ====================
-
-_rate_limit_store: dict[str, list[float]] = defaultdict(list)
-
-
 def _check_rate_limit(key: str, max_requests: int, window_seconds: int = 60):
-    """Simple in-memory rate limiter. Raises 429 if limit exceeded."""
-    now = time.monotonic()
-    timestamps = _rate_limit_store[key]
-    # Remove expired entries
-    _rate_limit_store[key] = [t for t in timestamps if now - t < window_seconds]
-    if len(_rate_limit_store[key]) >= max_requests:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="リクエストが多すぎます。しばらくしてから再試行してください。",
-        )
-    _rate_limit_store[key].append(now)
+    """Backward-compatible auth-local alias to the shared rate limiter."""
+    check_rate_limit(key, max_requests=max_requests, window_seconds=window_seconds)
 
 
 @router.post("/register", response_model=UserResponse)

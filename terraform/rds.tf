@@ -18,7 +18,7 @@ resource "aws_db_instance" "main" {
   password = var.db_password
 
   allocated_storage     = 20
-  max_allocated_storage = 50
+  max_allocated_storage = var.rds_max_allocated_storage
   storage_type          = "gp3"
   storage_encrypted     = true
 
@@ -26,14 +26,16 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  backup_retention_period   = 7
+  backup_retention_period   = var.rds_backup_retention_days
   backup_window             = "17:00-18:00" # 02:00-03:00 JST
+  delete_automated_backups  = false
   maintenance_window        = "sun:18:00-sun:19:00"
   skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-db-final"
   deletion_protection       = true
+  copy_tags_to_snapshot     = true
 
-  performance_insights_enabled = false
+  performance_insights_enabled = var.rds_performance_insights_enabled
 
   tags = { Name = "${local.name_prefix}-db" }
 }

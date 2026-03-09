@@ -13,6 +13,8 @@ from app.api.deps import get_optional_user
 from app.core.database import get_async_session, is_in_memory_mode, get_connection_error, reconnect
 from app.models.api_key import PlatformAPIKey
 from app.models.user import User
+from app.schemas.meta_marketing import MetaTokenExchangeResponse, MetaTokenHealthResponse
+from app.services.meta_marketing.token_manager import MetaTokenManager
 from app.utils.crypto import encrypt_value, decrypt_value
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -302,7 +304,53 @@ async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:
     return _decrypt_key_value(row.key_value)
 
 
-@router.post("/meta/exchange-token")
+async def _get_meta_token_source(db: AsyncSession) -> str:
+    runtime = await MetaTokenManager.get_token_runtime_source(db)
+    return runtime["token_source"]
+
+
+def _token_health_payload(
+    *,
+    token_source: str,
+    runtime_source: str | None = None,
+    source_priority: list[str] | None = None,
+    fallback_used: bool = False,
+    fallback_reason: str | None = None,
+    has_token: bool,
+    is_valid: bool,
+    app_id: str | None = None,
+    token_type: str | None = None,
+    expires_at: int | None = None,
+    days_remaining: int | None = None,
+    is_expiring: bool = False,
+    scopes: list[str] | None = None,
+    user_id: str | None = None,
+    user_name: str | None = None,
+    last_validation_error: str | None = None,
+    message: str | None = None,
+) -> dict:
+    return MetaTokenHealthResponse(
+        has_token=has_token,
+        token_source=token_source,
+        runtime_source=runtime_source or token_source,
+        source_priority=source_priority or ["db", "env", "missing"],
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
+        is_valid=is_valid,
+        app_id=app_id,
+        type=token_type,
+        expires_at=expires_at,
+        days_remaining=days_remaining,
+        is_expiring=is_expiring,
+        scopes=scopes or [],
+        user_id=user_id,
+        user_name=user_name,
+        last_validation_error=last_validation_error,
+        message=message,
+    ).model_dump()
+
+
+@router.post("/meta/exchange-token", response_model=MetaTokenExchangeResponse)
 async def exchange_meta_token(
     _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
@@ -371,25 +419,42 @@ async def exchange_meta_token(
         ))
 
     logger.info("meta_token_exchanged", token_type=data.get("token_type"))
-    return {
-        "status": "ok",
-        "message": "長期トークンに変換しました（有効期限: 約60日）",
-        "token_type": data.get("token_type"),
-    }
+    return MetaTokenExchangeResponse(
+        status="ok",
+        message="長期トークンに変換しました（有効期限: 約60日）",
+        token_type=data.get("token_type"),
+        token_source="db",
+        saved_to="db",
+        source_priority=["db", "env", "missing"],
+        exchanged=True,
+        expires_in_seconds=data.get("expires_in"),
+    ).model_dump()
 
 
-@router.get("/meta/token-info")
+@router.get("/meta/token-info", response_model=MetaTokenHealthResponse)
 async def get_meta_token_info(
     _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Return information about the current Meta access token (expiry, scopes, type)."""
+    runtime = await MetaTokenManager.get_token_runtime_source(db)
+    token_source = runtime["token_source"]
     app_id = await _get_meta_key(db, "app_id")
     app_secret = await _get_meta_key(db, "app_secret")
-    access_token = await _get_meta_key(db, "access_token")
+    access_token = runtime["token"]
 
     if not access_token:
-        return {"has_token": False, "message": "アクセストークンが設定されていません"}
+        return _token_health_payload(
+            has_token=False,
+            token_source=token_source,
+            runtime_source=runtime["runtime_source"],
+            source_priority=runtime["source_priority"],
+            fallback_used=runtime["fallback_used"],
+            fallback_reason=runtime["fallback_reason"],
+            is_valid=False,
+            last_validation_error="アクセストークンが設定されていません",
+            message="アクセストークンが設定されていません",
+        )
 
     # If app_id + app_secret are set, use debug_token for detailed info
     if app_id and app_secret:
@@ -405,20 +470,113 @@ async def get_meta_token_info(
 
         if resp.status_code == 200:
             info = resp.json().get("data", {})
-            return {
-                "has_token": True,
-                "is_valid": info.get("is_valid", False),
-                "app_id": info.get("app_id"),
-                "type": info.get("type"),
-                "expires_at": info.get("expires_at"),  # unix timestamp, 0 = never
-                "scopes": info.get("scopes", []),
-            }
+            expires_at = info.get("expires_at")
+            days_remaining = None
+            is_expiring = False
+            if expires_at and expires_at > 0:
+                from datetime import datetime, timezone
+                expiry_dt = datetime.fromtimestamp(expires_at, tz=timezone.utc)
+                delta = expiry_dt - datetime.now(timezone.utc)
+                days_remaining = max(0, delta.days)
+                is_expiring = days_remaining <= 7
+            return _token_health_payload(
+                has_token=True,
+                token_source=token_source,
+                runtime_source=runtime["runtime_source"],
+                source_priority=runtime["source_priority"],
+                fallback_used=runtime["fallback_used"],
+                fallback_reason=runtime["fallback_reason"],
+                is_valid=info.get("is_valid", False),
+                app_id=info.get("app_id"),
+                token_type=info.get("type"),
+                expires_at=expires_at,
+                days_remaining=days_remaining,
+                is_expiring=is_expiring,
+                scopes=info.get("scopes", []),
+            )
+        error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        fallback_reason = runtime["fallback_reason"]
+        if token_source == "db":
+            env_runtime = await MetaTokenManager.get_token_runtime_source(db)
+            env_token = MetaTokenManager._get_env_access_token()
+            if env_token:
+                runtime = {
+                    "token": env_token,
+                    "token_source": "db",
+                    "runtime_source": "env",
+                    "fallback_used": True,
+                    "fallback_reason": "db_invalid_fallback_env",
+                    "source_priority": ["db", "env", "missing"],
+                }
+                return _token_health_payload(
+                    has_token=True,
+                    token_source=token_source,
+                    runtime_source=runtime["runtime_source"],
+                    source_priority=runtime["source_priority"],
+                    fallback_used=runtime["fallback_used"],
+                    fallback_reason=runtime["fallback_reason"],
+                    is_valid=False,
+                    last_validation_error=error_data.get("error", {}).get("message", resp.text),
+                    message="DB token が無効のため env token を fallback 候補として検出しました",
+                )
+        return _token_health_payload(
+            has_token=True,
+            token_source=token_source,
+            runtime_source=runtime["runtime_source"],
+            source_priority=runtime["source_priority"],
+            fallback_used=runtime["fallback_used"],
+            fallback_reason=fallback_reason,
+            is_valid=False,
+            last_validation_error=error_data.get("error", {}).get("message", resp.text),
+            message="debug_token に失敗しました",
+        )
 
     # Fallback: minimal check without app credentials
-    return {
-        "has_token": True,
-        "message": "App ID と App Secret を設定すると、トークンの詳細情報を確認できます",
-    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"{META_GRAPH_API_BASE}/me",
+                params={"fields": "id,name", "access_token": access_token},
+            )
+        if resp.status_code == 200:
+            payload = resp.json()
+            return _token_health_payload(
+                has_token=True,
+                token_source=token_source,
+                runtime_source=runtime["runtime_source"],
+                source_priority=runtime["source_priority"],
+                fallback_used=runtime["fallback_used"],
+                fallback_reason=runtime["fallback_reason"],
+                is_valid=True,
+                scopes=[],
+                user_id=payload.get("id"),
+                user_name=payload.get("name"),
+                message="App ID と App Secret を設定すると、トークンの詳細情報を確認できます",
+            )
+        error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        return _token_health_payload(
+            has_token=True,
+            token_source=token_source,
+            runtime_source=runtime["runtime_source"],
+            source_priority=runtime["source_priority"],
+            fallback_used=runtime["fallback_used"],
+            fallback_reason=runtime["fallback_reason"],
+            is_valid=False,
+            last_validation_error=error_data.get("error", {}).get("message", resp.text),
+            message="Meta token の簡易検証に失敗しました",
+        )
+    except Exception as exc:
+        return _token_health_payload(
+            has_token=True,
+            token_source=token_source,
+            runtime_source=runtime["runtime_source"],
+            source_priority=runtime["source_priority"],
+            fallback_used=runtime["fallback_used"],
+            fallback_reason=runtime["fallback_reason"],
+            is_valid=False,
+            last_validation_error=str(exc),
+            message="Meta token の簡易検証に失敗しました",
+        )
 
 
 # ── Helpers ─────────────────────────────────────────────────────
@@ -428,7 +586,10 @@ def _decrypt_key_value(stored: str) -> str:
     try:
         return decrypt_value(stored)
     except (ValueError, Exception):
-        # Legacy plaintext value — return as-is (will be re-encrypted on next save)
+        # Legacy plaintext value — return as-is (will be re-encrypted on next save).
+        # If it still looks like an encrypted Fernet blob, treat it as unavailable.
+        if str(stored or "").startswith("gAAAAA"):
+            return ""
         return stored
 
 

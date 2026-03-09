@@ -34,83 +34,6 @@ interface AnalysisGroup {
   representative_ads: RepresentativeAd[];
 }
 
-// ─── Mock Data (TODO: Replace with API calls when endpoints are ready) ───
-
-const MOCK_SUCCESS: AnalysisGroup = {
-  ad_count: 127,
-  percentage: 32.5,
-  avg_views: 285000,
-  avg_spend: 1250000,
-  avg_likes: 3400,
-  avg_score: 82,
-  hook_types: [
-    { name: "質問型", count: 48, percentage: 37.8 },
-    { name: "衝撃型", count: 35, percentage: 27.6 },
-    { name: "ベネフィット型", count: 29, percentage: 22.8 },
-    { name: "ストーリー型", count: 15, percentage: 11.8 },
-  ],
-  cta_types: [
-    { name: "限定オファー", count: 52, percentage: 40.9 },
-    { name: "無料お試し", count: 38, percentage: 29.9 },
-    { name: "保証付き", count: 22, percentage: 17.3 },
-    { name: "緊急性", count: 15, percentage: 11.8 },
-  ],
-  offer_types: [
-    { name: "割引", count: 55, percentage: 43.3 },
-    { name: "無料トライアル", count: 35, percentage: 27.6 },
-    { name: "限定品", count: 22, percentage: 17.3 },
-    { name: "セット", count: 15, percentage: 11.8 },
-  ],
-  representative_ads: [
-    { ad_id: 1, title: "【驚愕】美容液の実力がヤバい", advertiser_name: "Beauty Corp", hit_score: 95, thumbnail: "", platform: "instagram" },
-    { ad_id: 2, title: "1ヶ月で-5kg達成の秘密", advertiser_name: "Health Co", hit_score: 92, thumbnail: "", platform: "facebook" },
-    { ad_id: 3, title: "プロが認めた最強サプリ", advertiser_name: "Supplement Inc", hit_score: 88, thumbnail: "", platform: "tiktok" },
-    { ad_id: 4, title: "今だけ80%OFF 話題の商品", advertiser_name: "EC Store", hit_score: 85, thumbnail: "", platform: "facebook" },
-    { ad_id: 5, title: "知らないと損する美容法", advertiser_name: "Skin Care Ltd", hit_score: 83, thumbnail: "", platform: "instagram" },
-  ],
-};
-
-const MOCK_FAILURE: AnalysisGroup = {
-  ad_count: 264,
-  percentage: 67.5,
-  avg_views: 15000,
-  avg_spend: 85000,
-  avg_likes: 120,
-  avg_score: 28,
-  hook_types: [
-    { name: "ベネフィット型", count: 95, percentage: 36.0 },
-    { name: "質問型", count: 72, percentage: 27.3 },
-    { name: "ストーリー型", count: 55, percentage: 20.8 },
-    { name: "衝撃型", count: 42, percentage: 15.9 },
-  ],
-  cta_types: [
-    { name: "緊急性", count: 90, percentage: 34.1 },
-    { name: "限定オファー", count: 75, percentage: 28.4 },
-    { name: "無料お試し", count: 58, percentage: 22.0 },
-    { name: "保証付き", count: 41, percentage: 15.5 },
-  ],
-  offer_types: [
-    { name: "割引", count: 100, percentage: 37.9 },
-    { name: "セット", count: 80, percentage: 30.3 },
-    { name: "無料トライアル", count: 50, percentage: 18.9 },
-    { name: "限定品", count: 34, percentage: 12.9 },
-  ],
-  representative_ads: [
-    { ad_id: 101, title: "商品紹介動画", advertiser_name: "Unknown Corp", hit_score: 15, thumbnail: "", platform: "facebook" },
-    { ad_id: 102, title: "新商品のご案内", advertiser_name: "Small Biz", hit_score: 20, thumbnail: "", platform: "instagram" },
-    { ad_id: 103, title: "お得なセール開催中", advertiser_name: "Retail Shop", hit_score: 22, thumbnail: "", platform: "facebook" },
-    { ad_id: 104, title: "当社サービスについて", advertiser_name: "Service Co", hit_score: 25, thumbnail: "", platform: "tiktok" },
-    { ad_id: 105, title: "キャンペーン実施中", advertiser_name: "Campaign Inc", hit_score: 28, thumbnail: "", platform: "instagram" },
-  ],
-};
-
-const MOCK_REUSE_POINTS = [
-  "フックには「質問型」を採用し、視聴者の悩みに直接訴えかける",
-  "CTAには「限定オファー」を必ず組み込み、行動を促す",
-  "具体的な数字（%、日数、金額）を盛り込んで信頼性を高める",
-  "成功広告の93%が最初の3秒で視聴者の注意を引くフックを使用",
-  "失敗広告は「緊急性CTA」に偏りすぎている傾向がある",
-];
 
 // ─── Helper: Horizontal Bar ───
 
@@ -139,18 +62,32 @@ export default function SuccessFailureAnalysis({ onAdSelect, genre }: SuccessFai
   const [success, setSuccess] = useState<AnalysisGroup | null>(null);
   const [failure, setFailure] = useState<AnalysisGroup | null>(null);
 
+  const [reusePoints, setReusePoints] = useState<string[]>([]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      // const data = await fetchApi<{ success: AnalysisGroup; failure: AnalysisGroup }>("/rankings/hit-ads", {
-      //   params: { genre: genre || undefined },
-      // });
-      await new Promise((r) => setTimeout(r, 700));
-      setSuccess(MOCK_SUCCESS);
-      setFailure(MOCK_FAILURE);
-    } catch (err) {
-      console.error("分析データの取得に失敗しました", err);
+      const data = await fetchApi<{
+        success?: AnalysisGroup;
+        failure?: AnalysisGroup;
+        reuse_points?: string[];
+        hit_ads?: Array<Record<string, unknown>>;
+        non_hit_ads?: Array<Record<string, unknown>>;
+      }>("/rankings/hit-ads", {
+        params: { genre: genre || undefined, analysis: "true" },
+      });
+      if (data.success && data.failure) {
+        setSuccess(data.success);
+        setFailure(data.failure);
+        setReusePoints(data.reuse_points || []);
+      } else {
+        // Endpoint returns flat hit_ads list - build groups from it
+        setSuccess(null);
+        setFailure(null);
+      }
+    } catch {
+      setSuccess(null);
+      setFailure(null);
     } finally {
       setLoading(false);
     }
@@ -338,7 +275,7 @@ export default function SuccessFailureAnalysis({ onAdSelect, genre }: SuccessFai
         </div>
         <div className="p-5">
           <div className="space-y-3">
-            {MOCK_REUSE_POINTS.map((point, idx) => (
+            {reusePoints.map((point, idx) => (
               <div key={idx} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
                 <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-[11px] font-bold shrink-0">
                   {idx + 1}

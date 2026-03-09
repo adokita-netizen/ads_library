@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ヨガ・ピラティス - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>ヨガ・ピラティス</h1>
+<p class="summary">yoga_pilates | 5 ads | Avg views: 28.7K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in ヨガ・ピラティス ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>benefit</span>
+            <span style="color:#f59e0b;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">40%</span>
+        </div>
+        <div class="pattern-bar" style="width:40.0%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>desire</span>
+            <span style="color:#8b5cf6;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>testimonial</span>
+            <span style="color:#3b82f6;font-weight:600">60%</span>
+        </div>
+        <div class="pattern-bar" style="width:60.0%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">60%</span>
+        </div>
+        <div class="pattern-bar" style="width:60.0%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>numbers</span>
+            <span style="color:#3b82f6;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">40%</span>
+        </div>
+        <div class="pattern-bar" style="width:40.0%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">40%</span>
+        </div>
+        <div class="pattern-bar" style="width:40.0%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>article_lp</span>
+            <span style="color:#60a5fa;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>form</span>
+            <span style="color:#22c55e;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">20%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.0%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" class=active>ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1793187537966291" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/38.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">MINITORE.NET</div>
+            <div class="ad-desc">姿勢改善・ダイエットしたい方は迷わず無料体験にきて下さい！
+MINITORE.NET
+こんなピラティス探してた！予約不要・月額9800円
+30分で体の変化を実感！ミニトレ＆ピラティス武蔵小山店は忙しい方にピッタリのピラティスを提供します。
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">139.5K views</span><span class="badge-hit">HIT 89</span><span>ミニトレ&amp;ピラティス</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1793187537966291" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://minitore.net/" target="_blank">https://minitore.net/</a>
+            <div class="lp-detail">
+                <div><strong>ピラティスをするならミニトレ＆ピラティス</strong></div>
+                
+                <div style="margin-top:4px"><strong>CTA:</strong> 送信する</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#313131;border-radius:2px;border:1px solid #333" title="#313131"></span><span style="display:inline-block;width:14px;height:14px;background:#00D084;border-radius:2px;border:1px solid #333" title="#00D084"></span><span style="display:inline-block;width:14px;height:14px;background:#0693E3;border-radius:2px;border:1px solid #333" title="#0693E3"></span><span style="display:inline-block;width:14px;height:14px;background:#32373C;border-radius:2px;border:1px solid #333" title="#32373C"></span><span style="display:inline-block;width:14px;height:14px;background:#7A00DF;border-radius:2px;border:1px solid #333" title="#7A00DF"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/38.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=25801359789532614&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">-</div>
+            <div class="ad-desc">The key to deepening twists begins by moving the torso over to the side. This lateral movement creates the space for the spinal twist along the thoracic vertebrae. Once the shoulder is firmly snuggled around the knee and the elbow spirals around the shin bone, it might be possible to reach the hands towards each other. Finally, keeping the wait forward protects the lower back and helps oriented tw</div>
+            <div class="ad-meta"><span class="badge-views">2.6K views</span><span>Kino Yoga</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=25801359789532614&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://instagram.com" target="_blank">https://instagram.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=3545215935631696&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">今すぐフェイスヨガを試してみましょう 🥰</div>
+            <div class="ad-desc"></div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Anna Lips Academy</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=3545215935631696&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://skin.luvly.care" target="_blank">https://skin.luvly.care</a>
+            <div class="lp-detail">
+                <div><strong>Luvly</strong></div>
+                <div>Luvly</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FF7262;border-radius:2px;border:1px solid #333" title="#FF7262"></span><span style="display:inline-block;width:14px;height:14px;background:#189CF3;border-radius:2px;border:1px solid #333" title="#189CF3"></span></div>
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=1637184600812193&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/253.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">今すぐフェイスヨガを試してみましょう 🥰</div>
+            <div class="ad-desc"></div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Anna Lips Academy</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1637184600812193&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://skin.luvly.care" target="_blank">https://skin.luvly.care</a>
+            <div class="lp-detail">
+                <div><strong>Luvly</strong></div>
+                <div>Luvly</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FF7262;border-radius:2px;border:1px solid #333" title="#FF7262"></span><span style="display:inline-block;width:14px;height:14px;background:#189CF3;border-radius:2px;border:1px solid #333" title="#189CF3"></span></div>
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1157875382951055&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">Get Luvly 🥰</div>
+            <div class="ad-desc">Take a Short Quiz and Get Face Yoga Plan for Glowing Skin 🔥🌟
+
+1️⃣ Take a Short Quiz
+2️⃣ Get your personal program
+3️⃣ Start feeling better in just 4 weeks! 😍
+
+Stay active, relaxed, and healthy—perfect for beginners🌟</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lee So-Yeon - Face Lift Expert</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1157875382951055&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://skin.luvly.care" target="_blank">https://skin.luvly.care</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

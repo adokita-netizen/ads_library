@@ -17,9 +17,11 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import create_engine
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.orm import sessionmaker
 
-from app.core.database import SyncSessionLocal
+from app.core.database import SyncSessionLocal, is_in_memory_mode
 from app.models.ad import Ad
 
 # Maximum history entries per ad
@@ -54,6 +56,24 @@ def _get_access_token() -> str:
     except Exception:
         pass
     return ""
+
+
+def _get_session():
+    """Get DB session with SQLite fallback for local ops scripts."""
+    if not is_in_memory_mode():
+        try:
+            session = SyncSessionLocal()
+            session.execute(__import__("sqlalchemy").text("SELECT 1"))
+            return session
+        except Exception:
+            pass
+
+    db_path = os.path.join(os.path.dirname(__file__), "..", "vaap_local.db")
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"vaap_local.db not found at {db_path}")
+    engine = create_engine(f"sqlite:///{db_path}")
+    Session = sessionmaker(bind=engine)
+    return Session()
 
 
 def _fetch_ads_by_page(page_id: str, token: str) -> list:
@@ -205,7 +225,7 @@ def main() -> None:
     else:
         print("No Meta API token found. Will use stored data only.")
 
-    session = SyncSessionLocal()
+    session = _get_session()
     try:
         ads = session.query(Ad).all()
         total = len(ads)

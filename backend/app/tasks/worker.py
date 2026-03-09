@@ -1,17 +1,81 @@
 """Celery worker configuration."""
 
-from celery import Celery
-from celery.schedules import crontab
+from types import SimpleNamespace
+
+try:
+    from celery import Celery
+    from celery.schedules import crontab
+except ModuleNotFoundError:
+    Celery = None
+
+    def crontab(*args, **kwargs):
+        return {"args": args, "kwargs": kwargs}
+
+    class _LocalTaskWrapper:
+        def __init__(self, func, **task_options):
+            self.func = func
+            self.max_retries = task_options.get("max_retries", 0)
+            self.default_retry_delay = task_options.get("default_retry_delay")
+            self.request = SimpleNamespace(id=None, retries=0)
+
+        def __call__(self, *args, **kwargs):
+            return self.run(*args, **kwargs)
+
+        def run(self, *args, **kwargs):
+            previous_request = self.request
+            self.request = SimpleNamespace(
+                id=getattr(previous_request, "id", None),
+                retries=getattr(previous_request, "retries", 0),
+            )
+            try:
+                return self.func(self, *args, **kwargs)
+            finally:
+                self.request = previous_request
+
+        def delay(self, *args, **kwargs):
+            payload = self.run(*args, **kwargs)
+            return SimpleNamespace(id=None, task_id=None, payload=payload)
+
+        def apply_async(self, args=None, kwargs=None, **_options):
+            payload = self.run(*(args or ()), **(kwargs or {}))
+            return SimpleNamespace(id=None, task_id=None, payload=payload)
+
+        def retry(self, exc=None):
+            self.request.retries = getattr(self.request, "retries", 0) + 1
+            raise exc or RuntimeError("Local task retry requested")
+
+    class _LocalCelery:
+        def __init__(self, *args, **kwargs):
+            self.conf = SimpleNamespace(update=lambda *a, **k: None)
+
+        def task(self, *decorator_args, **decorator_kwargs):
+            def decorator(func):
+                return _LocalTaskWrapper(func, **decorator_kwargs)
+
+            return decorator
+
+        def autodiscover_tasks(self, *args, **kwargs):
+            return None
+
+        def send_task(self, *args, **kwargs):
+            raise RuntimeError("Celery is not installed in this environment")
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-celery_app = Celery(
-    "vaap_worker",
-    broker=settings.celery_broker_url,
-    backend=settings.celery_result_backend,
-)
+if Celery is None:
+    celery_app = _LocalCelery(
+        "vaap_worker",
+        broker=settings.celery_broker_url,
+        backend=settings.celery_result_backend,
+    )
+else:
+    celery_app = Celery(
+        "vaap_worker",
+        broker=settings.celery_broker_url,
+        backend=settings.celery_result_backend,
+    )
 
 celery_app.conf.update(
     task_serializer="json",
@@ -35,6 +99,7 @@ celery_app.conf.update(
         "app.tasks.ranking_tasks.*": {"queue": "default"},
         "app.tasks.metrics_tasks.*": {"queue": "default"},
         "app.tasks.alert_tasks.*": {"queue": "default"},
+        "app.tasks.freshness_tasks.*": {"queue": "default"},
         "app.tasks.meta_sync_tasks.*": {"queue": "default"},
         "app.tasks.optimization_tasks.*": {"queue": "default"},
     },
@@ -58,6 +123,10 @@ celery_app.conf.update(
         "detect-daily-alerts": {
             "task": "app.tasks.alert_tasks.detect_alerts_task",
             "schedule": crontab(hour=6, minute=0),  # 毎日 06:00 JST
+        },
+        "refresh-data-freshness": {
+            "task": "app.tasks.freshness_tasks.refresh_data_freshness_task",
+            "schedule": crontab(hour=6, minute=30),  # 毎日 06:30 JST
         },
         # Meta Marketing API tasks
         "meta-token-health-check": {
@@ -87,6 +156,7 @@ celery_app.autodiscover_tasks([
     "app.tasks.ranking_tasks",
     "app.tasks.metrics_tasks",
     "app.tasks.alert_tasks",
+    "app.tasks.freshness_tasks",
     "app.tasks.meta_sync_tasks",
     "app.tasks.optimization_tasks",
 ])

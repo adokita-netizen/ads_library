@@ -57,6 +57,15 @@ logging.basicConfig(
 logger = logging.getLogger("scheduled_crawl")
 
 
+def _schedule_window() -> str:
+    hour = datetime.now(timezone.utc).hour
+    if hour < 10:
+        return "morning"
+    if hour < 16:
+        return "noon"
+    return "night"
+
+
 # ── Config loader ──────────────────────────────────────────────────────
 
 def load_config() -> dict:
@@ -109,6 +118,9 @@ def run_crawl(config: dict) -> dict:
             "platforms": platforms,
             "limit_per_platform": limit,
             "auto_analyze": True,
+            "trigger_source": "scheduled",
+            "schedule_window": _schedule_window(),
+            "priority": "high",
         }
 
         try:

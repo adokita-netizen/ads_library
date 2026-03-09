@@ -24,11 +24,21 @@ import json
 import uuid
 import zipfile
 import logging
+import re
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
+
+from app.schemas.ad import (
+    BULK_DOWNLOAD_SKIPPED_REASON_CODES,
+    DOWNLOAD_FAILURE_REASON_CODES,
+    build_lp_info_payload,
+    build_media_status_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +58,14 @@ STREAM_THRESHOLD_BYTES = 10 * 1024 * 1024
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
+
+def _download_error_detail(code: str, message: str, **extra) -> dict:
+    normalized = code if code in DOWNLOAD_FAILURE_REASON_CODES else "download_file_missing"
+    payload = {"failure_reason_code": normalized, "message": message}
+    if extra:
+        payload.update(extra)
+    return payload
 
 def _find_video_path(ad_id: int) -> tuple[str, str] | None:
     """Find a cached video file for the given ad ID.
@@ -83,6 +101,55 @@ def _find_best_creative(ad_id: int) -> tuple[str, str, str] | None:
         return thumb_path, "image/jpeg", "thumbnail"
 
     return None
+
+
+def _infer_extension(source: str | None, default_ext: str) -> str:
+    if not source:
+        return default_ext
+    path = urlparse(source).path or source
+    ext = os.path.splitext(path)[1].lower()
+    return ext if ext else default_ext
+
+
+def _write_cache_file(path: str, data: bytes) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+
+
+async def _cache_remote_http(url: str, cache_path: str, expected_type_prefix: str) -> bool:
+    try:
+        import httpx
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=20.0,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        ) as client:
+            resp = await client.get(url)
+        if resp.status_code != 200:
+            return False
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if expected_type_prefix and ctype and not ctype.startswith(expected_type_prefix):
+            return False
+        _write_cache_file(cache_path, resp.content)
+        return True
+    except Exception as e:
+        logger.warning("cache_remote_http_failed: url=%s err=%s", url, e)
+        return False
+
+
+def _cache_s3_object(s3_key: str, cache_path: str) -> bool:
+    try:
+        from app.core.storage import get_storage_client
+        storage = get_storage_client()
+        data = storage.get_bytes(s3_key)
+        if not data:
+            return False
+        _write_cache_file(cache_path, data)
+        return True
+    except Exception as e:
+        logger.warning("cache_s3_object_failed: key=%s err=%s", s3_key, e)
+        return False
 
 
 def _stream_file(path: str, chunk_size: int = 65536):
@@ -129,7 +196,8 @@ def _get_cloudfront_settings():
                 s.aws_cloudfront_enabled and bool(s.aws_cloudfront_domain),
                 s.aws_cloudfront_domain,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("cloudfront_settings_load_failed: %s", e)
             _get_cloudfront_settings._cache = (False, "")
     return _get_cloudfront_settings._cache
 
@@ -151,7 +219,8 @@ def _s3_presigned_url(s3_key: str) -> str | None:
         from app.core.storage import get_storage_client
         storage = get_storage_client()
         return storage.get_presigned_url(s3_key, expires=3600)
-    except Exception:
+    except Exception as e:
+        logger.warning("s3_presigned_url_failed: key=%s err=%s", s3_key, e)
         return None
 
 
@@ -161,6 +230,44 @@ def _media_redirect_url(s3_key: str) -> str | None:
     if url:
         return url
     return _s3_presigned_url(s3_key)
+
+
+async def _validated_media_redirect_url(
+    s3_key: str | None,
+    expected_type_prefix: str = "",
+) -> str | None:
+    """Return redirect URL only when object existence is verified.
+
+    This prevents leaking CloudFront/S3 NoSuchKey responses to the UI.
+    """
+    url = _media_redirect_url(s3_key or "")
+    if not url:
+        return None
+    try:
+        import httpx
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=5.0,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            resp = await client.head(url)
+        if not (200 <= resp.status_code < 300):
+            return None
+        if expected_type_prefix:
+            ctype = (resp.headers.get("content-type") or "").lower()
+            if ctype and not ctype.startswith(expected_type_prefix):
+                # Allow unknown content types, but block clear mismatches.
+                if ctype not in ("application/octet-stream",):
+                    return None
+            # Guard against stale tiny placeholder objects in S3/CloudFront.
+            if expected_type_prefix == "image/":
+                content_len = (resp.headers.get("content-length") or "").strip()
+                if content_len.isdigit() and int(content_len) < 4096:
+                    return None
+        return url
+    except Exception as e:
+        logger.warning("media_redirect_validation_failed: key=%s err=%s", s3_key, e)
+        return None
 
 
 def _get_ad_media_info(ad_id: int, media_type: str) -> dict | None:
@@ -192,7 +299,8 @@ def _get_ad_media_info(ad_id: int, media_type: str) -> dict | None:
             }
         finally:
             session.close()
-    except Exception:
+    except Exception as e:
+        logger.warning("ad_media_info_fetch_failed: ad_id=%d type=%s err=%s", ad_id, media_type, e)
         return None
 
 
@@ -200,6 +308,132 @@ def _get_ad_s3_key(ad_id: int, media_type: str) -> str | None:
     """Fetch S3 key for an ad from DB. media_type: thumbnail, image, video."""
     info = _get_ad_media_info(ad_id, media_type)
     return info["s3_key"] if info else None
+
+
+async def _ensure_best_creative_cached(ad_id: int) -> tuple[str, str, str] | None:
+    existing = _find_best_creative(ad_id)
+    if existing:
+        return existing
+
+    video_info = _get_ad_media_info(ad_id, "video") or {}
+    image_info = _get_ad_media_info(ad_id, "image") or {}
+    thumb_info = _get_ad_media_info(ad_id, "thumbnail") or {}
+
+    video_s3_key = video_info.get("s3_key")
+    if video_s3_key:
+        ext = _infer_extension(video_s3_key, ".mp4")
+        cache_path = os.path.join(CACHE_DIR, "videos", f"{ad_id}{ext}")
+        if _cache_s3_object(video_s3_key, cache_path):
+            mime = dict(VIDEO_FORMATS).get(ext.lstrip("."), "video/mp4")
+            return cache_path, mime, "video"
+
+    video_url = video_info.get("video_url")
+    if video_url:
+        ext = _infer_extension(video_url, ".mp4")
+        cache_path = os.path.join(CACHE_DIR, "videos", f"{ad_id}{ext}")
+        if await _cache_remote_http(video_url, cache_path, "video/"):
+            mime = dict(VIDEO_FORMATS).get(ext.lstrip("."), "video/mp4")
+            return cache_path, mime, "video"
+
+    image_s3_key = image_info.get("s3_key")
+    image_path = os.path.join(CACHE_DIR, "images", f"{ad_id}.jpg")
+    if image_s3_key and _cache_s3_object(image_s3_key, image_path):
+        return image_path, "image/jpeg", "image"
+
+    image_url = image_info.get("image_url")
+    if image_url:
+        for candidate in [_upgrade_fbcdn_image_url(image_url), image_url]:
+            if await _cache_remote_http(candidate, image_path, "image/"):
+                return image_path, "image/jpeg", "image"
+
+    thumb_s3_key = thumb_info.get("s3_key")
+    thumb_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
+    if thumb_s3_key and _cache_s3_object(thumb_s3_key, thumb_path):
+        return thumb_path, "image/jpeg", "thumbnail"
+
+    thumb_url = thumb_info.get("thumbnail_url")
+    if thumb_url:
+        for candidate in [_upgrade_fbcdn_image_url(thumb_url), thumb_url]:
+            if await _cache_remote_http(candidate, thumb_path, "image/"):
+                return thumb_path, "image/jpeg", "thumbnail"
+
+    extracted = await _try_snapshot_thumbnail_extract(ad_id, thumb_info or image_info)
+    if extracted:
+        return _find_best_creative(ad_id)
+
+    return None
+
+
+async def _try_snapshot_thumbnail_extract(ad_id: int, info: dict | None) -> Response | None:
+    """Try extracting thumbnail from snapshot_url on-demand.
+
+    This is a last-resort fallback to reduce blank creatives for newly crawled ads.
+    """
+    if not info:
+        return None
+    snapshot_url = info.get("snapshot_url")
+    if not snapshot_url:
+        return None
+
+    try:
+        from app.services.media_extraction import MediaExtractor
+        extractor = MediaExtractor()
+        extracted = await extractor.extract(snapshot_url, use_playwright=False)
+        candidate_urls: list[str] = []
+        if getattr(extracted, "thumbnail_url", None):
+            candidate_urls.append(extracted.thumbnail_url)
+        for u in getattr(extracted, "image_urls", []) or []:
+            if u:
+                candidate_urls.append(u)
+
+        candidate_urls = list(dict.fromkeys([u for u in candidate_urls if isinstance(u, str) and u.startswith("http")]))
+        if not candidate_urls:
+            return None
+
+        import httpx
+        for url in candidate_urls[:3]:
+            try:
+                async with httpx.AsyncClient(
+                    follow_redirects=True,
+                    timeout=10.0,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                ) as client:
+                    resp = await client.get(url)
+                if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
+                    cache_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
+                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    with open(cache_path, "wb") as f:
+                        f.write(resp.content)
+
+                    # Persist discovered thumbnail URL for future requests.
+                    try:
+                        from app.core.database import SyncSessionLocal
+                        from app.models.ad import Ad
+                        session = SyncSessionLocal()
+                        try:
+                            ad = session.query(Ad).filter(Ad.id == ad_id).first()
+                            if ad and not ad.thumbnail_url:
+                                ad.thumbnail_url = url
+                            if ad and not ad.image_url:
+                                ad.image_url = url
+                            session.commit()
+                        finally:
+                            session.close()
+                    except Exception as e:
+                        logger.warning("thumbnail_url_persist_failed: ad_id=%d err=%s", ad_id, e)
+
+                    return Response(
+                        content=resp.content,
+                        media_type=resp.headers.get("content-type", "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=86400", "X-Fallback": "snapshot_extract"},
+                    )
+            except Exception as e:
+                logger.debug("snapshot_extract_attempt_failed: ad_id=%d err=%s", ad_id, e)
+                continue
+    except Exception as e:
+        logger.warning("snapshot_thumbnail_extract_failed: ad_id=%d err=%s", ad_id, e)
+        return None
+    return None
 
 
 def _file_info(path: str) -> dict:
@@ -218,13 +452,39 @@ def _file_info(path: str) -> dict:
             or hdr[:3] == b'GIF'      # GIF
             or hdr[:4] == b'RIFF'     # WebP
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("file_header_check_failed: path=%s err=%s", path, e)
     return {
         "cached": True,
         "size_kb": round(size / 1024, 1),
         "valid": valid,
     }
+
+
+def _cleanup_file(path: str) -> None:
+    """Best-effort file cleanup for temporary exports."""
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception as e:
+        logger.warning("temp_file_cleanup_failed: %s", str(e))
+
+
+def _safe_export_slug(value: str, default: str = "custom") -> str:
+    """Return filesystem-safe slug for generated filenames."""
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", (value or "").strip())
+    safe = safe.strip("._")
+    if not safe:
+        return default
+    return safe[:80]
+
+
+def _upgrade_fbcdn_image_url(url: str) -> str:
+    """Remove tiny size restriction from fbcdn URLs when present."""
+    if not url or "fbcdn.net" not in url:
+        return url
+    # e.g. stp=dst-jpg_s60x60_tt6 -> stp=dst-jpg_tt6
+    return re.sub(r"_s\d+x\d+", "", url)
 
 
 # ── Existing endpoints ───────────────────────────────────────────────
@@ -239,7 +499,9 @@ async def get_thumbnail(ad_id: int):
 
     # Try CloudFront or S3 presigned URL redirect first
     s3_key = info["s3_key"] if info else None
-    redirect_url = _media_redirect_url(s3_key)
+    redirect_url = await _validated_media_redirect_url(
+        s3_key, expected_type_prefix="image/"
+    )
     if redirect_url:
         return RedirectResponse(url=redirect_url, status_code=302)
 
@@ -261,27 +523,36 @@ async def get_thumbnail(ad_id: int):
         for url_field in ["thumbnail_url", "image_url"]:
             url = info.get(url_field)
             if url and url.startswith("http"):
+                candidates = [_upgrade_fbcdn_image_url(url), url]
+                seen = set()
+                candidates = [u for u in candidates if not (u in seen or seen.add(u))]
                 try:
                     import httpx
                     async with httpx.AsyncClient(
                         follow_redirects=True, timeout=10.0,
                         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
                     ) as client:
-                        resp = await client.get(url)
-                        if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
-                            # Cache for future requests
-                            cache_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
-                            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                            with open(cache_path, "wb") as f:
-                                f.write(resp.content)
-                            from fastapi.responses import Response
-                            return Response(
-                                content=resp.content,
-                                media_type=resp.headers.get("content-type", "image/jpeg"),
-                                headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
-                            )
-                except Exception:
-                    pass
+                        for candidate_url in candidates:
+                            resp = await client.get(candidate_url)
+                            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
+                                # Cache for future requests
+                                cache_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
+                                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                                with open(cache_path, "wb") as f:
+                                    f.write(resp.content)
+                                from fastapi.responses import Response
+                                return Response(
+                                    content=resp.content,
+                                    media_type=resp.headers.get("content-type", "image/jpeg"),
+                                    headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
+                                )
+                except Exception as e:
+                    logger.debug("thumbnail_http_fetch_failed: ad_id=%d field=%s err=%s", ad_id, url_field, e)
+
+    # Last fallback: extract from snapshot_url on demand
+    extracted = await _try_snapshot_thumbnail_extract(ad_id, info)
+    if extracted:
+        return extracted
 
     # Fallback: placeholder SVG
     return _placeholder_response(ad_id)
@@ -297,7 +568,9 @@ async def get_image(ad_id: int):
 
     # Try CloudFront or S3 presigned URL redirect first
     s3_key = info["s3_key"] if info else None
-    redirect_url = _media_redirect_url(s3_key)
+    redirect_url = await _validated_media_redirect_url(
+        s3_key, expected_type_prefix="image/"
+    )
     if redirect_url:
         return RedirectResponse(url=redirect_url, status_code=302)
 
@@ -319,26 +592,35 @@ async def get_image(ad_id: int):
         for url_field in ["image_url", "thumbnail_url"]:
             url = info.get(url_field)
             if url and url.startswith("http"):
+                candidates = [_upgrade_fbcdn_image_url(url), url]
+                seen = set()
+                candidates = [u for u in candidates if not (u in seen or seen.add(u))]
                 try:
                     import httpx
                     async with httpx.AsyncClient(
                         follow_redirects=True, timeout=10.0,
                         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
                     ) as client:
-                        resp = await client.get(url)
-                        if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
-                            cache_path = os.path.join(CACHE_DIR, "images", f"{ad_id}.jpg")
-                            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                            with open(cache_path, "wb") as f:
-                                f.write(resp.content)
-                            from fastapi.responses import Response
-                            return Response(
-                                content=resp.content,
-                                media_type=resp.headers.get("content-type", "image/jpeg"),
-                                headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
-                            )
-                except Exception:
-                    pass
+                        for candidate_url in candidates:
+                            resp = await client.get(candidate_url)
+                            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image"):
+                                cache_path = os.path.join(CACHE_DIR, "images", f"{ad_id}.jpg")
+                                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                                with open(cache_path, "wb") as f:
+                                    f.write(resp.content)
+                                from fastapi.responses import Response
+                                return Response(
+                                    content=resp.content,
+                                    media_type=resp.headers.get("content-type", "image/jpeg"),
+                                    headers={"Cache-Control": "public, max-age=86400", "X-Fallback": url_field},
+                                )
+                except Exception as e:
+                    logger.debug("image_http_fetch_failed: ad_id=%d field=%s err=%s", ad_id, url_field, e)
+
+    # Last fallback: try snapshot extraction and reuse cached thumbnail as image.
+    extracted = await _try_snapshot_thumbnail_extract(ad_id, info)
+    if extracted:
+        return extracted
 
     # Fallback: placeholder SVG
     return _placeholder_response(ad_id)
@@ -395,9 +677,11 @@ async def get_creative(ad_id: int):
     """
     result = _find_best_creative(ad_id)
     if not result:
+        result = await _ensure_best_creative_cached(ad_id)
+    if not result:
         raise HTTPException(
             status_code=404,
-            detail="No cached media found for this ad",
+            detail=_download_error_detail("no_cached_media", "No cached media found for this ad", ad_id=ad_id),
         )
 
     path, mime, kind = result
@@ -433,9 +717,11 @@ async def download_creative(ad_id: int):
     """
     result = _find_best_creative(ad_id)
     if not result:
+        result = await _ensure_best_creative_cached(ad_id)
+    if not result:
         raise HTTPException(
             status_code=404,
-            detail="No cached media found for this ad",
+            detail=_download_error_detail("no_cached_media", "No cached media found for this ad", ad_id=ad_id),
         )
 
     path, mime, kind = result
@@ -566,9 +852,37 @@ class BulkDownloadRequest(BaseModel):
 
 class BulkDownloadResponse(BaseModel):
     download_url: str
+    requested_count: int
+    downloaded_count: int
     file_count: int
     total_size_bytes: int
     zip_filename: str
+    skipped_ids: list[int] = Field(default_factory=list)
+    skipped_reasons: dict[str, str] = Field(default_factory=dict)
+    skipped_reason_code: str | None = None
+
+
+def _load_ad_for_contract(ad_id: int):
+    from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad
+
+    session = SyncSessionLocal()
+    try:
+        return session.query(Ad).filter(Ad.id == ad_id).first()
+    finally:
+        session.close()
+
+
+def _build_bulk_skip_reason(ad_id: int) -> str:
+    ad = _load_ad_for_contract(ad_id)
+    if not ad:
+        return "missing_creative"
+
+    media_status = build_media_status_payload(ad)
+    for code in media_status.get("missing_reasons", []):
+        if code in BULK_DOWNLOAD_SKIPPED_REASON_CODES:
+            return code
+    return "missing_creative"
 
 
 @router.post("/bulk-download", response_model=BulkDownloadResponse)
@@ -579,10 +893,16 @@ async def bulk_download(request: BulkDownloadRequest):
     media_cache/downloads/.
     """
     if not request.ad_ids:
-        raise HTTPException(status_code=400, detail="ad_ids list cannot be empty")
+        raise HTTPException(
+            status_code=400,
+            detail=_download_error_detail("invalid_ad_ids", "ad_ids list cannot be empty"),
+        )
 
     if len(request.ad_ids) > 500:
-        raise HTTPException(status_code=400, detail="Maximum 500 ads per bulk download")
+        raise HTTPException(
+            status_code=400,
+            detail=_download_error_detail("invalid_ad_ids", "Maximum 500 ads per bulk download"),
+        )
 
     # Ensure downloads directory exists
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -596,13 +916,17 @@ async def bulk_download(request: BulkDownloadRequest):
     file_count = 0
     total_size = 0
     skipped_ids = []
+    skipped_reasons: dict[str, str] = {}
 
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for ad_id in request.ad_ids:
                 result = _find_best_creative(ad_id)
                 if not result:
+                    result = await _ensure_best_creative_cached(ad_id)
+                if not result:
                     skipped_ids.append(ad_id)
+                    skipped_reasons[str(ad_id)] = _build_bulk_skip_reason(ad_id)
                     continue
 
                 path, mime, kind = result
@@ -628,7 +952,7 @@ async def bulk_download(request: BulkDownloadRequest):
         logger.error("Bulk download ZIP creation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create ZIP archive: {str(e)}",
+            detail=_download_error_detail("zip_creation_failed", f"Failed to create ZIP archive: {str(e)}"),
         )
 
     if file_count == 0:
@@ -637,7 +961,11 @@ async def bulk_download(request: BulkDownloadRequest):
             os.remove(zip_path)
         raise HTTPException(
             status_code=404,
-            detail="No cached media found for any of the requested ads",
+            detail=_download_error_detail(
+                "no_cached_media",
+                "No cached media found for any of the requested ads",
+                ad_ids=request.ad_ids,
+            ),
         )
 
     if skipped_ids:
@@ -650,9 +978,14 @@ async def bulk_download(request: BulkDownloadRequest):
 
     return BulkDownloadResponse(
         download_url=download_url,
+        requested_count=len(request.ad_ids),
+        downloaded_count=file_count,
         file_count=file_count,
         total_size_bytes=total_size,
         zip_filename=zip_filename,
+        skipped_ids=skipped_ids,
+        skipped_reasons=skipped_reasons,
+        skipped_reason_code="no_cached_media" if skipped_ids else None,
     )
 
 
@@ -662,11 +995,17 @@ async def serve_bulk_download(filename: str):
     # Sanitize filename to prevent path traversal
     safe_name = os.path.basename(filename)
     if safe_name != filename or ".." in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+        raise HTTPException(
+            status_code=400,
+            detail=_download_error_detail("invalid_ad_ids", "Invalid filename"),
+        )
 
     path = os.path.join(DOWNLOAD_DIR, safe_name)
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Download file not found or expired")
+        raise HTTPException(
+            status_code=404,
+            detail=_download_error_detail("download_file_missing", "Download file not found or expired"),
+        )
 
     file_size = os.path.getsize(path)
 
@@ -752,8 +1091,8 @@ async def get_crawl_history(days: int = 30):
                     "total_ads_found": cj.total_ads_found,
                     "created_at": cj.created_at.isoformat() if cj.created_at else None,
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("crawl_jobs_query_failed: %s", str(e))
 
         # Build daily timeline
         daily_timeline = []
@@ -852,6 +1191,18 @@ async def get_media_status(ad_id: int):
     Reports whether thumbnail, image, and video are cached, their file
     sizes, and validity. Also provides an overall status assessment.
     """
+    from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad
+
+    session = SyncSessionLocal()
+    try:
+        ad = session.query(Ad).filter(Ad.id == ad_id).first()
+    finally:
+        session.close()
+
+    if not ad:
+        raise HTTPException(status_code=404, detail="Ad not found")
+
     # Thumbnail status
     thumb_path = os.path.join(CACHE_DIR, "thumbnails", f"{ad_id}.jpg")
     thumb_info = _file_info(thumb_path)
@@ -897,6 +1248,9 @@ async def get_media_status(ad_id: int):
         "video": video_info,
         "frames": {"count": frame_count},
         "overall": overall,
+        "media_status": build_media_status_payload(ad),
+        "lp_info": build_lp_info_payload(ad),
+        "media_cache_status": overall,
     }
 
 
@@ -1164,7 +1518,8 @@ async def get_media_stats():
                             thumb_valid += 1
                         else:
                             thumb_placeholder += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("thumb_header_check_failed: %s err=%s", f, e)
                         thumb_placeholder += 1
 
         # Image stats
@@ -1197,7 +1552,8 @@ async def get_media_stats():
                             img_valid += 1
                         else:
                             img_invalid += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("img_header_check_failed: %s err=%s", f, e)
                         img_invalid += 1
 
         # Video stats
@@ -1321,7 +1677,8 @@ async def get_ad_all_media(ad_id: int):
                     hdr = fh.read(4)
                 is_valid = hdr[:2] == b'\xff\xd8' or hdr[:4] == b'\x89PNG'
                 img_info["quality"] = 90 if is_valid else 20
-            except Exception:
+            except Exception as e:
+                logger.debug("image_quality_check_failed: ad_id=%d err=%s", ad_id, e)
                 img_info["quality"] = 0
         result["image"] = img_info
 
@@ -1594,7 +1951,8 @@ async def scenario_export(request: ScenarioExportRequest):
 
     # Write to temp file for download
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"scenario_{archetype}_{timestamp}{ext}"
+    safe_archetype = _safe_export_slug(archetype)
+    filename = f"scenario_{safe_archetype}_{timestamp}{ext}"
 
     # Store in downloads dir
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -1606,6 +1964,7 @@ async def scenario_export(request: ScenarioExportRequest):
         file_path,
         media_type=media_type,
         filename=filename,
+        background=BackgroundTask(_cleanup_file, file_path),
     )
 
 

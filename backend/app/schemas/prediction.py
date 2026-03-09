@@ -40,3 +40,22 @@ class FatigueResponse(BaseModel):
 class BatchFatigueRequest(BaseModel):
     ads: list[dict]
     platform: str = "youtube"
+
+
+class MLHitScoreRequest(BaseModel):
+    ad_id: int
+    ab_mode: str = Field(default="auto", pattern="^(auto|rule|ml)$")
+
+
+class MLHitScoreResponse(BaseModel):
+    ad_id: int
+    ab_mode: str
+    ab_arm: str
+    model_version: str
+    rule_score: float
+    ml_score: float | None = None
+    selected_score: float
+    rule_hit: bool
+    rule_level: str
+    trained_now: bool = False
+    train_info: dict = Field(default_factory=dict)

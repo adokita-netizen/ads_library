@@ -35,6 +35,13 @@ resource "aws_lambda_function" "api" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [
+      description,
+      environment[0].variables["META_ACCESS_TOKEN"],
+    ]
+  }
+
   tags = { Name = "${local.name_prefix}-api" }
 }
 
@@ -60,6 +67,12 @@ resource "aws_lambda_function" "sqs_ecs_trigger" {
       ECS_SUBNETS         = join(",", [aws_subnet.public_1.id, aws_subnet.public_2.id])
       ECS_SECURITY_GROUPS = aws_security_group.ecs.id
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      environment[0].variables["META_ACCESS_TOKEN"],
+    ]
   }
 
   tags = { Name = "${local.name_prefix}-sqs-ecs-trigger" }
@@ -95,7 +108,18 @@ resource "aws_lambda_function" "light_tasks" {
       TASK_BACKEND        = "sqs"
       SQS_HEAVY_QUEUE_URL = aws_sqs_queue.heavy_tasks.url
       SQS_LIGHT_QUEUE_URL = aws_sqs_queue.light_tasks.url
+      ECS_CLUSTER         = aws_ecs_cluster.main.name
+      ECS_TASK_DEFINITION = "${local.name_prefix}-worker"
+      ECS_CONTAINER_NAME  = "${local.name_prefix}-worker"
+      ECS_SUBNETS         = join(",", [aws_subnet.public_1.id, aws_subnet.public_2.id])
+      ECS_SECURITY_GROUPS = aws_security_group.ecs.id
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      environment[0].variables["META_ACCESS_TOKEN"],
+    ]
   }
 
   tags = { Name = "${local.name_prefix}-light-tasks" }

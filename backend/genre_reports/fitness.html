@@ -1,0 +1,2538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フィットネス - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>フィットネス</h1>
+<p class="summary">fitness | 58 ads | Avg views: 42.2K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">58</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">58</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">18</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">53</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in フィットネス ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>benefit</span>
+            <span style="color:#f59e0b;font-weight:600">16%</span>
+        </div>
+        <div class="pattern-bar" style="width:15.517241379310345%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>urgency</span>
+            <span style="color:#f59e0b;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>social_proof</span>
+            <span style="color:#f59e0b;font-weight:600">2%</span>
+        </div>
+        <div class="pattern-bar" style="width:1.7241379310344827%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>question</span>
+            <span style="color:#f59e0b;font-weight:600">2%</span>
+        </div>
+        <div class="pattern-bar" style="width:1.7241379310344827%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">7%</span>
+        </div>
+        <div class="pattern-bar" style="width:6.896551724137931%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>signup</span>
+            <span style="color:#22c55e;font-weight:600">5%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.172413793103448%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">2%</span>
+        </div>
+        <div class="pattern-bar" style="width:1.7241379310344827%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>desire</span>
+            <span style="color:#8b5cf6;font-weight:600">59%</span>
+        </div>
+        <div class="pattern-bar" style="width:58.620689655172406%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">21%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.689655172413794%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">9%</span>
+        </div>
+        <div class="pattern-bar" style="width:8.620689655172415%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>trust</span>
+            <span style="color:#8b5cf6;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">91%</span>
+        </div>
+        <div class="pattern-bar" style="width:91.37931034482759%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>numbers</span>
+            <span style="color:#3b82f6;font-weight:600">41%</span>
+        </div>
+        <div class="pattern-bar" style="width:41.37931034482759%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:10.344827586206897%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>testimonial</span>
+            <span style="color:#3b82f6;font-weight:600">7%</span>
+        </div>
+        <div class="pattern-bar" style="width:6.896551724137931%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">69%</span>
+        </div>
+        <div class="pattern-bar" style="width:68.96551724137932%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>article_lp</span>
+            <span style="color:#60a5fa;font-weight:600">28%</span>
+        </div>
+        <div class="pattern-bar" style="width:27.586206896551722%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">31%</span>
+        </div>
+        <div class="pattern-bar" style="width:31.03448275862069%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">29%</span>
+        </div>
+        <div class="pattern-bar" style="width:29.310344827586203%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">26%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.862068965517242%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">5%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.172413793103448%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>form</span>
+            <span style="color:#22c55e;font-weight:600">5%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.172413793103448%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" class=active>フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=696950691854397" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/43.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">BFTUNES.TV</div>
+            <div class="ad-desc">ダイエットならおまかせ
+BFTUNES.TV
+東近江で痩せたいなら
+トレーニングジムが2980円
+Learn More
+トレーニングジムが2980円
+BFTUNES.TV
+ジムが2980円
+東近江で瘦せたいなら
+Learn More
+東近江で瘦せたいなら
+BFTUNES.TV
+ダイエットで魅せる身体
+ジムが2980円
+Learn More
+ジムが2980円
+BFTUNES.TV
+まずは無料体験
+東近江でダイエットなら
+Learn More
+東近江でダイエットなら
+BFTUNES.TV
+理想の身体へ
+東近江でジムをお探しなら
+Learn More
+東近江でジムをお探しなら</div>
+            <div class="ad-meta"><span class="badge-views">798.3K views</span><span class="badge-hit">HIT 89</span><span>Tunes</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=696950691854397" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="http://www.bftunes.tv/" target="_blank">http://www.bftunes.tv/</a>
+            <div class="lp-detail">
+                <div><strong>TUNES</strong></div>
+                
+                <div style="margin-top:4px"><strong>CTA:</strong> READ MORE, お問い合わせ</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#E63823;border-radius:2px;border:1px solid #333" title="#E63823"></span><span style="display:inline-block;width:14px;height:14px;background:#4B8CFE;border-radius:2px;border:1px solid #333" title="#4B8CFE"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#313131;border-radius:2px;border:1px solid #333" title="#313131"></span><span style="display:inline-block;width:14px;height:14px;background:#00D084;border-radius:2px;border:1px solid #333" title="#00D084"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/43.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1313548189822063" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/40.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">,𝟬𝟬𝟬➡️無料‼️</div>
+            <div class="ad-desc">𖧷𝟭𝟮月限定キャンペーン𖧷何𝗞𝗴痩せたい❓ウエスト何𝗰𝗺引締めたい❓
+⁡
+各店舗先着𝟭𝟬名限定‼️
+𝟭𝟮月中のお問合せご入会で、
+初月会費➡️無料‼️
+そして体験トレーニング𝟱,𝟬𝟬𝟬➡️無料‼️
+さらに入会金𝟱𝟵,𝟴𝟬𝟬➡️無料✨
+⁡
+🉐最大𝟭𝟯𝟮,𝟬𝟬𝟬もお得に‼️
+⁡
+🔽キャンペーン適応条件🔽
+・𝟰回コース以上でのご入会
+・𝟲ヶ月以上の継続必須
+・𝟯ヶ月間のコース減不可
+⁡
+関東、関西に𝟰𝟬店舗以上展開中✨
+⁡
+既に多くのお問い合わせを頂いております🙇‍♂️
+早めのお問い合わせをオススメします💨💨
+⁡
+✅業界最安値
+✅契約期間の縛りなし
+✅追加料金一切なし
+✅手ぶらで通える
+✅プロテイン無料
+⁡
+𝘄𝗲𝗯・𝗱𝗺
+どちらからでも申込可能👍
+⁡
+#パーソナルジム
+#パーソナルトレーニング
+#フィットネス
+#ダイエット
+#ヒップアップ
+#腹筋
+#キャンペーン
+#キャンペーン実施中
+#無料
+#</div>
+            <div class="ad-meta"><span class="badge-views">404.1K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 93</span><span>パーソナルジム ティーバランス</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1313548189822063" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: urgency</span><span class="ca-tag ca-cta">CTA: signup</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">93</strong> (longevity:40, spend:20, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.01075268817204%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:21.50537634408602%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:21.50537634408602%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:10.75268817204301%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.225806451612903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://t-balance-gym.net/kansaigenderline/" target="_blank">https://t-balance-gym.net/kansaigenderline/</a>
+            <div class="lp-detail">
+                <div><strong>SNSで大人気のパーソナルジム/都内22店舗・神奈川4店舗・大阪10店舗 | ティーバランス</strong></div>
+                <div>芸能人やモデルも通う今注目のプライベートジムです。リバウンド無しの理想の体型を手に入れる為のトレーニングを指導します。カウンセリング後にあなただけのトレーニングメニューを制作。厳しい食事制限無しで女性に人気です。</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> 美脚＆美尻トレ, 高強度ウエストシェイプ法, くびれ＆超美尻トレーニング, バランス系美尻トレ, スクワット、男性</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/40.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=540806885783424" target="_blank"><img class="ad-creative" src="https://scontent.fitm5-1.fna.fbcdn.net/v/t39.35426-6/474907572_579568135056388_8428306567892355872_n.jpg?_tt6&amp;_nc_cat=107&amp;ccb=1-7&amp;_nc_sid=c53f8f&amp;_nc_ohc=pLj17-klwAYQ7kNvwEKTeVG&amp;_nc_oc=AdmI7tLl-Ogo2uWBFUbCUi6O640aKI_YQKAloUJgGAiv5aOesh7I8XVIG5lLnwXQLUA&amp;_nc_zt=14&amp;_nc_ht=scontent.fitm5-1.fna&amp;_nc_gid=dSTSG9SzyiSZI1hNpyYhWg&amp;oh=00_AfvhAw7RJeSBTwx5aL7a-igX1q0wh_VVDX-EW2TolMNPiw&amp;oe=69A799F6" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">遺伝子検査でリスク管理　定額通い放題パーソナルジム</div>
+            <div class="ad-desc">遺伝子検査でリスク管理　定額通い放題パーソナルジム
+SUSTINA-GYM.COM
+価格破壊パーソナルジム
+遺伝子検査＆パーソナルトレーニング＆キックボクシングの絶対的ダイエットを圧倒的コスパで実現
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">359.1K views</span><span class="badge-hit">HIT 89</span><span>豹と公園</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=540806885783424" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://sustina-gym.com/lp2" target="_blank">https://sustina-gym.com/lp2</a>
+            <div class="lp-detail">
+                <div><strong>サスティナ｜完全個室パーソナルトレーニング</strong></div>
+                <div>サスティナ｜完全個室パーソナルトレーニング</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> マンツーマンで予約する, セミパーソナルで予約する, 新宿落合REDで予約する, 新宿落合BLUEで予約する, 東中野で予約する</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#E4E4E4;border-radius:2px;border:1px solid #333" title="#E4E4E4"></span><span style="display:inline-block;width:14px;height:14px;background:#279ED0;border-radius:2px;border:1px solid #333" title="#279ED0"></span><span style="display:inline-block;width:14px;height:14px;background:#191970;border-radius:2px;border:1px solid #333" title="#191970"></span><span style="display:inline-block;width:14px;height:14px;background:#6495ED;border-radius:2px;border:1px solid #333" title="#6495ED"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/15.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1142500401149340" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/45.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">30名】入会金0円&amp;10%OFF</div>
+            <div class="ad-desc">【限定30名】入会金0円&amp;10%OFF
+川崎駅から3分の完全個室パーソナルジムRat
+週2回2ヶ月間でダイエットできる短期集中コースあります。
+手ぶらでOK！23時まで営業していますので、週に2回 仕事帰りに寄って、2ヶ月でキレイに変身しましょう！過去にダイエットに挫折してしまった方でも、パーソナルジムならしっかりサポートがあります♪
+なぜ、パーソナルジムなら痩せられるのか？
+他のパーソナルジムとの違いは？
+「変わりたい」と1mmでも感じたら、今すぐにページを確認してみてください。
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+SB.RATGYM.JP
+【川崎】楽しいから続けられる！完全個室のパーソナルジムRat
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">162.9K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 93</span><span>パーソナルジム Rat（ラット）</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1142500401149340" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: urgency</span><span class="ca-tag ca-cta">CTA: signup</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">93</strong> (longevity:40, spend:20, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.01075268817204%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:21.50537634408602%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:21.50537634408602%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:10.75268817204301%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.225806451612903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://sb.ratgym.jp/ab/article_01" target="_blank">https://sb.ratgym.jp/ab/article_01</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span><span style="display:inline-block;width:14px;height:14px;background:#F96C88;border-radius:2px;border:1px solid #333" title="#F96C88"></span><span style="display:inline-block;width:14px;height:14px;background:#FFEE57;border-radius:2px;border:1px solid #333" title="#FFEE57"></span><span style="display:inline-block;width:14px;height:14px;background:#FF0000;border-radius:2px;border:1px solid #333" title="#FF0000"></span><span style="display:inline-block;width:14px;height:14px;background:#D7EBFE;border-radius:2px;border:1px solid #333" title="#D7EBFE"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/45.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1504138947391179" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/41.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">「歩く」を体幹ダイエットに⁉️/</div>
+            <div class="ad-desc">\「歩く」を体幹ダイエットに⁉️/
+シリーズ累計販売数17万個突破！
+大ヒット体幹スニーカーから”きれいめデザイン”が登場✨
+独自設計の「特許インソール」が重心を自然と内側に。
+内側から引き締め、体幹が目覚めます👀
+さまざまファッションに合わせやすいので、いろいろなシーンで活躍✨
+【公式】バランスコアスニーカー3
+Learn More</div>
+            <div class="ad-meta"><span class="badge-views">134.1K views</span><span class="badge-hit">HIT 89</span><span>Amepla</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1504138947391179" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.amepla.jp/f/balance-core-sneaker3" target="_blank">https://www.amepla.jp/f/balance-core-sneaker3</a>
+            <div class="lp-detail">
+                <div><strong>【公式】バランスコアスニーカー3 BEAXIS(ビーアクシス)｜amepla（アメプラ）公式オンラインショップ</strong></div>
+                <div>「歩く」を体幹ダイエットに！ 大ヒットスニーカーから待望の新作が登場！</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#F8B62D;border-radius:2px;border:1px solid #333" title="#F8B62D"></span><span style="display:inline-block;width:14px;height:14px;background:#F39800;border-radius:2px;border:1px solid #333" title="#F39800"></span><span style="display:inline-block;width:14px;height:14px;background:#3BA9AC;border-radius:2px;border:1px solid #333" title="#3BA9AC"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#D4D4D4;border-radius:2px;border:1px solid #333" title="#D4D4D4"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/41.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1305098978298767" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/35.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#6</span>
+            <div class="ad-title">5が90件突破！おかげさまで皆様に選ばれています。あなたもスタートフィットネスでダイエット！</div>
+            <div class="ad-desc">多摩センターエリアで口コミ★5が90件突破！おかげさまで皆様に選ばれています。あなたもスタートフィットネスでダイエット！
+HTTPS://START-FITNESS.JP/PAGES/AUGUST
+口コミ★5が90件突破！
+入会金無料・手ぶらOK・キャンセル無料 初めての方でも安心して通える完全プライベートパーソナルジムです。
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">104.4K views</span><span class="badge-hit">HIT 88</span><span>START Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1305098978298767" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: social_proof</span><span class="ca-tag ca-cta">CTA: signup</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">88</strong> (longevity:39, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.507361268403166%;background:#22c55e" title="longevity: 39"></div><div class="score-seg" style="width:22.650056625141563%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.650056625141563%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.7950169875424695%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3975084937712348%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://start-fitness.jp/pages/august" target="_blank">https://start-fitness.jp/pages/august</a>
+            <div class="lp-detail">
+                <div><strong>スタートフィットネス多摩センター｜ダイエットパーソナルジム｜駅徒歩2分</strong></div>
+                <div>多摩センター駅徒歩2分｜30代からのダイエット｜手ぶらOK・食事指導無料・完全個室・キャンセルペナルティーなし！口コミ評価も地域No.1。まずは無料体験カウンセリングで気軽に相談！</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> コンテンツに進む, はじめての方へ, お客様の声, 脂肪冷却, 無料体験＆カウンセリング</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FBFFF3;border-radius:2px;border:1px solid #333" title="#FBFFF3"></span><span style="display:inline-block;width:14px;height:14px;background:#242424;border-radius:2px;border:1px solid #333" title="#242424"></span><span style="display:inline-block;width:14px;height:14px;background:#F3F3F3;border-radius:2px;border:1px solid #333" title="#F3F3F3"></span><span style="display:inline-block;width:14px;height:14px;background:#242833;border-radius:2px;border:1px solid #333" title="#242833"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/35.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=2690100991326685" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/37.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#7</span>
+            <div class="ad-title">‼️下半身をスッキリ見せて美ボディに導く。</div>
+            <div class="ad-desc">＼漕ぐだけ体幹トレーニング✨／
+一輪車型エアロバイクを漕ぐだけ‼️下半身をスッキリ見せて美ボディに導く。
+まるで一輪車に乗ったように座るだけで背筋が伸び、体幹を強化‼️
+30秒で組み立て可能なコンパクト設計で、片付けもラク♪
+ジムに行く時間がない方や、効率的に運動を始めたい方にもオススメ😊
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+WWW.AMEPLA.JP
+【お家がジムに⁉︎】スリムコアバイク2
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">97.2K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 78</span><span>Amepla</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=2690100991326685" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">78</strong> (longevity:38, spend:7, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:48.78048780487805%;background:#22c55e" title="longevity: 38"></div><div class="score-seg" style="width:8.857509627727858%;background:#3b82f6" title="spend: 7"></div><div class="score-seg" style="width:25.673940949935815%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:12.836970474967908%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.8510911424903718%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.amepla.jp/f/slim-core-bike2" target="_blank">https://www.amepla.jp/f/slim-core-bike2</a>
+            <div class="lp-detail">
+                <div><strong>【公式】今村式スリムコアバイク2 BEAXIS(ビーアクシス)｜amepla（アメプラ）公式オンラインショップ</strong></div>
+                <div>新感覚！一輪車型エアロバイク。漕ぐだけで簡単に体幹トレーニングができる。さらにエアロバイクのように有酸素運動にも！スリムコアバイク2でダイエット効率アップ。</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#3BA9AC;border-radius:2px;border:1px solid #333" title="#3BA9AC"></span><span style="display:inline-block;width:14px;height:14px;background:#F8B62D;border-radius:2px;border:1px solid #333" title="#F8B62D"></span><span style="display:inline-block;width:14px;height:14px;background:#F39800;border-radius:2px;border:1px solid #333" title="#F39800"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FEDE00;border-radius:2px;border:1px solid #333" title="#FEDE00"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/37.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1463884394822999&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#8</span>
+            <div class="ad-title">Take a break from scrolling!🎯</div>
+            <div class="ad-desc">Reach goals easily and get:
+💪 Step-by-step workout journey
+💪 Habit building system
+💪 Meal plan based on your goal
+💪 Easy-to-follow recipes
+💪 Strong muscles
+💪 More confidence, better sleep</div>
+            <div class="ad-meta"><span class="badge-views">65.1K views</span><span>Master Lee</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1463884394822999&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://madmuscles.com" target="_blank">https://madmuscles.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1102031652094073&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#9</span>
+            <div class="ad-title">Take a break from scrolling!🎯</div>
+            <div class="ad-desc">Reach goals easily and get:
+💪 Step-by-step workout journey
+💪 Habit building system
+💪 Meal plan based on your goal
+💪 Easy-to-follow recipes
+💪 Strong muscles
+💪 More confidence, better sleep</div>
+            <div class="ad-meta"><span class="badge-views">65.1K views</span><span>Master Lee</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1102031652094073&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://madmuscles.com" target="_blank">https://madmuscles.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1946667075903585&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#10</span>
+            <div class="ad-title">Take a break from scrolling!🎯</div>
+            <div class="ad-desc">Reach goals easily and get:
+💪 Step-by-step workout journey
+💪 Habit building system
+💪 Meal plan based on your goal
+💪 Easy-to-follow recipes
+💪 Strong muscles
+💪 More confidence, better sleep</div>
+            <div class="ad-meta"><span class="badge-views">65.1K views</span><span>Master Lee</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1946667075903585&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://madmuscles.com" target="_blank">https://madmuscles.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=661370373388076&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#11</span>
+            <div class="ad-title">Take a break from scrolling!🎯</div>
+            <div class="ad-desc">Reach goals easily and get:
+💪 Step-by-step workout journey
+💪 Habit building system
+💪 Meal plan based on your goal
+💪 Easy-to-follow recipes
+💪 Strong muscles
+💪 More confidence, better sleep</div>
+            <div class="ad-meta"><span class="badge-views">65.1K views</span><span>Master Lee</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=661370373388076&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://madmuscles.com" target="_blank">https://madmuscles.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1553320475853426&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#12</span>
+            <div class="ad-title">Take a break from scrolling!🎯</div>
+            <div class="ad-desc">Reach goals easily and get:
+💪 Step-by-step workout journey
+💪 Habit building system
+💪 Meal plan based on your goal
+💪 Easy-to-follow recipes
+💪 Strong muscles
+💪 More confidence, better sleep</div>
+            <div class="ad-meta"><span class="badge-views">64.6K views</span><span>Master Lee</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1553320475853426&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://madmuscles.com" target="_blank">https://madmuscles.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1566182391131891&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#13</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1566182391131891&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:2, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:56.75675675675676%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:43.24324324324324%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1557887775475509&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#14</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1557887775475509&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:0, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:20.0%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:80.0%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=900409165900953&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#15</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=900409165900953&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:1, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:30.434782608695656%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:69.56521739130436%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1264214005653682&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#16</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1264214005653682&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:1, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:30.434782608695656%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:69.56521739130436%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=886338080850163&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#17</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=886338080850163&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:2, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:56.75675675675676%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:43.24324324324324%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1650681426063043&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#18</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1650681426063043&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:0, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:20.0%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:80.0%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1583653826291721&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#19</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1583653826291721&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:2, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:56.75675675675676%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:43.24324324324324%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1510372913992926&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#20</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.9K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1510372913992926&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:2, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:56.75675675675676%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:43.24324324324324%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=25729712140032501&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#21</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.5K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=25729712140032501&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:0, spend:1)
+        <div class="score-bar"><div class="score-seg" style="width:22.222222222222225%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:77.77777777777779%;background:#3b82f6" title="spend: 1"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1259786366155079&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#22</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">軍隊式ワークアウトで、強くて無敵な自分へ 💪
+
+この7分間ワークアウトは、シンプルで分かりやすく、誰でも簡単に続けられます。脂肪燃焼、筋力アップをサポートし、最高のコンディションへ導きます。
+
+1️⃣ 簡単なクイズに回答
+2️⃣ あなた専用のトレーニングプランを取得
+3️⃣ たった4週間で、より強く、より鋭い自分を実感！ ⚡</div>
+            <div class="ad-meta"><span class="badge-views">3.5K views</span><span>Military Training System</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1259786366155079&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:1, spend:1)
+        <div class="score-bar"><div class="score-seg" style="width:33.333333333333336%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:66.66666666666667%;background:#3b82f6" title="spend: 1"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1325454522673430" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/57.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#23</span>
+            <div class="ad-title">@yosapark_moimoi</div>
+            <div class="ad-desc">新潟市江南区温めて痩せる専門店
+@yosapark_moimoi 
+「またダイエット失敗した…」
+そう思ったの、これで何回目？
+ジムもサプリも頑張ったのに、結果が出ない。
+でもそれ、努力不足じゃなく「代謝の低下」が
+原因かも？
+そんなあなたに体験してほしいのが、
+進化系よもぎ蒸し「ルルオン」× 高濃度水素酸素吸入
+✔ 体の芯からじんわり温めて
+✔ 巡りと代謝をぐんぐんUP！
+✔ 脂肪が燃えやすい体に自然と変わっていく
+実際に体験した方からは、
+「全然汗をかけなかったのに、信じられないくらい出た」
+「むくみがスッキリして、体が軽くなった」
+「無理せず−3kg。人生で初めてダイエットが続いてる」
+そんな嬉しい声がたくさん届いています。
+もう頑張るダイエットはやめて、
+体質から“痩せやすい体”に変わってみませんか？
+👇今すぐプロフィールからチェック！
+@yosapark_moimoi 
+⁂⁂⁂⁂</div>
+            <div class="ad-meta"><span class="badge-views">2.1K views</span><span class="badge-video">VIDEO</span><span>ヨサパークモイモイ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1325454522673430" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: trial</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">26</strong> (longevity:2, spend:5, active_bonus:5, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:9.803921568627452%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:19.607843137254903%;background:#3b82f6" title="spend: 5"></div><div class="score-seg" style="width:19.607843137254903%;background:#f59e0b" title="active_bonus: 5"></div><div class="score-seg" style="width:39.21568627450981%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:11.76470588235294%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://beauty.hotpepper.jp/kr/slnH000623189/?msockid=0536b2acd6076bf73ff6bd86d73d6ab0" target="_blank">https://beauty.hotpepper.jp/kr/slnH000623189/?msockid=0536b2acd6076bf73ff6bd86d73d6ab0</a>
+            <div class="lp-detail">
+                <div><strong>ヨサパーク モイモイ(YOSA PARK moimoi)｜ホットペッパービューティー</strong></div>
+                <div>【ホットペッパービューティー】ヨサパーク モイモイ(YOSA PARK moimoi)のサロン情報。サロンの内外装、お得なクーポン、ブログ、口コミ、住所、電話番号など知りたい情報満載です。ホットペッパービューティーの２４時間いつでもOKなネット予約を活用しよう！</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> ブックマークする, 詳細を見る, 空席確認・予約する, 女性, 男性</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#CCCCCC;border-radius:2px;border:1px solid #333" title="#CCCCCC"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#FBFAF5;border-radius:2px;border:1px solid #333" title="#FBFAF5"></span><span style="display:inline-block;width:14px;height:14px;background:#797979;border-radius:2px;border:1px solid #333" title="#797979"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/57.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=896354596491135&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#24</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.3K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=896354596491135&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:35.8974358974359%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:12.820512820512823%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:51.28205128205129%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=850737544689723&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#25</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.3K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=850737544689723&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:35.8974358974359%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:12.820512820512823%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:51.28205128205129%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=901416342504441&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#26</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=901416342504441&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:44.44444444444445%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:55.55555555555556%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=887244107453912&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#27</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=887244107453912&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:1, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:58.333333333333336%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:41.66666666666667%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=860097506995936&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#28</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=860097506995936&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:44.44444444444445%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:55.55555555555556%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=796599499513595&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#29</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=796599499513595&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:1, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:68.75%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:31.25%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=782532161576821&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#30</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=782532161576821&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:44.44444444444445%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:55.55555555555556%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=777969788707808&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#31</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=777969788707808&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:44.44444444444445%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:55.55555555555556%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=730662389984097&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#32</span>
+            <div class="ad-title">新しい自分へ変わろう！</div>
+            <div class="ad-desc">筋トレの目標をらくらく達成💪次のシンプルなプランに沿ってなりたい自分になろう。1.1分間クイズに答える📊 2.体重や身長、年齢、1日の活動、運動量によってカスタマイズされたワークアウトや食事プランをゲット 📲 3.各プログラムに従う(らくらく簡単) 😎</div>
+            <div class="ad-meta"><span class="badge-views">1.2K views</span><span>BetterMe Men</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=730662389984097&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:1, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:58.333333333333336%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:41.66666666666667%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-calisthenics.com" target="_blank">https://betterme-calisthenics.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1196073656058242&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#33</span>
+            <div class="ad-title">instagram.com</div>
+            <div class="ad-desc">🫶🏽
+
+Bom descanso gente ❤️🕊bjs
+.
+
+#gym #workout #fitnessmotivation #fitnessgirl #gymmotivation #running #motivation #japanesegirl #asian #black #tbt #fitnessmodel #physique #photooftheday #model #bodybuilding #筋トレ #ダイエット #筋トレ女子 #ボディメイク #美尻 #ヒップアップ #美脚 #likeforlike #gymlife #glutesworkout #legday</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>91reichel.fit</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1196073656058242&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:32.35294117647059%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:8.823529411764707%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:58.82352941176471%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://instagram.com" target="_blank">https://instagram.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=926001456452485&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#34</span>
+            <div class="ad-title">キングジム - SS50K-EXR テプラPRO 詰替用 EXロングテープ 白ラベル/黒文字 50mm KING JIM</div>
+            <div class="ad-desc">Joshin web</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Joshin webショップ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=926001456452485&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2025977531467648&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#35</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2025977531467648&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1650581162749525&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#36</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1650581162749525&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1481447403699531&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#37</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1481447403699531&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=912326285119029&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#38</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=912326285119029&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=907073635259207&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#39</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=907073635259207&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=919998010391600&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#40</span>
+            <div class="ad-title">עשי את המבחן 👉👉</div>
+            <div class="ad-desc">למה פילאטיס קיר באמת עובד?
+ניסית סוגי אימון שונים ושום דבר לא החזיק מעמד? הנה הסיבה שפילאטיס קיר הוא הפתרון המושלם עבורך:
+
+✅ קל למעקב — תנועות פשוטות ומודרכות.
+✅ ללא אימפקט — בלי קפיצות ובלי כאבי מפרקים.
+✅ תוצאות אמיתיות — התקדמות יציבה שנשמרת לאורך זמן.
+✅ אימונים קצרים — הכי קל להפוך להרגל יומיומי.
+✅ מתאים לכל גיל.
+✅ בלי תחושת עומס — פשוט ונגיש מהרגע הראשון.
+
+👉 עכשיו הזמן לעשות את המבחן ולקבל תוכ</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>28 Day Challenge</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=919998010391600&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: question</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-pilates.com" target="_blank">https://betterme-pilates.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=807225778334200&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#41</span>
+            <div class="ad-title">Fais le test 👉👉</div>
+            <div class="ad-desc">Si vous avez essayé plusieurs types d&#x27;entraînement sans jamais tenir sur la durée, voici pourquoi le Pilates au mur fonctionne :
+
+✅ Facile à suivre — des mouvements simples et guidés.
+✅ Sans impact — pas de sauts, donc pas de douleurs articulaires.
+✅ Résultats réels — une progression constante et durable.
+✅ Séances courtes — plus facile d&#x27;en faire une habitude.
+✅ Adapté à tous les âges.
+✅ Sans pre</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>28 Day Challenge</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=807225778334200&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-pilates.com" target="_blank">https://betterme-pilates.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=906060012176518&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#42</span>
+            <div class="ad-title">4.9/5.0 ⭐️⭐️⭐️⭐️⭐️</div>
+            <div class="ad-desc">椅子エクササイズで強く、元気な自分に！ 🪑💪
+
+1️⃣ 簡単なアンケートに答える
+2️⃣ あなた専用のプログラムを受け取る
+3️⃣ わずか4週間で体調の変化を実感！ 😎
+
+無理なく、リラックスしながら続けられる — シニア男性に最適です。🌟</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Mike&#x27;s Strength Challenge</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=906060012176518&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.fitme.expert" target="_blank">https://quiz.fitme.expert</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=906630488751025&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#43</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=906630488751025&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/362.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1619621082502440&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#44</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1619621082502440&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1538810920556027&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#45</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1538810920556027&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1282163230394526&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#46</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1282163230394526&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=947713091016660&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#47</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=947713091016660&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=905477212366817&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#48</span>
+            <div class="ad-title">28日間シニア向け椅子のヨガ</div>
+            <div class="ad-desc">らくらく目標達成💪 
+
+1️⃣1分間クイズに答える
+2️⃣パーソナルプログラムをゲット
+3️⃣トレーニング過程を記録＆モチベーションアップ
+4️⃣4週間で目に見える効果を実感！😍</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Tori Repa</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=905477212366817&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://betterme-chair-yoga.com" target="_blank">https://betterme-chair-yoga.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1424564745798636&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#49</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1424564745798636&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/366.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1254283250217904&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#50</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1254283250217904&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/365.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=937167885425001&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#51</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=937167885425001&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/364.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=927130970287163&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#52</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=927130970287163&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/363.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=900449496053131&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#53</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=900449496053131&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/361.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=898624866357653&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#54</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=898624866357653&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/360.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=883541234477026&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#55</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=883541234477026&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/359.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=850573651366649&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#56</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=850573651366649&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/358.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=785493464106387&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#57</span>
+            <div class="ad-title">今すぐ変身しよう！</div>
+            <div class="ad-desc">目標達成しよう！ 💪
+
+✅ 筋力＆持久力UP
+✅ 柔軟性を高める
+✅ バランス＆姿勢の向上
+✅ 関節痛の軽減
+
+テストをうけて今すぐワークアウトプランをゲット！👇</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Lessie Fitness</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=785493464106387&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://betterme-wallpilates.com" target="_blank">https://betterme-wallpilates.com</a>
+            <div class="lp-detail">
+                <div><strong>BetterMe</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#171717;border-radius:2px;border:1px solid #333" title="#171717"></span><span style="display:inline-block;width:14px;height:14px;background:#EFF1F4;border-radius:2px;border:1px solid #333" title="#EFF1F4"></span><span style="display:inline-block;width:14px;height:14px;background:#F9F9F9;border-radius:2px;border:1px solid #333" title="#F9F9F9"></span><span style="display:inline-block;width:14px;height:14px;background:#DF4142;border-radius:2px;border:1px solid #333" title="#DF4142"></span><span style="display:inline-block;width:14px;height:14px;background:#3C8786;border-radius:2px;border:1px solid #333" title="#3C8786"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/357.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1086829283627361&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#58</span>
+            <div class="ad-title">instagram.com</div>
+            <div class="ad-desc">. 
+珍しく体調悪そうだったから、うどんとかおかゆ作ろうかと思って一応リクエスト聞いたらまさかの具沢山そば笑
+　　　　　　　
+消化にいいとは言えないけどしっかり完食してくれて、翌朝5時からジム行ってました🏋️
+　　　　　　　　　
+　　　　　　　　　　　　
+　　　　　　　　　　　　　
+ 
+#夜ご飯 #献立 #蕎麦 #japanesefood #soba</div>
+            <div class="ad-meta"><span class="badge-views">330 views</span><span>hinagohan_n</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1086829283627361&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:16.0%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:4.0%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:80.0%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://instagram.com" target="_blank">https://instagram.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

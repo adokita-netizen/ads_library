@@ -40,29 +40,6 @@ function getPlatformColor(platform: string): string {
   return PLATFORM_COLORS[platform?.toLowerCase()] || "#9ca3af";
 }
 
-/* ─── Mock data generator ─── */
-
-function generateMockPoints(): AdPoint[] {
-  const platforms = ["facebook", "instagram", "tiktok"];
-  const titles = [
-    "美容液LP広告", "健康サプリ動画", "D2Cブランド訴求", "金融セミナー広告",
-    "ゲームアプリCM", "教育コース紹介", "食品EC広告", "旅行プラン訴求",
-    "コスメ新商品", "不動産投資LP", "アプリDL促進", "ダイエット商品",
-    "スキンケア動画", "投資セミナー案内", "英会話アプリ", "グルメ通販",
-    "フィットネス広告", "転職サイト訴求", "ペット用品EC", "家電比較LP",
-    "保険見積もり広告", "美容クリニック", "サブスク訴求", "ベビー用品LP",
-    "マッチングアプリ", "中古車査定LP", "プログラミング講座", "化粧水紹介",
-    "ウォーターサーバー", "オンラインヨガ",
-  ];
-  return titles.map((title, i) => ({
-    id: i + 1,
-    title,
-    hit_score: Math.round(Math.random() * 100),
-    cumulative_views: Math.round(Math.random() * 5000000),
-    platform: platforms[i % platforms.length],
-  }));
-}
-
 /* ─── SVG Constants ─── */
 
 const VB_W = 400;
@@ -86,9 +63,9 @@ export default function ScatterPlot({ onAdSelect }: ScatterPlotProps) {
         { params: { limit: 50 } }
       );
       const items = res?.items || res?.ads || (Array.isArray(res) ? res : []);
-      setPoints(Array.isArray(items) && items.length > 0 ? items : generateMockPoints());
+      setPoints(Array.isArray(items) && items.length > 0 ? items : []);
     } catch {
-      setPoints(generateMockPoints());
+      setPoints([]);
     } finally {
       setLoading(false);
     }

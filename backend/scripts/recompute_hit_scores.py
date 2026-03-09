@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import sync_session_scope
@@ -27,6 +28,38 @@ from app.models.ad_metrics import AdDailyMetrics, ProductRanking
 from app.services.ranking.ranking_service import compute_hit_score, compute_genre_stats
 
 JST = timezone(timedelta(hours=9))
+
+
+def _sync_product_rankings(session, top_ads: list[dict]) -> tuple[int, str | None]:
+    """Best-effort ProductRanking sync.
+
+    Some local DBs lag behind the ORM model. Hit-score recomputation should still
+    complete for ads even when ProductRanking cannot be queried safely.
+    """
+    try:
+        rankings = session.query(ProductRanking).all()
+    except SQLAlchemyError as exc:
+        session.rollback()
+        return 0, str(exc)
+
+    rankings_updated = 0
+    ad_scores = {ad["id"]: ad for ad in top_ads}
+    for ranking in rankings:
+        ad_info = ad_scores.get(ranking.ad_id)
+        if ad_info:
+            ranking.hit_score = ad_info["score"]
+            ranking.is_hit = ad_info["hit_level"] in ("hit", "mega_hit")
+            ad_obj = session.get(Ad, ranking.ad_id)
+            ad_meta = (ad_obj.ad_metadata or {}) if ad_obj else {}
+            extra = dict(ranking.extra_metadata or {})
+            extra["hit_level"] = ad_info["hit_level"]
+            extra["score_breakdown"] = ad_meta.get("latest_score_breakdown", {})
+            ranking.extra_metadata = extra
+            flag_modified(ranking, "extra_metadata")
+            rankings_updated += 1
+
+    session.commit()
+    return rankings_updated, None
 
 
 def main():
@@ -131,27 +164,8 @@ def main():
                 "is_still_running": meta.get("is_still_running", ad.last_seen_at is None),
             })
 
-        # Update ProductRanking records if they exist
-        rankings_updated = 0
-        rankings = session.query(ProductRanking).all()
-        # Build a lookup from ad scores
-        ad_scores = {ad["id"]: ad for ad in top_ads}
-        for ranking in rankings:
-            ad_info = ad_scores.get(ranking.ad_id)
-            if ad_info:
-                ranking.hit_score = ad_info["score"]
-                ranking.is_hit = ad_info["hit_level"] in ("hit", "mega_hit")
-                # Store hit_level and score_breakdown in extra_metadata
-                ad_obj = session.query(Ad).get(ranking.ad_id)
-                ad_meta = (ad_obj.ad_metadata or {}) if ad_obj else {}
-                extra = dict(ranking.extra_metadata or {})
-                extra["hit_level"] = ad_info["hit_level"]
-                extra["score_breakdown"] = ad_meta.get("latest_score_breakdown", {})
-                ranking.extra_metadata = extra
-                flag_modified(ranking, "extra_metadata")
-                rankings_updated += 1
-
         session.commit()
+        rankings_updated, rankings_error = _sync_product_rankings(session, top_ads)
 
         # Sort top ads by score descending
         top_ads.sort(key=lambda x: x["score"], reverse=True)
@@ -164,6 +178,8 @@ def main():
         print(f"  Total ads:              {total_ads}")
         print(f"  ad_metadata updated:    {updated_count}")
         print(f"  ProductRanking updated: {rankings_updated}")
+        if rankings_error:
+            print(f"  ProductRanking sync:    skipped ({rankings_error})")
         print(f"  Hit ads:                {hit_count}  (30+ days & score 45+)")
         print(f"  Mega-hit ads:           {mega_hit_count}  (60+ days & score 70+)")
         print(f"  Average hit score:      {avg_score:.1f}")

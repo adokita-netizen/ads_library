@@ -115,6 +115,30 @@ npm install
 npm run dev
 ```
 
+## API Review
+
+API compatibility review guidance lives in `docs/API_COMPATIBILITY_GUIDELINES.md`.
+
+You can validate the review assets with:
+
+```bash
+python backend/scripts/api_compatibility_review.py --check
+```
+
+## Session Continuity
+
+To keep working even if the terminal or session drops, use the checkpoint workflow in `docs/SESSION_CONTINUITY.md`.
+
+Common commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\checkpoint-session.ps1 -Note "before large change"
+powershell -ExecutionPolicy Bypass -File .\scripts\checkpoint-session.ps1 -Note "remote backup" -CreateGitCommit -PushToOrigin
+powershell -ExecutionPolicy Bypass -File .\scripts\resume-session.ps1
+```
+
+Backup branches use `checkpoint/<timestamp>` so they do not trigger the production deploy workflow on `main`.
+
 ## Project Structure
 
 ```

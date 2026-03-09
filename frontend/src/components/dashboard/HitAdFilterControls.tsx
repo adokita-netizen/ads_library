@@ -86,7 +86,7 @@ export default function HitAdFilterControls({
             </svg>
             <input
               type="text"
-              placeholder="商材名、広告主、テキストで検索..."
+              placeholder="商材名、広告主、個別ワードで検索... 例: GLP-1 / ピラティス / 24時間ジム"
               value={filters.searchText}
               onChange={(e) => setFilters((f) => ({ ...f, searchText: e.target.value }))}
               className="w-full h-8 pl-8 pr-3 rounded-lg border border-gray-200 text-[11px] text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#4A7DFF] focus:border-[#4A7DFF]"

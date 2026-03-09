@@ -3,6 +3,9 @@
 import React, { useState, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { formatNumber, formatYen } from "@/lib/format";
+import { useSearchUxSettings } from "@/lib/useSearchUxSettings";
+import SearchUxSettingsPanel from "../common/SearchUxSettingsPanel";
+import SearchFallbackChips, { type SearchFallbackSuggestion } from "../common/SearchFallbackChips";
 
 /* ─── Types ─── */
 
@@ -50,6 +53,8 @@ interface SearchResult {
   image_url?: string;
   fine_genre?: string;
   hit_score?: number;
+  matched_field?: string;
+  matched_terms?: string[];
 }
 
 /* ─── Creative Viewer (inline for comparison) ─── */
@@ -183,10 +188,20 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
   const [selectedInfo, setSelectedInfo] = useState<Map<number, SearchResult>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [relatedSuggestions, setRelatedSuggestions] = useState<SearchFallbackSuggestion[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [result, setResult] = useState<CompareResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const {
+    showSuggestionWeights,
+    setShowSuggestionWeights,
+    defaultSuggestionLimit,
+    setDefaultSuggestionLimit,
+    autoOpenDefaultSuggestions,
+    setAutoOpenDefaultSuggestions,
+    allowedSuggestionLimits,
+  } = useSearchUxSettings();
 
   const colors = ["#4A7DFF", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"];
 
@@ -195,35 +210,48 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
     setSearchQuery(q);
     if (!q.trim()) {
       setSearchResults([]);
+      setRelatedSuggestions([]);
       return;
     }
     setSearchLoading(true);
     try {
-      const res = await fetchApi<{ items?: SearchResult[] }>("/rankings/search-simple", {
-        params: { q, page_size: 15 },
+      const res = await fetchApi<{ items?: SearchResult[]; related_suggestions?: SearchFallbackSuggestion[] }>("/rankings/search-simple", {
+        params: { q, page_size: defaultSuggestionLimit },
       });
       setSearchResults(res.items || []);
+      setRelatedSuggestions(res.related_suggestions || []);
     } catch {
       setSearchResults([]);
+      setRelatedSuggestions([]);
     } finally {
       setSearchLoading(false);
     }
-  }, []);
+  }, [defaultSuggestionLimit]);
 
   // Load initial results when search opens
   const openSearch = useCallback(async () => {
     setShowSearch(true);
-    if (searchResults.length === 0 && !searchQuery) {
+    if (
+      autoOpenDefaultSuggestions &&
+      searchResults.length === 0 &&
+      !searchQuery
+    ) {
       setSearchLoading(true);
       try {
-        const res = await fetchApi<{ items?: SearchResult[] }>("/rankings/search-simple", {
-          params: { q: "", page_size: 15 },
+        const res = await fetchApi<{ items?: SearchResult[]; related_suggestions?: SearchFallbackSuggestion[] }>("/rankings/search-simple", {
+          params: { q: "", page_size: defaultSuggestionLimit },
         });
         setSearchResults(res.items || []);
+        setRelatedSuggestions(res.related_suggestions || []);
       } catch { /* ignore */ }
       finally { setSearchLoading(false); }
     }
-  }, [searchResults.length, searchQuery]);
+  }, [
+    autoOpenDefaultSuggestions,
+    defaultSuggestionLimit,
+    searchResults.length,
+    searchQuery,
+  ]);
 
   // Add ad to comparison
   const addAd = (result: SearchResult) => {
@@ -233,6 +261,7 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
     setShowSearch(false);
     setSearchQuery("");
     setSearchResults([]);
+    setRelatedSuggestions([]);
     setResult(null);
   };
 
@@ -322,11 +351,30 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
                       type="text"
                       value={searchQuery}
                       onChange={(e) => handleSearch(e.target.value)}
-                      placeholder="商品名・広告主名で検索..."
+                      placeholder="商品名・広告主名・個別ワードで検索... 例: GLP-1 / ピラティス"
                       className="w-full px-3 py-1.5 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4A7DFF]/30"
                       autoFocus
                     />
                   </div>
+                  {!searchQuery && (
+                    <div className="px-3 pb-2 border-b border-gray-100">
+                      <SearchUxSettingsPanel
+                        autoOpenDefaultSuggestions={autoOpenDefaultSuggestions}
+                        onToggleAutoOpen={() =>
+                          setAutoOpenDefaultSuggestions((prev) => !prev)
+                        }
+                        showSuggestionWeights={showSuggestionWeights}
+                        onToggleSuggestionWeights={() =>
+                          setShowSuggestionWeights((prev) => !prev)
+                        }
+                        defaultSuggestionLimit={defaultSuggestionLimit}
+                        allowedSuggestionLimits={allowedSuggestionLimits}
+                        onChangeSuggestionLimit={setDefaultSuggestionLimit}
+                        suggestionTypeStats={[]}
+                        suggestionTypeWeights={{}}
+                      />
+                    </div>
+                  )}
                   <div className="max-h-64 overflow-y-auto">
                     {searchLoading ? (
                       <div className="flex items-center justify-center py-6">
@@ -336,9 +384,19 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
                         </svg>
                       </div>
                     ) : searchResults.length === 0 ? (
-                      <p className="text-[11px] text-gray-400 text-center py-4">
-                        {searchQuery ? "結果が見つかりません" : "検索キーワードを入力"}
-                      </p>
+                      <div className="px-3 py-4">
+                        <p className="text-[11px] text-gray-400 text-center">
+                          {searchQuery ? "結果が見つかりません" : "GLP-1、マンジャロ、ピラティスなどで検索"}
+                        </p>
+                        {searchQuery && relatedSuggestions.length > 0 && (
+                          <div className="mt-3">
+                            <SearchFallbackChips
+                              suggestions={relatedSuggestions}
+                              onSelect={(suggestion) => handleSearch(suggestion.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       searchResults.filter(s => !selectedIds.includes(s.ad_id)).map(s => (
                         <button
@@ -367,6 +425,21 @@ export default function AdComparisonTool({ onAdSelect }: AdComparisonToolProps) 
                                 </span>
                               )}
                             </div>
+                            {!!s.matched_terms?.length && (
+                              <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                <span className="text-[9px] text-gray-400">
+                                  {s.matched_field || "一致"}:
+                                </span>
+                                {s.matched_terms.slice(0, 2).map((term) => (
+                                  <span
+                                    key={`${s.ad_id}-${term}`}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[9px] leading-none"
+                                  >
+                                    {term}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </button>
                       ))

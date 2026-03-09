@@ -26,91 +26,6 @@ interface TemplateLibraryProps {
   onSelectTemplate?: (templateId: string) => void;
 }
 
-// ─── Mock Data ───
-
-const MOCK_TEMPLATES: Template[] = [
-  {
-    id: "tmpl_001",
-    name: "美容系・質問型フック・限定CTA",
-    hit_rate: 78,
-    genres: ["beauty", "health"],
-    sections: [
-      { label: "質問フック", description: "悩みに共感する質問で開始" },
-      { label: "Before/After", description: "使用前後の変化を視覚的に提示" },
-      { label: "成分解説", description: "独自成分・技術の信頼性を訴求" },
-      { label: "口コミ紹介", description: "実際のユーザー体験談" },
-      { label: "限定CTA", description: "初回限定○○%OFF+返金保証" },
-    ],
-    created_at: "2026-02-15",
-  },
-  {
-    id: "tmpl_002",
-    name: "EC・数字訴求・緊急型",
-    hit_rate: 72,
-    genres: ["ec_d2c", "food"],
-    sections: [
-      { label: "数字フック", description: "「累計100万個突破」等の実績数値" },
-      { label: "USP提示", description: "競合との明確な差別化ポイント" },
-      { label: "社会的証明", description: "ランキング1位・メディア掲載" },
-      { label: "緊急CTA", description: "残りわずか・本日限定" },
-    ],
-    created_at: "2026-02-10",
-  },
-  {
-    id: "tmpl_003",
-    name: "アプリ・体験型ストーリー",
-    hit_rate: 65,
-    genres: ["app", "gaming"],
-    sections: [
-      { label: "問題提起", description: "日常の不便を具体的に描写" },
-      { label: "アプリ紹介", description: "UI画面のデモ・操作感の訴求" },
-      { label: "利用シーン", description: "実際の使用場面を複数提示" },
-      { label: "無料DL CTA", description: "今すぐ無料ダウンロード" },
-    ],
-    created_at: "2026-02-08",
-  },
-  {
-    id: "tmpl_004",
-    name: "金融・権威性訴求・信頼構築型",
-    hit_rate: 61,
-    genres: ["finance", "real_estate"],
-    sections: [
-      { label: "衝撃的データ", description: "知らないと損する数値の提示" },
-      { label: "専門家解説", description: "FP・専門家による信頼性の補強" },
-      { label: "事例紹介", description: "成功事例・シミュレーション結果" },
-      { label: "無料相談CTA", description: "まずは無料シミュレーション" },
-    ],
-    created_at: "2026-02-05",
-  },
-  {
-    id: "tmpl_005",
-    name: "教育・共感型・変身ストーリー",
-    hit_rate: 58,
-    genres: ["education"],
-    sections: [
-      { label: "共感フック", description: "「英語が苦手だった私が…」型の導入" },
-      { label: "挫折→転機", description: "失敗体験から出会いへの展開" },
-      { label: "メソッド紹介", description: "独自学習法の説明" },
-      { label: "成果証明", description: "TOEIC○点UP等の具体的成果" },
-      { label: "無料体験CTA", description: "7日間無料体験" },
-    ],
-    created_at: "2026-01-28",
-  },
-  {
-    id: "tmpl_006",
-    name: "食品・シズル感・衝動型",
-    hit_rate: 69,
-    genres: ["food", "ec_d2c"],
-    sections: [
-      { label: "シズルカット", description: "食欲をそそるビジュアルで開始" },
-      { label: "素材こだわり", description: "産地・製法のストーリー" },
-      { label: "食レポ", description: "実食リアクション・感想" },
-      { label: "お得セットCTA", description: "初回限定お試しセット" },
-    ],
-    created_at: "2026-01-20",
-  },
-];
-
 type SortKey = "hit_rate" | "newest";
 
 const genreLabelMap: Record<string, string> = Object.fromEntries(genreOptions.map((g) => [g.value, g.label]));
@@ -129,7 +44,7 @@ export default function TemplateLibrary({ onSelectTemplate }: TemplateLibraryPro
         setTemplates(Array.isArray(items) ? items : []);
       })
       .catch(() => {
-        setTemplates(MOCK_TEMPLATES);
+        setTemplates([]);
       })
       .finally(() => setLoading(false));
   }, []);

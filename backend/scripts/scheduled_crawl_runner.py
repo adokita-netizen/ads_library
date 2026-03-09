@@ -36,6 +36,7 @@ CRAWL_LOG_FILE = os.path.join(DATA_DIR, "crawl_log.json")
 
 # Default interval in hours
 DEFAULT_INTERVAL_HOURS = 24
+STRICT_MODE = str(os.getenv("CRAWL_RUNNER_STRICT", "0")).strip().lower() in {"1", "true", "yes"}
 
 # ── Logging setup ────────────────────────────────────────────────────
 
@@ -136,15 +137,24 @@ def run_script(script_name: str) -> dict:
             errors="replace",
         )
         elapsed = time.time() - start
+        stdout = result.stdout or ""
+        parsed_json = None
+        try:
+            parsed_json = json.loads(stdout)
+        except Exception:
+            parsed_json = None
 
         # Log stdout (limited)
-        if result.stdout:
-            for line in result.stdout.strip().split("\n")[-20:]:
+        if stdout:
+            for line in stdout.strip().split("\n")[-20:]:
                 logger.info("  %s: %s", script_name, line)
 
         if result.returncode == 0:
             logger.info("  %s completed in %.1fs", script_name, elapsed)
-            return {"status": "success", "elapsed_sec": round(elapsed, 1)}
+            payload = {"status": "success", "elapsed_sec": round(elapsed, 1)}
+            if parsed_json is not None:
+                payload["parsed_json"] = parsed_json
+            return payload
         else:
             stderr_msg = (result.stderr or "")[:500]
             logger.warning("  %s failed (exit %d): %s", script_name, result.returncode, stderr_msg)
@@ -163,7 +173,51 @@ def run_crawl_phase() -> dict:
     logger.info("=" * 60)
     logger.info("PHASE 1: CRAWL")
     logger.info("=" * 60)
-    return run_script("scheduled_crawl.py")
+    scheduled = run_script("scheduled_crawl.py")
+    boost = run_script("run_daily_meta_instagram_boost.py")
+    growth = run_script("run_jp_growth_pipeline.py")
+    meta_scheduler_summary = {}
+    if isinstance(growth.get("parsed_json"), dict):
+        meta_scheduler_summary = growth["parsed_json"].get("meta_scheduler_summary") or {}
+        if meta_scheduler_summary:
+            logger.info(
+                "meta_scheduler_summary",
+                new_saves=meta_scheduler_summary.get("new_saves", 0),
+                merged_updates=meta_scheduler_summary.get("merged_updates", 0),
+                backfilled_creatives=meta_scheduler_summary.get("backfilled_creatives", 0),
+                backfilled_lps=meta_scheduler_summary.get("backfilled_lps", 0),
+                queued_backfill_ads=meta_scheduler_summary.get("queued_backfill_ads", 0),
+                mode=meta_scheduler_summary.get("mode"),
+                token_status=((meta_scheduler_summary.get("meta_token") or {}).get("status")),
+            )
+    ok = scheduled.get("status") == "success" and (
+        boost.get("status") in {"success", "skipped"} or not STRICT_MODE
+    )
+    return {
+        "scheduled_crawl": scheduled,
+        "meta_instagram_boost": boost,
+        "jp_growth_pipeline": growth,
+        "meta_scheduler_summary": meta_scheduler_summary,
+        "strict_mode": STRICT_MODE,
+        "status": "success" if ok else "failed",
+    }
+
+
+def _require_phase_success(phase_name: str, phase_result: dict):
+    status = str((phase_result or {}).get("status") or "").lower()
+    if status == "success":
+        return
+    if phase_name == "crawl" and not STRICT_MODE:
+        # In non-strict mode, only fail hard when scheduled_crawl itself failed.
+        main_status = str(((phase_result or {}).get("scheduled_crawl") or {}).get("status") or "").lower()
+        if main_status == "success":
+            logger.warning(
+                "phase_soft_failed: phase=%s reason=%s",
+                phase_name,
+                "boost_failed_but_tolerated",
+            )
+            return
+    raise RuntimeError(f"{phase_name} phase failed")
 
 
 def run_analysis_phase() -> dict:
@@ -187,7 +241,8 @@ def run_analysis_phase() -> dict:
     total = len(results)
     logger.info("Analysis phase: %d/%d steps succeeded", success_count, total)
 
-    return results
+    status = "success" if success_count == total else ("failed" if STRICT_MODE else "partial")
+    return {"steps": results, "status": status}
 
 
 def run_media_phase() -> dict:
@@ -208,7 +263,8 @@ def run_media_phase() -> dict:
     total = len(results)
     logger.info("Media phase: %d/%d steps succeeded", success_count, total)
 
-    return results
+    status = "success" if success_count == total else ("failed" if STRICT_MODE else "partial")
+    return {"steps": results, "status": status}
 
 
 # ── Logging results ──────────────────────────────────────────────────
@@ -289,6 +345,7 @@ def main():
         # Phase 1: Crawl
         crawl_result = run_crawl_phase()
         log_entry["phases"]["crawl"] = crawl_result
+        _require_phase_success("crawl", crawl_result)
 
         # Brief pause
         time.sleep(3)
@@ -296,10 +353,14 @@ def main():
         # Phase 2: Analysis
         analysis_result = run_analysis_phase()
         log_entry["phases"]["analysis"] = analysis_result
+        if STRICT_MODE:
+            _require_phase_success("analysis", analysis_result)
 
         # Phase 3: Media
         media_result = run_media_phase()
         log_entry["phases"]["media"] = media_result
+        if STRICT_MODE:
+            _require_phase_success("media", media_result)
 
         # Count ads after
         ads_after = 0

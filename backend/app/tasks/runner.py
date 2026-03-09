@@ -8,6 +8,7 @@ Example:
 """
 
 import json
+import importlib
 import os
 import signal
 import sys
@@ -18,33 +19,34 @@ import structlog
 logger = structlog.get_logger()
 
 
-def _get_task_map() -> dict:
-    """Lazy-load task functions to avoid importing heavy modules at module level."""
-    from app.tasks.analysis_tasks import analyze_ad_task
-    from app.tasks.crawl_tasks import crawl_ads_task
-    from app.tasks.lp_tasks import (
-        crawl_and_analyze_lp_task,
-        analyze_own_lp_content_task,
-        batch_crawl_lps_task,
-    )
-    from app.tasks.media_tasks import enrich_ad_creative_task, extract_media_task
-    from app.tasks.generation_tasks import generate_script_task, generate_copy_task
-    from app.tasks.ranking_tasks import compute_rankings_task
-    from app.tasks.alert_tasks import detect_alerts_task
+_TASK_IMPORTS: dict[str, str] = {
+    "crawl_ads": "app.tasks.crawl_tasks:crawl_ads_task",
+    "analyze_ad": "app.tasks.analysis_tasks:analyze_ad_task",
+    "crawl_and_analyze_lp": "app.tasks.lp_tasks:crawl_and_analyze_lp_task",
+    "analyze_own_lp_content": "app.tasks.lp_tasks:analyze_own_lp_content_task",
+    "batch_crawl_lps": "app.tasks.lp_tasks:batch_crawl_lps_task",
+    "compute_rankings": "app.tasks.ranking_tasks:compute_rankings_task",
+    "detect_alerts": "app.tasks.alert_tasks:detect_alerts_task",
+    "generate_script": "app.tasks.generation_tasks:generate_script_task",
+    "generate_copy": "app.tasks.generation_tasks:generate_copy_task",
+    "enrich_ad_creative": "app.tasks.media_tasks:enrich_ad_creative_task",
+    "extract_media": "app.tasks.media_tasks:extract_media_task",
+    "analyze_video": "app.tasks.video_tasks:analyze_video_task",
+    "analyze_new_videos": "app.tasks.video_tasks:analyze_new_videos_task",
+    "report_video_analysis": "app.tasks.video_tasks:report_video_analysis_task",
+    "daily_video_ops": "app.tasks.video_tasks:daily_video_ops_task",
+    "mlops_retrain": "app.tasks.mlops_tasks:mlops_retrain_task",
+    "mlops_monitoring": "app.tasks.mlops_tasks:mlops_monitoring_task",
+}
 
-    return {
-        "crawl_ads": crawl_ads_task,
-        "analyze_ad": analyze_ad_task,
-        "crawl_and_analyze_lp": crawl_and_analyze_lp_task,
-        "analyze_own_lp_content": analyze_own_lp_content_task,
-        "batch_crawl_lps": batch_crawl_lps_task,
-        "compute_rankings": compute_rankings_task,
-        "detect_alerts": detect_alerts_task,
-        "generate_script": generate_script_task,
-        "generate_copy": generate_copy_task,
-        "enrich_ad_creative": enrich_ad_creative_task,
-        "extract_media": extract_media_task,
-    }
+
+def _load_task(task_name: str):
+    target = _TASK_IMPORTS.get(task_name)
+    if not target:
+        return None
+    module_name, func_name = target.split(":", 1)
+    module = importlib.import_module(module_name)
+    return getattr(module, func_name, None)
 
 
 class _FakeRequest:
@@ -95,10 +97,9 @@ def _timeout_handler(signum, frame):
 
 def run_task(task_name: str, kwargs: dict) -> dict:
     """Execute a task function directly (bypassing Celery)."""
-    task_map = _get_task_map()
-    task_func = task_map.get(task_name)
+    task_func = _load_task(task_name)
     if not task_func:
-        raise ValueError(f"Unknown task: {task_name}. Available: {list(task_map.keys())}")
+        raise ValueError(f"Unknown task: {task_name}. Available: {list(_TASK_IMPORTS.keys())}")
 
     logger.info("ecs_task_starting", task=task_name, kwargs_keys=list(kwargs.keys()),
                 timeout_seconds=TASK_TIMEOUT)

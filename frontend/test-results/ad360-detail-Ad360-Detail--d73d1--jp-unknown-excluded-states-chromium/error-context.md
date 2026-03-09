@@ -1,0 +1,501 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: "API接続OK / データ取得エラー: API応答はOKですが、データが0件です"
+      - generic [ref=e5]:
+        - button "再読み込み" [ref=e6] [cursor=pointer]
+        - button "閉じる" [ref=e7] [cursor=pointer]
+    - generic [ref=e8]:
+      - complementary [ref=e9]:
+        - generic [ref=e11]:
+          - generic [ref=e13]: V
+          - generic [ref=e14]: VAAP
+        - navigation "メインナビゲーション" [ref=e15]:
+          - generic [ref=e16]:
+            - combobox "ジャンルフィルタ" [ref=e17]:
+              - option "全ジャンル" [selected]
+              - option "分析"
+              - option "インサイト"
+              - option "運用"
+              - option "システム"
+            - textbox "メニュー検索" [ref=e18]:
+              - /placeholder: メニューを絞り込み
+          - generic [ref=e19]:
+            - paragraph [ref=e21]: 分析
+            - generic [ref=e22]:
+              - button "PRO DATABASE 注目" [ref=e23] [cursor=pointer]:
+                - img [ref=e25]
+                - generic [ref=e27]: PRO DATABASE
+                - generic [ref=e28]: 注目
+              - button "検索" [ref=e29] [cursor=pointer]:
+                - img [ref=e31]
+                - generic [ref=e33]: 検索
+              - button "トレンド" [ref=e34] [cursor=pointer]:
+                - img [ref=e36]
+                - generic [ref=e38]: トレンド
+              - button "分析" [ref=e39] [cursor=pointer]:
+                - img [ref=e41]
+                - generic [ref=e43]: 分析
+              - button "ヒートマップ 新" [ref=e44] [cursor=pointer]:
+                - img [ref=e46]
+                - generic [ref=e48]: ヒートマップ
+                - generic [ref=e49]: 新
+          - generic [ref=e50]:
+            - paragraph [ref=e53]: インサイト
+            - generic [ref=e54]:
+              - button "LP分析・USP設計" [ref=e55] [cursor=pointer]:
+                - img [ref=e57]
+                - generic [ref=e59]: LP分析・USP設計
+              - button "競合インテリジェンス" [ref=e60] [cursor=pointer]:
+                - img [ref=e62]
+                - generic [ref=e64]: 競合インテリジェンス
+              - button "ヒット広告分析" [ref=e65] [cursor=pointer]:
+                - img [ref=e67]
+                - generic [ref=e70]: ヒット広告分析
+              - button "比較ツール" [ref=e71] [cursor=pointer]:
+                - img [ref=e73]
+                - generic [ref=e75]: 比較ツール
+              - button "AI専門家" [ref=e76] [cursor=pointer]:
+                - img [ref=e78]
+                - generic [ref=e80]: AI専門家
+              - button "AIチャット 新" [ref=e81] [cursor=pointer]:
+                - img [ref=e83]
+                - generic [ref=e85]: AIチャット
+                - generic [ref=e86]: 新
+              - button "クリエイティブ生成" [ref=e87] [cursor=pointer]:
+                - img [ref=e89]
+                - generic [ref=e91]: クリエイティブ生成
+              - button "シナリオ作成" [ref=e92] [cursor=pointer]:
+                - img [ref=e94]
+                - generic [ref=e96]: シナリオ作成
+              - button "ブリーフ作成" [ref=e97] [cursor=pointer]:
+                - img [ref=e99]
+                - generic [ref=e101]: ブリーフ作成
+          - generic [ref=e102]:
+            - paragraph [ref=e105]: 運用
+            - generic [ref=e106]:
+              - button "自社広告管理" [ref=e107] [cursor=pointer]:
+                - img [ref=e109]
+                - generic [ref=e111]: 自社広告管理
+              - button "レポート" [ref=e112] [cursor=pointer]:
+                - img [ref=e114]
+                - generic [ref=e116]: レポート
+              - button "カレンダー" [ref=e117] [cursor=pointer]:
+                - img [ref=e119]
+                - generic [ref=e121]: カレンダー
+              - button "通知一覧 新" [ref=e122] [cursor=pointer]:
+                - img [ref=e124]
+                - generic [ref=e126]: 通知一覧
+                - generic [ref=e127]: 新
+              - button "お知らせ" [ref=e128] [cursor=pointer]:
+                - img [ref=e130]
+                - generic [ref=e132]: お知らせ
+              - button "コレクション" [ref=e133] [cursor=pointer]:
+                - img [ref=e135]
+                - generic [ref=e137]: コレクション
+              - button "チームスペース" [ref=e138] [cursor=pointer]:
+                - img [ref=e140]
+                - generic [ref=e142]: チームスペース
+              - button "キャンペーン" [ref=e143] [cursor=pointer]:
+                - img [ref=e145]
+                - generic [ref=e147]: キャンペーン
+              - button "マイリスト" [ref=e148] [cursor=pointer]:
+                - img [ref=e150]
+                - generic [ref=e152]: マイリスト
+          - generic [ref=e153]:
+            - paragraph [ref=e156]: システム
+            - generic [ref=e157]:
+              - button "メディア管理 新" [ref=e158] [cursor=pointer]:
+                - img [ref=e160]
+                - generic [ref=e162]: メディア管理
+                - generic [ref=e163]: 新
+              - button "管理ツール" [ref=e164] [cursor=pointer]:
+                - img [ref=e166]
+                - generic [ref=e169]: 管理ツール
+              - button "設定" [ref=e170] [cursor=pointer]:
+                - img [ref=e172]
+                - generic [ref=e175]: 設定
+        - paragraph [ref=e177]: Ctrl + / ショートカット一覧
+        - generic [ref=e179]:
+          - generic [ref=e180]: U
+          - generic [ref=e181]:
+            - paragraph [ref=e182]: ユーザー名
+            - paragraph [ref=e183]: Proプラン
+          - button "Switch to dark mode" [ref=e184] [cursor=pointer]:
+            - img [ref=e185]
+      - main [ref=e187]:
+        - generic [ref=e188]:
+          - generic [ref=e189]:
+            - generic [ref=e191]: V
+            - generic [ref=e192]: VAAP
+          - generic [ref=e193]:
+            - generic [ref=e194]:
+              - generic [ref=e195]: 画面読込
+              - generic [ref=e196]: 広告DB
+              - generic [ref=e197]: 75ms
+              - generic [ref=e198]: 平均 75ms
+            - button "Switch to dark mode" [ref=e199] [cursor=pointer]:
+              - img [ref=e200]
+            - button "通知" [ref=e203] [cursor=pointer]:
+              - img [ref=e205]
+        - generic [ref=e207]:
+          - generic [ref=e209]:
+            - generic [ref=e210]:
+              - generic [ref=e211]: セットアップ進捗
+              - generic [ref=e212]: 1/5
+            - list [ref=e215]:
+              - listitem [ref=e216]:
+                - img [ref=e217]
+                - generic [ref=e219]: プラットフォーム接続済み
+              - listitem [ref=e220]:
+                - generic [ref=e222]: 初回クロール完了
+              - listitem [ref=e223]:
+                - generic [ref=e225]: ランキング計算完了
+              - listitem [ref=e226]:
+                - generic [ref=e228]: Meta APIトークン設定済み
+              - listitem [ref=e229]:
+                - generic [ref=e231]: 定期クロール有効化
+            - generic [ref=e232]:
+              - button "設定を開く" [ref=e233] [cursor=pointer]:
+                - img [ref=e234]
+                - text: 設定を開く
+              - button "広告DBへ" [ref=e236] [cursor=pointer]:
+                - img [ref=e237]
+                - text: 広告DBへ
+          - generic [ref=e239]:
+            - generic [ref=e241]:
+              - generic [ref=e242]:
+                - heading "KPIカード" [level=3] [ref=e243]
+                - generic [ref=e244]:
+                  - button "デフォルト" [ref=e245] [cursor=pointer]
+                  - button "カスタム" [ref=e246] [cursor=pointer]
+              - generic [ref=e247]:
+                - generic [ref=e248]:
+                  - paragraph [ref=e249]: 総広告数
+                  - paragraph [ref=e250]: 0件
+                - generic [ref=e251]:
+                  - paragraph [ref=e252]: アクティブ広告
+                  - paragraph [ref=e253]: 0件
+                - generic [ref=e254]:
+                  - paragraph [ref=e255]: 平均スコア
+                  - paragraph [ref=e256]: 0.0pt
+                - generic [ref=e257]:
+                  - paragraph [ref=e258]: HIT率
+                  - paragraph [ref=e259]: 0.0%
+            - generic [ref=e261]:
+              - generic [ref=e262]:
+                - generic [ref=e263]:
+                  - generic [ref=e264]:
+                    - img [ref=e265]
+                    - heading "PRO DATABASE" [level=1] [ref=e267]
+                  - generic [ref=e268]: 広告データベース分析
+                - generic [ref=e269]:
+                  - button "共有" [ref=e270] [cursor=pointer]:
+                    - img [ref=e271]
+                    - generic [ref=e273]: 共有
+                  - button "保存済み検索" [ref=e275] [cursor=pointer]:
+                    - img [ref=e276]
+                    - text: 保存済み検索
+              - generic [ref=e279]:
+                - generic [ref=e280]: "マイビュー:"
+                - button "+ 新規" [ref=e281] [cursor=pointer]
+              - generic [ref=e282]:
+                - button "HIT広告のみ" [ref=e283] [cursor=pointer]
+                - button "動画のみ" [ref=e284] [cursor=pointer]
+                - button "配信中" [ref=e285] [cursor=pointer]
+                - button "今週の新着" [ref=e286] [cursor=pointer]
+                - button "スコア70+" [ref=e287] [cursor=pointer]
+              - generic [ref=e288]:
+                - generic [ref=e290]:
+                  - img
+                  - combobox "広告・商材・広告主を検索" [ref=e291]
+                  - button "検索条件を保存" [ref=e292] [cursor=pointer]:
+                    - img [ref=e293]
+                - generic [ref=e295]:
+                  - button "2日間" [ref=e296] [cursor=pointer]
+                  - button "1週間" [ref=e297] [cursor=pointer]
+                  - button "2週間" [ref=e298] [cursor=pointer]
+                  - button "1ヶ月" [ref=e299] [cursor=pointer]
+                  - button "全期間" [ref=e300] [cursor=pointer]
+                - generic [ref=e301]:
+                  - generic [ref=e302]: version
+                  - textbox "履歴基準日" [ref=e303]
+                - combobox "形式" [ref=e304]:
+                  - 'option "形式: すべて" [selected]'
+                  - 'option "形式: 動画"'
+                  - 'option "形式: バナー"'
+                  - 'option "形式: カルーセル"'
+                - combobox "遷移先タイプ" [ref=e305]:
+                  - 'option "遷移先: すべて" [selected]'
+                  - option "記事LP"
+                  - option "アンケートLP"
+                  - option "漫画記事LP"
+                  - option "その他"
+                - combobox "PR広告絞り込み" [ref=e306]:
+                  - 'option "PR/アフィリ: すべて" [selected]'
+                  - option "PR広告のみ"
+                  - option "アフィリエイトのみ"
+                - generic [ref=e307]:
+                  - checkbox "日本語広告のみ" [checked] [ref=e308]
+                  - generic [ref=e309]: 日本語広告のみ
+                - combobox "priority絞り込み" [ref=e310]:
+                  - 'option "優先度: すべて" [selected]'
+                  - option "高優先"
+                  - option "中優先"
+                  - option "低優先"
+                - generic [ref=e311]:
+                  - checkbox "要確認のみ" [ref=e312]
+                  - generic [ref=e313]: 要確認のみ
+                - generic [ref=e314]:
+                  - checkbox "実績指標を優先取得" [ref=e315]
+                  - generic [ref=e316]: 実績指標を優先取得
+                - button "運用ビュー" [ref=e317] [cursor=pointer]
+                - button "指標ガイド" [ref=e318] [cursor=pointer]
+                - generic [ref=e319]:
+                  - button "テーブル表示" [ref=e320] [cursor=pointer]:
+                    - img [ref=e321]
+                  - button "カード表示" [ref=e323] [cursor=pointer]:
+                    - img [ref=e324]
+                  - button "ギャラリー表示" [ref=e326] [cursor=pointer]:
+                    - img [ref=e327]
+              - generic [ref=e329]: "比較条件: 最新版 / 区切り 1週間"
+              - generic [ref=e330]: "表示件数: 4件 / 最終更新: 12:22:08/ table sort・page URL同期"
+              - generic [ref=e331]:
+                - combobox [ref=e332]:
+                  - option "全媒体" [selected]
+                  - option "Facebook"
+                  - option "Instagram"
+                  - option "TikTok"
+                  - option "YouTube"
+                  - option "LINE"
+                  - option "X"
+                - combobox [ref=e333]:
+                  - option "全トピック" [selected]
+                  - option "医療ダイエット (0)"
+                  - option "AGA (0)"
+                  - option "美容 (0)"
+                  - option "金融 (0)"
+                  - option "教育 (0)"
+                - generic [ref=e334]:
+                  - button "GLP-1/医療 0" [ref=e335] [cursor=pointer]
+                  - button "AGA 0" [ref=e336] [cursor=pointer]
+                  - button "美容 0" [ref=e337] [cursor=pointer]
+                  - button "金融 0" [ref=e338] [cursor=pointer]
+                - combobox [ref=e339]:
+                  - option "再生数順" [selected]
+                  - option "消化額順"
+                  - option "いいね順"
+                  - option "スコア順"
+                - button "フィルター" [ref=e340] [cursor=pointer]:
+                  - img [ref=e341]
+                  - text: フィルター
+                - button "低品質を再抽出" [ref=e343] [cursor=pointer]
+            - generic [ref=e344]:
+              - complementary [ref=e345]:
+                - generic [ref=e346]:
+                  - generic [ref=e347]:
+                    - textbox "ジャンル検索..." [ref=e348]
+                    - generic [ref=e349]:
+                      - generic [ref=e350]: 一致ジャンル 1件
+                      - generic [ref=e351]: 表示広告 4件
+                    - generic [ref=e352]:
+                      - button "全展開" [ref=e353] [cursor=pointer]
+                      - button "全折りたたみ" [ref=e354] [cursor=pointer]
+                  - button "すべての広告" [ref=e355] [cursor=pointer]:
+                    - generic [ref=e356]: すべての広告
+                  - generic [ref=e357]:
+                    - button "その他 0" [ref=e358] [cursor=pointer]:
+                      - generic [ref=e359]: その他
+                      - generic [ref=e360]: "0"
+                    - button [ref=e361] [cursor=pointer]
+              - generic [ref=e363]:
+                - generic [ref=e364]:
+                  - generic [ref=e365]:
+                    - generic [ref=e366]:
+                      - img [ref=e367]
+                      - 'textbox "タイトル・広告主・個別ワードで絞り込み... 例: GLP-1 / マンジャロ / ピラティス" [ref=e369]'
+                    - generic [ref=e370]:
+                      - generic [ref=e371]: "スコア範囲:"
+                      - generic [ref=e372]:
+                        - slider [ref=e373]: "0"
+                        - generic [ref=e374]: "0"
+                        - generic [ref=e375]: "-"
+                        - slider [ref=e376]: "100"
+                        - generic [ref=e377]: "100"
+                    - generic [ref=e378]:
+                      - generic [ref=e379]: 実績指標
+                      - generic [ref=e380]: 通常
+                    - button "カラム" [ref=e382] [cursor=pointer]:
+                      - img [ref=e383]
+                      - text: カラム
+                  - generic [ref=e385]:
+                    - generic [ref=e386]: "ジャンル:"
+                    - button "すべて" [ref=e387] [cursor=pointer]
+                    - button "美容・コスメ" [ref=e388] [cursor=pointer]
+                - generic [ref=e389]:
+                  - img [ref=e390]
+                  - generic [ref=e392]:
+                    - text: "ヒットライン: 累計再生"
+                    - strong [ref=e393]: 10,000
+                    - text: 回以上
+                - table "広告ランキング" [ref=e395]:
+                  - rowgroup [ref=e396]:
+                    - row "順位 サムネイル タイトル 広告主 ジャンル スコア 比較基準 AI商材 priority review_required 再生回数 予想消化増加額 尺" [ref=e397]:
+                      - columnheader "順位" [ref=e398] [cursor=pointer]:
+                        - generic [ref=e399]:
+                          - text: 順位
+                          - generic [ref=e400]:
+                            - img [ref=e401]
+                            - img [ref=e403]
+                      - columnheader "サムネイル" [ref=e405]
+                      - columnheader "タイトル" [ref=e406] [cursor=pointer]:
+                        - generic [ref=e407]:
+                          - text: タイトル
+                          - generic [ref=e408]:
+                            - img [ref=e409]
+                            - img [ref=e411]
+                      - columnheader "広告主" [ref=e413] [cursor=pointer]:
+                        - generic [ref=e414]:
+                          - text: 広告主
+                          - generic [ref=e415]:
+                            - img [ref=e416]
+                            - img [ref=e418]
+                      - columnheader "ジャンル" [ref=e420] [cursor=pointer]:
+                        - generic [ref=e421]:
+                          - text: ジャンル
+                          - generic [ref=e422]:
+                            - img [ref=e423]
+                            - img [ref=e425]
+                      - columnheader "スコア" [ref=e427] [cursor=pointer]:
+                        - generic [ref=e428]:
+                          - text: スコア
+                          - generic [ref=e429]:
+                            - img [ref=e430]
+                            - img [ref=e432]
+                      - columnheader "比較基準" [ref=e434]
+                      - columnheader "AI商材" [ref=e435] [cursor=pointer]:
+                        - generic [ref=e436]:
+                          - text: AI商材
+                          - generic [ref=e437]:
+                            - img [ref=e438]
+                            - img [ref=e440]
+                      - columnheader "priority" [ref=e442] [cursor=pointer]:
+                        - generic [ref=e443]:
+                          - text: priority
+                          - generic [ref=e444]:
+                            - img [ref=e445]
+                            - img [ref=e447]
+                      - columnheader "review_required" [ref=e449] [cursor=pointer]:
+                        - generic [ref=e450]:
+                          - text: review_required
+                          - generic [ref=e451]:
+                            - img [ref=e452]
+                            - img [ref=e454]
+                      - columnheader "再生回数" [ref=e456] [cursor=pointer]:
+                        - generic [ref=e457]:
+                          - text: 再生回数
+                          - generic [ref=e458]:
+                            - img [ref=e459]
+                            - img [ref=e461]
+                      - columnheader "予想消化増加額" [ref=e463] [cursor=pointer]:
+                        - generic [ref=e464]:
+                          - text: 予想消化増加額
+                          - generic [ref=e465]:
+                            - img [ref=e466]
+                            - img [ref=e468]
+                      - columnheader "尺" [ref=e470] [cursor=pointer]:
+                        - generic [ref=e471]:
+                          - text: 尺
+                          - generic [ref=e472]:
+                            - img [ref=e473]
+                            - img [ref=e475]
+                  - rowgroup [ref=e477]:
+                    - 'row "1 Ad360広告A 0:15 F Ad360広告A HIT GLP-1 91% JP AI判定 広告主A 美容・コスメ 82 -- 遷移先: その他 GLP-1 AI 高信頼 高優先 score 92 要確認 low_confidence 1万 +800 ¥12万 再生増加 800 0:15" [ref=e478] [cursor=pointer]':
+                      - cell "1" [ref=e479]:
+                        - generic [ref=e482]: "1"
+                      - cell "Ad360広告A 0:15 F" [ref=e483]:
+                        - generic [ref=e484]:
+                          - img "Ad360広告A" [ref=e485]
+                          - generic [ref=e486]: 0:15
+                          - generic "facebook" [ref=e488]: F
+                      - cell "Ad360広告A HIT GLP-1 91% JP AI判定" [ref=e489]:
+                        - generic [ref=e490]:
+                          - generic [ref=e491]:
+                            - generic "Ad360広告A" [ref=e492]
+                            - generic [ref=e493]:
+                              - img [ref=e494]
+                              - text: HIT
+                          - generic [ref=e497]:
+                            - text: GLP-1
+                            - generic [ref=e498]: 91%
+                          - generic [ref=e500]:
+                            - generic [ref=e501]: JP
+                            - generic [ref=e502]: AI判定
+                      - cell "広告主A" [ref=e503]:
+                        - generic [ref=e504]:
+                          - img [ref=e505]
+                          - generic "広告主A" [ref=e507]
+                      - cell "美容・コスメ" [ref=e508]:
+                        - generic [ref=e509]: 美容・コスメ
+                      - cell "82" [ref=e510]:
+                        - generic [ref=e514]: "82"
+                      - 'cell "-- 遷移先: その他" [ref=e515]':
+                        - generic [ref=e516]: "--"
+                        - generic [ref=e517]: "遷移先: その他"
+                      - cell "GLP-1 AI 高信頼" [ref=e518]:
+                        - generic [ref=e519]:
+                          - generic [ref=e520]: GLP-1
+                          - generic [ref=e521]:
+                            - generic [ref=e522]: AI
+                            - generic [ref=e523]: 高信頼
+                      - cell "高優先 score 92" [ref=e524]:
+                        - generic [ref=e526]:
+                          - generic [ref=e527]: 高優先
+                          - generic [ref=e528]: score 92
+                      - cell "要確認 low_confidence" [ref=e529]:
+                        - generic [ref=e530]:
+                          - generic [ref=e531]: 要確認
+                          - generic [ref=e532]: low_confidence
+                      - cell "1万 +800" [ref=e533]:
+                        - generic [ref=e534]:
+                          - img [ref=e535]
+                          - generic [ref=e538]: 1万
+                        - generic [ref=e539]: "+800"
+                      - cell "¥12万 再生増加 800" [ref=e540]:
+                        - generic [ref=e541]: ¥12万
+                        - generic [ref=e542]: 再生増加 800
+                      - cell "0:15" [ref=e543]
+                - generic [ref=e544]:
+                  - generic [ref=e545]:
+                    - generic [ref=e546]: 4件中 1-4件を表示
+                    - generic [ref=e547]: "(フィルター適用: 1件)"
+                  - generic [ref=e548]:
+                    - generic [ref=e549]:
+                      - generic [ref=e550]: "表示件数:"
+                      - combobox [ref=e551]:
+                        - option "25件"
+                        - option "50件" [selected]
+                        - option "100件"
+                    - generic [ref=e552]:
+                      - text: 1 / 1 ページ
+                      - generic [ref=e553]: (240ms)
+                    - generic [ref=e554]:
+                      - button "最初のページ" [disabled] [ref=e555]:
+                        - img [ref=e556]
+                      - button "前へ" [disabled] [ref=e558]
+                      - button "1" [ref=e559] [cursor=pointer]
+                      - button "次へ" [disabled] [ref=e560]
+                      - button "最後のページ" [disabled] [ref=e561]:
+                        - img [ref=e562]
+            - generic [ref=e565]:
+              - button "アクティビティフィード" [ref=e566] [cursor=pointer]:
+                - generic [ref=e567]:
+                  - img [ref=e568]
+                  - generic [ref=e570]: アクティビティフィード
+                - img [ref=e571]
+              - paragraph [ref=e575]: 最近のアクティビティはありません
+  - alert [ref=e576]
+```

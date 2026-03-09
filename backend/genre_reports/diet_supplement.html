@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ダイエットサプリ - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>ダイエットサプリ</h1>
+<p class="summary">diet_supplement | 4 ads | Avg views: 203.6K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in ダイエットサプリ ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>urgency</span>
+            <span style="color:#f59e0b;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>consultation</span>
+            <span style="color:#22c55e;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">50%</span>
+        </div>
+        <div class="pattern-bar" style="width:50.0%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>relief</span>
+            <span style="color:#8b5cf6;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">100%</span>
+        </div>
+        <div class="pattern-bar" style="width:100.0%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>numbers</span>
+            <span style="color:#3b82f6;font-weight:600">50%</span>
+        </div>
+        <div class="pattern-bar" style="width:50.0%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>article_lp</span>
+            <span style="color:#60a5fa;font-weight:600">75%</span>
+        </div>
+        <div class="pattern-bar" style="width:75.0%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">25%</span>
+        </div>
+        <div class="pattern-bar" style="width:25.0%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>form</span>
+            <span style="color:#22c55e;font-weight:600">100%</span>
+        </div>
+        <div class="pattern-bar" style="width:100.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">100%</span>
+        </div>
+        <div class="pattern-bar" style="width:100.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">75%</span>
+        </div>
+        <div class="pattern-bar" style="width:75.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">50%</span>
+        </div>
+        <div class="pattern-bar" style="width:50.0%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">50%</span>
+        </div>
+        <div class="pattern-bar" style="width:50.0%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" class=active>ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1265505858626922" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/32.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">SB-RAKURAKU-SUKKKIRI.DISCOVER-NEWS.TOKYO</div>
+            <div class="ad-desc">東大卒推奨「体重増加が止まらない方へ」
+SB-RAKURAKU-SUKKKIRI.DISCOVER-NEWS.TOKYO
+【本日80％OFF】最もお得な値段でGET！
+この歳でも、諦めないでよかったです。今までは、食べたいのに我慢してきつい食事制限をしていました。ラクビは１日一粒目安で、お値段もお手頃なので続けられそうです。腸活はお通じにも美容にも大事ですね！
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">313.2K views</span><span class="badge-hit">HIT 89</span><span>Beauty - diet</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1265505858626922" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://sb-rakuraku-sukkkiri.discover-news.tokyo/ab/laku-f3-64q-bsfb01" target="_blank">https://sb-rakuraku-sukkkiri.discover-news.tokyo/ab/laku-f3-64q-bsfb01</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#F38DAF;border-radius:2px;border:1px solid #333" title="#F38DAF"></span><span style="display:inline-block;width:14px;height:14px;background:#888888;border-radius:2px;border:1px solid #333" title="#888888"></span><span style="display:inline-block;width:14px;height:14px;background:#CCCCCC;border-radius:2px;border:1px solid #333" title="#CCCCCC"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/32.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1165707701549118" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/21.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">【今だけ初回半額！】ダイエットに最適な食事で理想のカラダへ！高タンパク低カロリーな食事とサポートでダイエット成功を！</div>
+            <div class="ad-desc">【今だけ初回半額！】ダイエットに最適な食事で理想のカラダへ！高タンパク低カロリーな食事とサポートでダイエット成功を！
+本気でダイエットするならマッスルデリ
+Learn More</div>
+            <div class="ad-meta"><span class="badge-views">291.6K views</span><span class="badge-hit">HIT 89</span><span>Muscle Deli（マッスルデリ）</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1165707701549118" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: urgency</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://muscledeli.jp/lp?u=regular-l5m5-35off_fb001&amp;argument=fBw7r35C&amp;dmai=a6674f0e684841" target="_blank">https://muscledeli.jp/lp?u=regular-l5m5-35off_fb001&amp;argument=fBw7r35C&amp;dmai=a6674f0e684841</a>
+            <div class="lp-detail">
+                <div><strong>＜初回50%OFF＞本気でダイエットするならマッスルデリ｜Muscle Deli</strong></div>
+                <div>本気でダイエットするならマッスルデリ　満足度92.7%（※自社アンケート調査結果）</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/21.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=4054299831452588" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/34.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">80キロが感動</div>
+            <div class="ad-desc">「腸から燃やす菌」体重80キロが感動
+【初回680円】1粒習慣で体重減少サポート、感動する人続出！！
+Learn More</div>
+            <div class="ad-meta"><span class="badge-views">160.2K views</span><span class="badge-hit">HIT 89</span><span>Beauty - diet</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=4054299831452588" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://sb-rakuraku-sukkkiri.discover-news.tokyo/ab/laku-f3-64q-bsfb01?utm_creative=09031" target="_blank">https://sb-rakuraku-sukkkiri.discover-news.tokyo/ab/laku-f3-64q-bsfb01?utm_creative=09031</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span><span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#F38DAF;border-radius:2px;border:1px solid #333" title="#F38DAF"></span><span style="display:inline-block;width:14px;height:14px;background:#888888;border-radius:2px;border:1px solid #333" title="#888888"></span><span style="display:inline-block;width:14px;height:14px;background:#CCCCCC;border-radius:2px;border:1px solid #333" title="#CCCCCC"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/34.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1890945674964350" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/36.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">PR #ノボノルディスクファーマ株式会社</div>
+            <div class="ad-desc">自己流ダイエットで結果が出ない…
+それ、肥満症かもしれません。
+医師と一緒に正しい減量を始めませんか？
+#PR #ノボノルディスクファーマ株式会社
+CLINIC.MYNAVI.JP
+【肥満症でお悩みのかた】その肥満、病院で治療できるかも。お医者さんに相談してみませんか？
+肥満症は医学的に定義された病気であり、専門的な治療が可能です。正しい情報を知り、適切な医療機関を見つけましょう。
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">49.2K views</span><span class="badge-hit">HIT 81</span><span>マイナビクリニックナビ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1890945674964350" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: consultation</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">81</strong> (longevity:32, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:39.72939729397294%;background:#22c55e" title="longevity: 32"></div><div class="score-seg" style="width:24.600246002460025%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:24.600246002460025%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:7.380073800738007%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.6900369003690034%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://clinic.mynavi.jp/lp/himansho/?utm_source=meta&amp;utm_medium=display&amp;utm_campaign=obesity2025" target="_blank">https://clinic.mynavi.jp/lp/himansho/?utm_source=meta&amp;utm_medium=display&amp;utm_campaign=obesity2025</a>
+            <div class="lp-detail">
+                <div><strong>【肥満症でお悩みのかた】その肥満、病院で治療できるかも。お医者さんに相談してみませんか？</strong></div>
+                <div>肥満症は医学的に定義された病気であり、専門的な治療が可能です。正しい情報を知り、適切な医療機関を見つけましょう。</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/36.png" alt="LP" loading="lazy">
+        </div>
+    </div></div>
+
+</body>
+</html>

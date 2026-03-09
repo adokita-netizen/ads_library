@@ -1,5 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import ThemeToggle from "./ThemeToggle";
+
 interface SidebarProps {
   currentView: string;
   onViewChange: (view: string) => void;
@@ -9,43 +12,47 @@ interface SidebarProps {
 
 const navSections = [
   {
+    title: "分析",
     items: [
       { id: "pro-database", label: "PRO DATABASE", icon: "chart", badge: "注目" },
       { id: "search", label: "検索", icon: "search" },
       { id: "trend", label: "トレンド", icon: "trending" },
       { id: "analysis", label: "分析", icon: "chart" },
+      { id: "heatmap", label: "ヒートマップ", icon: "chart", badge: "新" },
     ],
   },
   {
+    title: "インサイト",
     items: [
       { id: "lp-analysis", label: "LP分析・USP設計", icon: "document" },
-      { id: "competitive", label: "競合インテリジェンス", icon: "shield", badge: "新着" },
-      { id: "hit-ads", label: "ヒット広告分析", icon: "fire", badge: "新着" },
-      { id: "compare", label: "比較ツール", icon: "compare", badge: "新着" },
+      { id: "competitive", label: "競合インテリジェンス", icon: "shield" },
+      { id: "hit-ads", label: "ヒット広告分析", icon: "fire" },
+      { id: "compare", label: "比較ツール", icon: "compare" },
       { id: "ai-expert", label: "AI専門家", icon: "sparkle" },
-      { id: "ai-chat", label: "AIチャット", icon: "sparkle", badge: "新着" },
+      { id: "ai-chat", label: "AIチャット", icon: "sparkle", badge: "新" },
       { id: "creative", label: "クリエイティブ生成", icon: "wand" },
-      { id: "scenario", label: "シナリオ作成", icon: "document", badge: "新着" },
-      { id: "creative-brief", label: "ブリーフ作成", icon: "wand", badge: "新着" },
+      { id: "scenario", label: "シナリオ作成", icon: "document" },
+      { id: "creative-brief", label: "ブリーフ作成", icon: "wand" },
     ],
   },
   {
+    title: "運用",
     items: [
-      { id: "meta-ads", label: "自社広告管理", icon: "megaphone", badge: "新着" },
-      { id: "reports", label: "レポート", icon: "chart", badge: "新着" },
-      { id: "calendar", label: "カレンダー", icon: "calendar", badge: "新着" },
-      { id: "notifications", label: "通知一覧", icon: "bell", badge: "新着" },
+      { id: "meta-ads", label: "自社広告管理", icon: "megaphone" },
+      { id: "reports", label: "レポート", icon: "chart" },
+      { id: "calendar", label: "カレンダー", icon: "calendar" },
+      { id: "notifications", label: "通知一覧", icon: "bell", badge: "新" },
       { id: "alerts", label: "お知らせ", icon: "bell" },
       { id: "collections", label: "コレクション", icon: "folder" },
       { id: "team", label: "チームスペース", icon: "users" },
       { id: "campaign", label: "キャンペーン", icon: "folder" },
       { id: "mylist", label: "マイリスト", icon: "bookmark" },
-      { id: "store", label: "VAAPストア", icon: "store" },
     ],
   },
   {
+    title: "システム",
     items: [
-      { id: "media-management", label: "メディア管理", icon: "image", badge: "新着" },
+      { id: "media-management", label: "メディア管理", icon: "image", badge: "新" },
       { id: "admin", label: "管理ツール", icon: "settings" },
       { id: "settings", label: "設定", icon: "settings" },
     ],
@@ -124,11 +131,6 @@ const icons: Record<string, JSX.Element> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
     </svg>
   ),
-  store: (
-    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z" />
-    </svg>
-  ),
   bell: (
     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
@@ -148,24 +150,41 @@ const icons: Record<string, JSX.Element> = {
 };
 
 export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobileClose }: SidebarProps) {
+  const [sectionFilter, setSectionFilter] = useState<string>("all");
+  const [searchFilter, setSearchFilter] = useState("");
+
   const handleNav = (id: string) => {
     onViewChange(id);
     onMobileClose?.();
   };
 
+  const filteredSections = useMemo(() => {
+    const query = searchFilter.trim().toLowerCase();
+    return navSections
+      .filter((section) => sectionFilter === "all" || section.title === sectionFilter)
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (!query) return true;
+          return item.label.toLowerCase().includes(query);
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [sectionFilter, searchFilter]);
+
   const sidebarContent = (
     <>
       {/* Logo */}
-      <div className="flex h-14 items-center justify-between px-5 border-b border-gray-100">
+      <div className="flex h-14 items-center justify-between px-5 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-[#4A7DFF] flex items-center justify-center">
             <span className="text-white text-xs font-black">V</span>
           </div>
-          <span className="text-[15px] font-bold text-gray-900">VAAP</span>
+          <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">VAAP</span>
         </div>
         {/* Close button (mobile only) */}
         {onMobileClose && (
-          <button onClick={onMobileClose} className="md:hidden p-1 text-gray-400 hover:text-gray-600" aria-label="メニューを閉じる">
+          <button onClick={onMobileClose} className="md:hidden p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-200" aria-label="メニューを閉じる">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -175,10 +194,35 @@ export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobil
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto custom-scrollbar py-3" aria-label="メインナビゲーション">
-        {navSections.map((section, sIdx) => (
+        <div className="px-3 pb-2 space-y-2">
+          <select
+            value={sectionFilter}
+            onChange={(e) => setSectionFilter(e.target.value)}
+            className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[12px] text-gray-700 dark:text-gray-200"
+            aria-label="ジャンルフィルタ"
+          >
+            <option value="all">全ジャンル</option>
+            {navSections.map((section) => (
+              <option key={section.title} value={section.title}>
+                {section.title}
+              </option>
+            ))}
+          </select>
+          <input
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[12px] text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            placeholder="メニューを絞り込み"
+            aria-label="メニュー検索"
+          />
+        </div>
+        {filteredSections.map((section, sIdx) => (
           <div key={sIdx}>
-            {sIdx > 0 && <div className="my-2 mx-4 border-t border-gray-100" />}
-            <div className="space-y-0.5 px-2">
+            {sIdx > 0 && <div className="my-3 mx-4 border-t border-gray-100 dark:border-gray-800" />}
+            <div className="px-4 pb-1 pt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{section.title}</p>
+            </div>
+            <div className="space-y-1 px-2">
               {section.items.map((item) => {
                 const isActive = currentView === item.id;
                 return (
@@ -186,13 +230,13 @@ export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobil
                     key={item.id}
                     onClick={() => handleNav(item.id)}
                     aria-current={isActive ? "page" : undefined}
-                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A7DFF]/40 ${
                       isActive
-                        ? "bg-[#EEF2FF] text-[#4A7DFF]"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        ? "bg-[#EEF2FF] text-[#4A7DFF] shadow-[inset_0_0_0_1px_rgba(74,125,255,0.2)]"
+                        : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
                     }`}
                   >
-                    <span className={isActive ? "text-[#4A7DFF]" : "text-gray-400"} aria-hidden="true">
+                    <span className={isActive ? "text-[#4A7DFF]" : "text-gray-400 dark:text-gray-500"} aria-hidden="true">
                       {icons[item.icon]}
                     </span>
                     <span>{item.label}</span>
@@ -210,25 +254,26 @@ export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobil
       </nav>
 
       {/* Keyboard shortcut hint */}
-      <div className="px-4 py-1.5 border-t border-gray-100">
-        <p className="text-[10px] text-gray-400 text-center">
-          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 border border-gray-200 rounded">Ctrl</kbd>
+      <div className="px-4 py-1.5 border-t border-gray-100 dark:border-gray-800">
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded">Ctrl</kbd>
           {" + "}
-          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 border border-gray-200 rounded">/</kbd>
+          <kbd className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded">/</kbd>
           {" ショートカット一覧"}
         </p>
       </div>
 
       {/* Footer */}
-      <div className="border-t border-gray-100 px-4 py-3">
+      <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500">
+          <div className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-300">
             U
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-700 truncate">ユーザー名</p>
-            <p className="text-[10px] text-gray-400">Proプラン</p>
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">ユーザー名</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500">Proプラン</p>
           </div>
+          <ThemeToggle compact />
         </div>
       </div>
     </>
@@ -237,7 +282,7 @@ export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobil
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex h-full w-56 flex-col border-r border-gray-200 bg-white shrink-0">
+      <aside className="hidden md:flex h-full w-56 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
         {sidebarContent}
       </aside>
 
@@ -245,7 +290,7 @@ export default function Sidebar({ currentView, onViewChange, mobileOpen, onMobil
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={onMobileClose} />
-          <aside className="relative flex h-full w-64 flex-col bg-white shadow-xl">
+          <aside className="relative flex h-full w-64 flex-col bg-white dark:bg-gray-900 shadow-xl">
             {sidebarContent}
           </aside>
         </div>

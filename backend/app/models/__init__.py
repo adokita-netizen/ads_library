@@ -37,6 +37,10 @@ from app.models.competitive_intel import (
     FunnelStep,
     TrendPrediction,
 )
+from app.models.conversation import Conversation
+from app.models.alert_rule import AlertRule
+from app.models.alert_history import AlertHistory
+from app.models.data_quality import DataQualitySnapshot
 
 __all__ = [
     "Ad",
@@ -74,4 +78,8 @@ __all__ = [
     "LPFunnel",
     "FunnelStep",
     "TrendPrediction",
+    "Conversation",
+    "AlertRule",
+    "AlertHistory",
+    "DataQualitySnapshot",
 ]

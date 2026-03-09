@@ -1,5 +1,120 @@
 # Agent A: Status Report
 
+## 2026-03-03 Immediate Execution (A48)
+- Priority: `P0`
+- Start now: `.agent-tasks/A/A48_copy_creative_topic_knowledge_expansion.md`
+- Scope:
+  - Build topic signals from ad copy + OCR + LP keywords
+  - Persist `topic_label`, `topic_confidence`, `matched_terms`, `needs_topic_review`
+  - Store daily dictionary suggestions in metadata
+- Validation:
+  - Add/extend backend tests for topic inference output schema
+  - Provide before/after gap report for GLP-1/AGA + 3 additional categories
+- Handoff to C:
+  - Output field contract and sample payloads by end of first pass
+
+## 2026-03-07 Update (A48)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/tasks/metrics_tasks.py`
+  - `backend/scripts/validate_metadata_schema.py`
+  - `backend/tests/test_a48_topic_enrichment.py`
+- Implemented:
+  - Added daily multi-source topic enrichment using ad copy + OCR + LP keywords
+  - Persisted `topic_label`, `topic_confidence`, `matched_terms`, `topic_candidates`, `needs_topic_review`, `topic_source_scores`
+  - Added daily `topic_dictionary_suggestions` accumulation in `ad_metadata`
+  - Added daily topic gap report persistence + alert logging for major categories
+- Validation:
+  - `python -m pytest backend/tests/test_a48_topic_enrichment.py -q`
+  - `python -m pytest backend/tests/test_c44_topic_classification_contract.py backend/tests/test_c45_dictionary_online_learning_contract.py -q`
+
+## 2026-03-08 Update (A42)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/tasks/metrics_tasks.py`
+  - `backend/scripts/validate_metadata_schema.py`
+  - `backend/tests/test_a48_topic_enrichment.py`
+- Implemented:
+  - Expanded topic enrichment to persist `topic_tags`, `topic_evidence`, and `hit_drivers`
+  - Added rule-based hit driver inference for appeal, offer, CTA, and visual signals across copy/OCR/LP sources
+  - Extended daily topic gap audit with `false_negative_report.top_candidates` for manual review prioritization
+- Validation:
+  - `python -m pytest backend/tests/test_a48_topic_enrichment.py -q`
+  - `python -m pytest backend/tests/test_c44_topic_classification_contract.py -q`
+
+## 2026-03-08 Update (A43)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/services/crawl_knowledge_pipeline.py`
+  - `backend/app/tasks/crawl_tasks.py`
+  - `backend/app/api/endpoints/ads.py`
+  - `backend/app/schemas/ad.py`
+  - `backend/scripts/scheduled_crawl.py`
+  - `backend/tests/test_a43_continuous_crawl_knowledge_pipeline.py`
+- Implemented:
+  - Added shared post-crawl knowledge pipeline that aggregates `topic`, `evidence_terms`, `hit_drivers`, `source_ad_ids`, `updated_at`
+  - Wired manual/scheduled crawl paths and inline crawl fallback to the same knowledge snapshot + run log flow
+  - Added trigger metadata (`trigger_source`, `schedule_window`, `priority`) so scheduled morning/noon/night runs are distinguishable in pipeline logs
+- Validation:
+  - `python -m pytest backend/tests/test_a43_continuous_crawl_knowledge_pipeline.py -q`
+
+## 2026-03-08 Update (A44)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/tasks/metrics_tasks.py`
+  - `backend/tests/test_a39_data_freshness_lp_intelligence.py`
+  - `backend/tests/test_a44_false_negative_hunt_automation.py`
+- Implemented:
+  - Added daily `false_negative_hunt` generation on top of topic gap audit with rule hits for `vocab_match`, `previous_day_diff`, `competitor_compare`
+  - Added nightly recrawl queue generation from false-negative evidence terms
+  - Added weekly recovery summary from persisted daily false-negative history
+- Validation:
+  - `python -m pytest backend/tests/test_a44_false_negative_hunt_automation.py -q`
+  - `python -m pytest backend/tests/test_a39_data_freshness_lp_intelligence.py -q`
+
+## 2026-03-08 Update (A45)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/services/full_cycle_data_taskpack.py`
+  - `backend/scripts/full_cycle_data_taskpack.py`
+  - `backend/tests/test_a45_full_cycle_data_taskpack.py`
+- Implemented:
+  - Added full-cycle orchestration for low-volume auto-recrawl judgment, dictionary update planning, false-negative hunt reuse, and failed-record retry/quarantine handling
+  - Added CLI entrypoint to run the full A45 taskpack end-to-end on a target date
+  - Added retry-vs-quarantine handling for failed media and unrecoverable incomplete records
+- Validation:
+  - `python -m pytest backend/tests/test_a45_full_cycle_data_taskpack.py -q`
+
+## 2026-03-08 Update (A46)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/services/ad360_unification.py`
+  - `backend/app/api/endpoints/rankings.py`
+  - `backend/scripts/audit_ad360_completeness.py`
+  - `backend/tests/test_a46_ad360_data_unification.py`
+- Implemented:
+  - Added Ad360 required-field schema and completeness summary with fallback fill for `final_url` / `lp_meta`
+  - Added per-ad Ad360 completeness audit that marks `<80%` records for reprocess and `<50%` records for quarantine
+  - Extended `get_ad360` response with top-level `completeness` while keeping the existing section contract stable
+- Validation:
+  - `python -m pytest backend/tests/test_a46_ad360_data_unification.py -q`
+  - `python -m pytest backend/tests/test_c48_ad360_contract.py -q`
+
+## 2026-03-08 Update (A47)
+- Status: `[COMPLETED]`
+- Files:
+  - `backend/app/services/meta_creative_extraction_ops.py`
+  - `backend/app/tasks/metrics_tasks.py`
+  - `backend/tests/test_a39_data_freshness_lp_intelligence.py`
+  - `backend/tests/test_a47_meta_creative_extraction_precision.py`
+- Implemented:
+  - Added ad-level extraction audit rows with normalized `extract_source`, `extract_quality_score`, `creative_complete`, and failure reason tracking
+  - Added low-quality re-extraction queue builder that sets fixed preferred source order with `api_render_ad` first
+  - Added daily extraction precision audit to the daily metrics pipeline with failure reason ranking
+- Validation:
+  - `python -m pytest backend/tests/test_a47_meta_creative_extraction_precision.py -q`
+  - `python -m pytest backend/tests/test_a39_data_freshness_lp_intelligence.py -q`
+
 ## Updated: 2026-02-28
 
 ### Task A1: サムネイル品質修復 [COMPLETED]
@@ -1060,3 +1175,1221 @@ scenario_structure {archetype, hook_type, hook_text_example, problem_type, probl
    - 87 flagged (28.2%): 65 non-Japanese, 11 short description, 7 URL-as-title, 3 missing title
    - 0 missing categories, 0 missing fine_genre
    - Supports --fix flag for auto-correction
+
+### Task A28: Hit Score Recalibration & Ranking Algorithm Improvement [COMPLETED]
+
+#### Problem
+- 74.5% of ads (373/501) clustered in 0-9 score range
+- IQR only 12.8 points - poor discriminating power
+- Three-tier split heavily skewed: 82% low / 7% mid / 11% high
+- New ads (352) had no scores at all
+
+#### A28-1: Score Distribution Analysis [COMPLETED]
+- Script: `backend/scripts/analyze_score_distribution.py` (already existed, executed)
+- Result: 501 ads analyzed
+  - Mean: 14.5, Median: 0.0, StdDev: 29.2
+  - Most crowded range: 0-5 (374 ads, 74.7%)
+  - Signal utilization: trend only 25% (major bottleneck)
+  - Correlation: score vs views r=0.69, score vs days_running r=0.56
+- Export: exports/score_distribution_analysis.json
+
+#### A28-2: Scoring Algorithm Proposal [COMPLETED]
+- Script: `backend/scripts/propose_new_scoring.py` (already existed, executed)
+- Compared 3 methods on latest 501-ad dataset:
+  - M1 Percentile: spread 54.8, IQR 39.9
+  - M2 Genre-Relative: spread 20.9, IQR 0.0
+  - M3 Hybrid + Recency [RECOMMENDED]: spread 48.3, IQR 23.7
+- Method 3 formula: 60% percentile + 20% genre-relative z-score + 20% recency boost
+- Export: exports/scoring_proposal.json
+
+#### A28-3: Score Recalculation Batch [COMPLETED]
+- Script: `backend/scripts/recalculate_scores.py` (already existed, executed)
+- Pre-step: Ran `score_new_ads.py` to score 352 unscored ads first
+- Dry-run verified, then applied to all 501 ads
+- Results stored in:
+  - `ad_metadata["recalculated_score"]` (new hybrid score)
+  - `ad_metadata["recalculated_hit_level"]` (new classification)
+  - `ad_metadata["score_recalculation"]` (algorithm, components, genre stats)
+- Original scores preserved in `ad_metadata["latest_hit_score"]`
+
+#### Before/After Comparison
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Mean | 15.9 | 48.0 | +32.1 |
+| Median | 2.6 | 49.4 | +46.8 |
+| StdDev | 28.5 | 22.7 | normalized |
+| IQR | 12.8 | 36.8 | **2.9x** |
+| P10-P90 | 77.3 | 59.2 | more compact |
+| Above 70 | 10.8% | 18.0% | closer to 20% target |
+| 30-70 (mid) | 7.2% | 49.9% | closer to 60% target |
+| Below 30 | 82.0% | 32.1% | closer to 20% target |
+
+Hit level transitions: 2 ads promoted from hit to mega_hit (total unchanged)
+
+- Export: exports/score_recalculation_report.json
+
+## ad_metadata Keys Added by Agent A (Updated for A28)
+```
+recalculated_score (float, 0-100, hybrid algorithm)  (NEW - A28)
+recalculated_hit_level (mega_hit/hit/none)  (NEW - A28)
+recalculated_is_hit (boolean)  (NEW - A28)
+score_recalculation {algorithm, original_hit_score, components:{percentile_base, genre_relative, recency_boost}, genre, genre_mean, genre_stdev, recalculated_at}  (NEW - A28)
+```
+
+### Task A29: Dockerfile.worker に Playwright + Chromium 追加 [COMPLETED]
+
+- File: `docker/Dockerfile.worker`
+- Changes:
+  - Added `ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers`
+  - Added 17 Chromium dependency packages (libgbm1, libnss3, libatk1.0-0, etc.)
+  - Added `fonts-noto-cjk` for Japanese text rendering
+  - Added `RUN playwright install chromium` after pip install
+  - Added `chown` for `${PLAYWRIGHT_BROWSERS_PATH}` directory
+
+### Task A30: Meta APIトークン更新・設定 [COMPLETED]
+- 完了日: 2026-03-01
+- 参照: `.agent-tasks/COORDINATION_LOG.md`（Meta APIトークン更新済み、render_ad画像抽出100%成功）
+- 備考:
+  - Required scopes: `ads_read`, `business_management`
+
+### Task A31: Terraform ECS タスク定義更新 [COMPLETED]
+
+- File: `terraform/ecs.tf`
+- Changes:
+  - Added `PLAYWRIGHT_BROWSERS_PATH` environment variable to container definition
+  - Added `linuxParameters.sharedMemorySize = 2048` (2GB) for Chromium shared memory
+  - Existing CPU/memory (var.worker_cpu/var.worker_memory) unchanged — already configurable
+
+### Task A32: デプロイスクリプト & E2Eテスト [COMPLETED]
+
+- Created: `backend/scripts/deploy_worker.sh`
+  - ECR login, Docker build, push, ECS task definition update
+  - Usage: `bash scripts/deploy_worker.sh [IMAGE_TAG]`
+- Created: `backend/scripts/test_media_pipeline.py`
+  - E2E pipeline test: Lambda invoke -> poll DB -> report results
+  - Usage: `python scripts/test_media_pipeline.py [AD_ID]`
+  - Max 2min polling, reports status/image_url/video_url/creative_type
+
+### Task A33: DBコネクションプール最適化 [COMPLETED]
+
+- File: `backend/app/core/database.py`
+- Changes:
+  - Lambda環境検出 (`AWS_LAMBDA_FUNCTION_NAME`) で pool_size=1, max_overflow=0 に自動切替
+  - pool_recycle: 1800→300 (5分) に短縮 — NAT再起動・接続切断への耐性向上
+  - connect_args に `connect_timeout=5` 追加 — 接続ハング防止
+  - ECS/ローカル環境では既存の settings.db_pool_size / db_max_overflow を維持
+
+### Task A34: config.py シークレット安全性強化 [COMPLETED]
+
+- File: `backend/app/core/config.py`
+- Changes:
+  - `@field_validator("secret_key")` 追加:
+    - 本番(APP_ENV=production/prod): 安全でないデフォルト値は即ValueError
+    - 開発環境: `secrets.token_urlsafe(32)` で自動ランダム生成
+  - `_resolve_db_secret()`: 本番環境で Secrets Manager 解決失敗時に ValueError raise (warningではなくエラー)
+
+### Task A35: lambda_handler エラーハンドリング改善 [COMPLETED]
+
+- File: `backend/lambda_handler.py`
+- Already existed (previous sessions):
+  - `_safe_error()`: 本番ではスタックトレース非公開
+  - `_DB_INITIALIZED`: 2回目以降の create_all スキップ
+- New changes:
+  - `_run_cleanup()`: 4ステップを独立トランザクションに分離
+    - 各ステップが個別の session で実行 → 部分失敗しても他のステップは続行
+    - 失敗ステップは error をログ出力 + 結果に記録
+    - Summary も独立 session で取得
+
+### Task A36: sqs_ecs_trigger 部分失敗処理改善 [ALREADY COMPLETED]
+
+- Both changes were already in place:
+  - `sqs_ecs_trigger.py`: batchItemFailures 返却済み (parse error, no arns, exception の3パターン)
+  - `terraform/lambda.tf` L111: `function_response_types = ["ReportBatchItemFailures"]` 設定済み
+
+---
+
+## Continuous Improvement Tasks (2026-03-01)
+
+### Task A25 (CI-001): DB接続の指数バックオフ再試行統一 [COMPLETED]
+
+- File: `backend/app/core/database.py`
+- Changes:
+  - `db_retry` decorator: OperationalError/DBAPIError/ConnectionError に対し指数バックオフ (1s, 2s, 4s... max 10s)
+  - `_connect_with_retry()`: 初回接続時に3回リトライ、全失敗時のみSQLite fallback
+  - 全リトライで構造化ログ出力 (`db_retry_attempt`, `db_connect_retry`, `db_retry_exhausted`)
+  - API/Worker/Lambda/スクリプトから `@db_retry` で統一的に使用可能
+
+### Task A27 (CI-007): ad_metadata スキーマバリデーション [COMPLETED]
+
+- Script: `backend/scripts/validate_metadata_schema.py`
+- 5つの必須キー + 8つの推奨キーをチェック
+- `--fix` で欠落必須キーにデフォルト値を埋める
+- `--json-report path` でJSON形式でエクスポート
+- 品質グレード (A-F) を算出
+
+### Task A30 (CI-030): backend smoke テスト [COMPLETED]
+
+- File: `backend/tests/test_smoke.py`
+- 20テスト、0.27秒で完了:
+  - TestAdModel (5): CRUD、メタデータ更新、enum検証
+  - TestConfig (3): 設定ロード、URL正規化、脆弱キー検出
+  - TestDatabaseUtils (3): セッション作成、クエリ、フィルタ
+  - TestImports (5): 主要モジュールのインポート検証
+  - TestSchemas (1): AdResponse Pydanticモデル検証
+  - TestScoringLogic (1): ヒットスコア計算検証
+  - TestLambdaHandler (2): モジュール存在確認
+
+### Task A28 (CI-025): 秘密情報CIチェック [COMPLETED]
+
+- Script: `backend/scripts/check_secrets.py`
+- 5パターン検出: API keys, AWS keys, DB URLs, private keys, JWT secrets
+- `--ci` モード: 検出時に exit 1 (CI失敗)
+- 安全パターン除外 (localhost, placeholder, test等)
+- .py, .tf, .yaml, .json, .toml ファイルをスキャン
+
+### Task A26 (CI-002): バッチ冪等性チェック [COMPLETED]
+
+- File: `backend/scripts/aggregate_metrics.py`
+- 同日再実行ガード追加: `aggregated_at` の日付を確認し、当日分はスキップ
+- スキップ数をログ出力
+- 他の主要バッチ (score_new_ads, snapshot_metrics, production_data_fix) は既に冪等
+
+### Task A29 (CI-026): CORS環境別制御の明確化 [COMPLETED]
+
+- File: `backend/app/main.py`
+- `allow_origins=["*"]` → `settings.cors_origins_list` に変更
+- ワイルドカード時は `allow_credentials=False`、明示オリジン時は `True`
+- 本番では `CORS_ORIGINS` 環境変数で制御
+
+### Task A31 (CI-016): DBインデックス見直し [COMPLETED]
+
+- File: `backend/app/models/ad.py`
+- 3つのインデックス追加:
+  - `idx_ads_media_extraction_status` — メディア抽出クエリの高速化
+  - `idx_ads_first_seen` — 時系列分析クエリの高速化
+  - `idx_ads_last_seen` — 鮮度チェッククエリの高速化
+
+### Task A32 (CI-034): ローカル開発セットアップ短縮 [COMPLETED]
+
+- Script: `scripts/dev-setup.sh`
+- 3モード: `full` (全体), `backend` (API+DB), `check` (前提条件のみ)
+- 自動 .env 生成、docker-compose DB起動、依存インストール
+- カラー出力、前提条件チェック、起動手順表示
+
+### Task A60 (CI-061): メトリクス収集の再入防止ロック [COMPLETED]
+
+- File: `backend/app/core/database.py` — `acquire_job_lock()` / `release_job_lock()` 追加
+- File: `backend/app/tasks/metrics_tasks.py` — Celeryタスクにロック適用 (TTL=900s)
+- プロセスレベルロック＋TTLによる自動解放
+
+### Task A61 (CI-077): トランザクションタイムアウト標準値統一 [COMPLETED]
+
+- File: `backend/app/core/database.py`
+- `statement_timeout`: Lambda 30s / Container 60s
+- `lock_timeout`: 全環境 10s
+- PostgreSQL connect_args options で設定
+
+### Task A63 (CI-069): ad/ad_metrics 整合性日次チェック [COMPLETED]
+
+- Script: `backend/scripts/check_data_integrity.py`
+- 6チェック: orphaned metrics, ads without metrics, duplicates, negative values, orphaned rankings, null metadata
+- `--fix` 自動修正、`--json-report` エクスポート、A-D品質グレード
+
+### Task A64 (CI-081): マイグレーション前提チェックCLI [COMPLETED]
+
+- Script: `backend/scripts/migration_precheck.py`
+- 6チェック: alembic state, active connections, pending transactions, table sizes, disk space, replication lag
+- `--strict` モードで警告時 exit 1
+
+### Task A65 (CI-085): エクスポートPIIマスキング [COMPLETED]
+
+- File: `backend/scripts/export_ads_csv.py`
+- `--mask-pii` フラグ追加
+- マスキング対象: advertiser_name, brand_name (名前ハッシュ), destination_url等 (ドメインのみ), external_id (SHA256ハッシュ)
+- マスク済みファイルは `_masked` サフィックス付き
+
+### Task A62 (CI-065): データ保持ポリシー・アーカイブ手順 [COMPLETED]
+
+- Script: `backend/scripts/archive_old_metrics.py`
+- デフォルト保持期間: 90日 (`--days` で変更可)
+- JSON アーカイブ → DB パージの2ステップ
+- `--execute` なしでドライラン、`--skip-archive` で直接削除
+
+### Task A66 (CI-073): 主要指標の異常検知ルール追加 [COMPLETED]
+
+- Script: `backend/scripts/detect_metric_anomalies.py`
+- 5ルール: view spikes (>5x avg), sudden drops, negative values, spend outliers (>3σ), stale ads
+- `--json-report` エクスポート、`--days` でルックバック期間指定
+
+### Task A67 (CI-089): 障害対応Runbook分岐図 [COMPLETED]
+
+- Script: `backend/scripts/runbook_diagnose.py`
+- 4診断: DB connectivity, metrics freshness, table health, data integrity
+- 各チェックで具体的な復旧アクション手順を出力
+- `--check db` で単体実行、`--json-report` エクスポート
+
+### Task A80 (CI-091): 排他制御キー統一導入 [COMPLETED]
+
+- File: `backend/app/core/database.py` — `job_locked()` デコレータ追加
+- `acquire_job_lock` / `release_job_lock` をラップする関数デコレータ
+- `aggregate_metrics.py` にもロック適用
+
+### Task A81 (CI-107): DB接続プール枯渇の早期警告 [COMPLETED]
+
+- File: `backend/app/core/database.py`
+- `check_pool_health()` 関数追加 — pool utilization統計返却
+- SQLAlchemy `checkout` イベントリスナーで80%利用時に自動警告ログ
+
+### Task A82 (CI-095): バッチ実行履歴の標準メタデータ保存 [COMPLETED]
+
+- File: `backend/app/core/batch_logger.py` (新規)
+- `batch_run()` コンテキストマネージャ、`log_batch_run()` デコレータ
+- JSONL形式で `exports/batch_history.jsonl` に記録
+- 実行者・入力・件数・結果・所要時間を追跡
+
+### Task A83 (CI-099): データ補完ジョブの優先度キュー化 [COMPLETED]
+
+- Script: `backend/scripts/prioritized_enrichment.py`
+- 優先度: CRITICAL(100) → HIGH(80) → MEDIUM(60) → RECENT(40) → LOW(20)
+- `--dry-run` でキュー確認、`--limit N` でトップN件処理
+
+### Task A84 (CI-111): 論理削除/復元手順の明確化 [COMPLETED]
+
+- Script: `backend/scripts/soft_delete_restore.py`
+- サブコマンド: `delete`, `restore`, `list-deleted`, `purge`
+- ad_metadata に `_soft_deleted`, `_deleted_at`, `_original_status` を保持
+
+### Task A85 (CI-115): データ品質レポートのSlack通知整備 [COMPLETED]
+
+- Script: `backend/scripts/notify_quality_report.py`
+- `SLACK_WEBHOOK_URL` 環境変数でWebhook設定
+- Slack Block Kit形式のリッチメッセージ、`--dry-run` でプレビュー
+
+### Task A86 (CI-103): データ移行チェックリスト自動生成 [COMPLETED]
+
+- Script: `backend/scripts/migration_checklist.py`
+- スキーマ情報からMarkdownチェックリストを自動生成
+- Pre/During/Post-Migration + Rollback Plan
+
+### Task A87 (CI-119): 運用手順の定期棚卸し自動化 [COMPLETED]
+
+- Script: `backend/scripts/ops_procedure_audit.py`
+- 重要スクリプトの最終実行日を batch_history.jsonl から確認
+- 期限超過スクリプトをSTALE警告
+
+### Task A90 (CI-124): Top30件収集監査追加 [COMPLETED]
+
+- Script: `backend/scripts/audit_top30_collection.py`
+- hit_scoreトップN件の日次メトリクスカバレッジを検証
+- 未収集時にALERT + 復旧アクション表示
+
+### Task A91 (CI-127): 日次実行レポート統合表示 [COMPLETED]
+
+- Script: `backend/scripts/daily_execution_report.py`
+- 4セクション: Collection / Key Extraction / Hit Determination / Data Quality
+- スコア分布、Top5、品質グレードを1レポートに統合
+
+---
+
+## Round 2 タスク (A-R2-1〜6) [ALL COMPLETED]
+
+### Task A-R2-1: 本番データ品質サーベイ＆Fix [COMPLETED]
+- Script: `backend/scripts/r2_data_quality_fix.py`
+- NULL/欠損フィールド調査 + `--fix` で category・metadata 自動補完
+
+### Task A-R2-2: メトリクスdelta逆算バックフィル [COMPLETED]
+- Script: `backend/scripts/backfill_deltas.py`
+- 全 ad_daily_metrics の view_count_increase / estimated_spend_increase を再計算
+
+### Task A-R2-3: フルパイプラインワンコマンド化 [COMPLETED]
+- Script: `backend/scripts/run_full_pipeline.py`
+- 10ステップ順次実行、subprocess + 5分タイムアウト
+
+### Task A-R2-4: DB接続リトライ強化 [COMPLETED]
+- File: `backend/app/core/database.py`
+- `get_session_with_retry()` 追加（指数バックオフ、最大3回リトライ）
+- `get_sync_session()` を retry 版に統合
+
+### Task A-R2-5: メタデータスキーマ拡張 [COMPLETED]
+- File: `backend/scripts/validate_metadata_schema.py`
+- R2必須キー追加: is_still_running, days_running, creative_quality, longevity_class
+- RECOMMENDED_SCHEMA拡張: publisher_platforms, estimation_method, delivery_start_time, freshness_score
+
+### Task A-R2-6: スマートアラートエンジン＆鮮度管理 [COMPLETED]
+- Models: `backend/app/models/alert_rule.py`, `backend/app/models/alert_history.py`
+- Service: `backend/app/services/alert_engine.py` (AlertEngine + seed_default_rules)
+- Service: `backend/app/services/data_freshness.py` (DataFreshnessService)
+- Task: `backend/app/tasks/alert_tasks.py` (evaluate_alert_rules_task 追加)
+- database.py / lambda_handler.py にモデル登録済み
+
+---
+
+## Batch 6 CI タスク (A92-A95) [ALL COMPLETED]
+
+### Task A92 (CI-129): Redis分散ロック統一 [COMPLETED]
+- Module: `backend/app/core/distributed_lock.py` (NEW)
+- Redis SET NX EX ベースの分散ロック、Redis不可時はプロセスレベルにフォールバック
+- Lua scriptによるatomic release（owner token検証）
+- `distributed_job_locked` デコレータ、`distributed_lock` コンテキストマネージャ
+- 既存利用箇所を移行: alert_tasks.py, metrics_tasks.py, aggregate_metrics.py
+
+### Task A93 (CI-133): データ品質ダッシュボードAPI [COMPLETED]
+- Endpoint: `backend/app/api/endpoints/data_quality.py` (NEW)
+- 5エンドポイント:
+  - GET /data-quality/overview — 品質グレード、fill率、鮮度分布
+  - GET /data-quality/metrics-health — 日別メトリクス収集状況
+  - GET /data-quality/pool-health — DB接続プール状況
+  - GET /data-quality/score-distribution — hit_scoreの分布統計
+  - GET /data-quality/alerts-summary — アラート集計
+- main.py にルーター登録済み
+
+### Task A94 (CI-137): Read replica分離導入 [COMPLETED]
+- config.py: `database_read_url` / `database_read_url_sync` 設定追加
+- database.py: `AsyncReadSession` / `SyncReadSession` ファクトリ追加
+- `get_async_read_session()` / `get_sync_read_session()` ジェネレータ追加
+- DATABASE_READ_URL未設定時はprimaryにフォールバック（透過的）
+
+### Task A95 (CI-141): データリネージ追跡基盤 [COMPLETED]
+- Module: `backend/app/core/data_lineage.py` (NEW)
+- `record_lineage()` — ad_metadata["_lineage"]に変換履歴を記録
+- `record_lineage_bulk()` — 複数adに一括記録
+- `get_lineage()` / `get_lineage_summary()` — リネージ参照
+- 中央ログ: exports/data_lineage.jsonl にJSONL形式で書き出し
+- `query_lineage_log()` — ログファイルのフィルタリング検索
+- 最大50エントリ/adでメタデータ肥大化防止
+
+---
+
+## Update: 2026-03-03 (Agent A 再実行)
+
+### Task A-R2-1: Production Data Quality Fix [COMPLETED]
+- 実行コマンド:
+  - `python -m scripts.classify_ads` (UTF-8モード)
+  - `python -m scripts.fix_titles` (UTF-8モード)
+  - `python -m scripts.collect_delivery_dates` (UTF-8モード)
+  - `python -m scripts.fix_longevity_class` (UTF-8モード)
+- 検証結果（total=1149）:
+  - `title NULL/empty`: 0 / 0
+  - `category NULL`: 0
+  - `destination_url NULL`: 31 (2.7%)
+  - `metadata.is_still_running`: missing 0
+  - `metadata.days_running`: missing 0
+  - `metadata.longevity_class`: missing 0
+- 補足:
+  - `metadata.latest_hit_score` missing 648 (56.4%)
+  - `metadata.creative_quality` missing 1025 (89.2%)
+  - `creative_quality` は Agent D 領域のため直接修正せず（連携ログへ記録）
+  - `latest_hit_score` 再計算は Planner 2/Agent C に依頼を連携ログへ記録
+
+### Task A-R2-4: DB Retry Unification (CI-001) [COMPLETED]
+- 変更ファイル:
+  - `backend/app/tasks/metrics_tasks.py`
+    - `SyncSessionLocal()` を `get_session_with_retry()` に置換
+  - `backend/lambda_handler.py`
+    - `_init_database()` にリトライループ（最大3回、1s/2s backoff）追加
+    - 初期化前に `get_session_with_retry()` で接続確認を実施
+- 検証:
+  - `python -m py_compile app/tasks/metrics_tasks.py lambda_handler.py` 成功
+
+### Task A-R2-2: Metrics Delta Tracking [COMPLETED]
+- 実行:
+  - `python -m scripts.backfill_deltas`
+- 検証:
+  - `ad_daily_metrics` 総件数: 367
+  - `view_count_increase IS NULL`: 0
+  - `estimated_spend_increase IS NULL`: 0
+- 補足:
+  - `metrics_tasks.py` 側の日次デルタ計算ロジックは既存実装済みで継続利用
+
+### Task A-R2-5: Metadata Validation (CI-007) [COMPLETED]
+- 実行:
+  - `python -m scripts.validate_metadata_schema --json-report exports/metadata_validation_before.json`
+  - `python -m scripts.validate_metadata_schema --fix --json-report exports/metadata_validation_after.json`
+- 結果:
+  - スキーマ検証レポートを2本出力（before/after）
+  - `--fix` により 666件のデフォルト補完を実施
+  - 充足率は依然低く、上流データ依存の欠損（`latest_hit_score` / `creative_analysis` など）が残存
+
+### Task A-R2-3: Full Data Pipeline Run [COMPLETED]
+- 実行:
+  - `python -m scripts.run_full_pipeline`
+- 結果:
+  - 初回: 10ステップ中 8成功 / 2失敗
+  - 再実行: `python -m scripts.run_full_pipeline --step 5` で 6/6 成功（失敗0）
+- 追加修正:
+  - `backend/scripts/r2_data_quality_fix.py`
+    - DB依存SQL(`ad_metadata->>`)をDB非依存ロジックへ修正
+    - `AdCategoryEnum` 参照名を実体に合わせて修正（`BEAUTY` 等）
+  - `backend/scripts/check_ad_survival.py`
+    - `--max-page-ids` / `--max-snapshot-checks` / `--max-seconds` 等の上限制御を追加
+  - `backend/scripts/run_full_pipeline.py`
+    - `check_ad_survival` ステップを上限制御付きコマンドに変更
+
+### Task A-R2-6: Alert Engine [COMPLETED]
+- 実行/検証:
+  - `seed_default_rules()` 実行
+  - `AlertEngine.evaluate_all_rules()` 実行
+  - `alert_rules: 3件`, `alert_history: 20件` を確認
+- 追加修正:
+  - `backend/app/services/alert_engine.py`
+    - PostgreSQL依存SQL（`::float`, `::boolean`, `NOW()-INTERVAL`, `ad_metadata`列名）を除去
+    - ORM/PythonベースのDB非依存評価に変更（SQLite互換）
+- デフォルトルール:
+  - score_threshold (`hit_score > 80`)
+  - new_hit
+  - data_quality
+
+### Task A-0303-1: ad_metadata 保存ルール統一 [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/validate_metadata_schema.py`
+- 追加した保存ルール（明文化）:
+  - グローバル必須: `source`
+  - 条件付き必須:
+    - クリエイティブ素材あり時: `creative_fetch_status`, `creative_fetch_source`, `creative_fetched_at`
+    - `creative_type=video` 時: `orientation`, `aspect_ratio`
+    - `creative_fetch_status in {failed,rejected,blocked,not_found}` 時: `creative_fetch_reason`
+- NULL許容方針:
+  - 旧データ互換のため `--fix` 時は `legacy_unknown` / `unknown` / 現在時刻で補完可能
+  - 新規保存では品質ゲート (`--fail-on-gate`) で検知・失敗化可能
+
+### Task A-0303-2: データ品質ゲート追加 [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/validate_metadata_schema.py`
+- 追加ゲート:
+  - `source_missing`（source未設定）
+  - `ad_id_mismatch`（`creative_ad_id` / `fetched_ad_id` / `source_ad_id` / `material_ad_id` と `Ad.id` 不一致）
+- 監査:
+  - `--audit-log exports/creative_fetch_gate_audit.jsonl` でJSONL監査ログ出力
+  - `--fail-on-gate` でゲート違反時に exit 1
+- 実行結果:
+  - `python -m scripts.validate_metadata_schema --fix --json-report exports/metadata_validation_0303_gate_v3.json`
+  - `python -m scripts.validate_metadata_schema --fail-on-gate --json-report exports/metadata_validation_0303_gate_strict.json`
+  - strict実行の終了コード: `0`（source/ad_idゲート違反なし）
+
+### Task A-LP-0303-1: LPメタデータ正規化 [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/normalize_lp_metadata.py`（新規）
+- 正規化キー:
+  - `final_url`, `domain`, `path`, `lang`, `title`, `h1_count`
+  - 補助: `lp_html_length`, `lp_text_length`, `lp_normalized.normalized_at`
+- 実行結果:
+  - `python -m scripts.normalize_lp_metadata --fix --json-report exports/lp_metadata_normalization_0303.json`
+  - 処理件数: 1164 ads、更新: 1164 ads
+
+### Task A-LP-0303-2: LP品質ゲート [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/normalize_lp_metadata.py`（品質問題の検知と `lp_quality_issue` 付与）
+  - `backend/scripts/validate_metadata_schema.py`（`lp_redirect_loop` / `lp_empty_html` / `lp_tiny_body` の監査ゲート）
+- ゲート方針:
+  - 空HTML・極小本文・リダイレクトループを `lp_quality_issue` に記録
+  - バリデータで欠損記録の監査を可能化
+
+### Task A-BRW-1: クロール実行メタデータ品質 [COMPLETED]
+- 対応ファイル:
+  - `backend/app/api/endpoints/rankings.py`
+  - `backend/app/tasks/crawl_tasks.py`
+  - `backend/scripts/validate_metadata_schema.py`
+- 変更内容:
+  - 空クエリ保存禁止（全角スペース正規化後に空なら reject）
+  - 保存時メタに `crawl_query` / `crawl_result_count` を付与
+  - バリデータに `empty_crawl_query` / `crawl_result_count_missing` 監査ゲートを追加
+- 検証:
+  - `python -m scripts.validate_metadata_schema --json-report exports/metadata_validation_0303_extended_postfix_check.json`
+  - `crawl_result_count_missing` ゲート違反 0件
+
+### Task A-BRW-2: 失敗分析用集計 [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/quick_crawl_daily_report.py`（新規）
+  - `backend/app/api/endpoints/rankings.py`（`quick_crawl` 失敗理由コード付与）
+- 実行結果:
+  - `python -m scripts.quick_crawl_daily_report --days 7 --json-report exports/quick_crawl_daily_report_0303.json`
+  - 7日集計: 52 jobs、success_rate 26.92%
+
+### Task A41: Volume Gap Investigation + Recovery [COMPLETED]
+- 対応ファイル:
+  - `backend/scripts/audit_ads_volume_errors.py`（新規）
+  - `backend/app/api/endpoints/rankings.py`（quick-crawl低件数リカバリ追加）
+- 実装内容:
+  - 直近7日の `query x platform x country` 件数監査
+  - 低件数/ゼロ件数の主因分類（`pipeline_failure:*`, `no_results_or_filtering`, `low_yield_keyword`）
+  - `GLP-1` 等の低件数時に補助クエリで再試行する回復ロジックを実装
+  - `before/after` 比較可能な JSON レポートを日次再実行可能な形で出力
+- 実行結果:
+  - `python -m scripts.audit_ads_volume_errors --days 7 --focus-keywords GLP-1,ダイエット --json-report exports/ads_volume_audit_0303_A41.json`
+  - 監査対象: 52 jobs / 43 groups、低件数グループ: 41
+### 2026-03-03: A-R3-1 Data Quality Dashboard API 完了
+- 追加:
+  - `backend/app/models/data_quality.py`
+  - `backend/scripts/data_quality_snapshot.py`
+  - `backend/app/api/endpoints/data_quality.py`
+- 変更:
+  - `backend/app/models/__init__.py`（モデル公開）
+  - `backend/app/main.py`（data quality model import + router登録）
+- 提供API:
+  - `GET /api/v1/data-quality/history`
+- 実装内容:
+  - 日次スナップショット（fill率/null率/freshness）を `data_quality_snapshots` にupsert
+  - 時系列履歴レスポンスをダッシュボード利用向けに整形
+- 検証:
+  - `python -m py_compile backend/app/models/data_quality.py backend/scripts/data_quality_snapshot.py backend/app/api/endpoints/data_quality.py backend/app/main.py backend/app/models/__init__.py` 成功
+
+## 2026-03-03 A48 Progress Update (Phase 1 complete)
+- Added automatic topic inference on crawl save path (`_save_crawled_ads`).
+- Persisted fields into `ad_metadata` on insert/update:
+  - `topic_label`
+  - `topic_confidence`
+  - `matched_terms`
+  - `needs_topic_review`
+- Added keyword dictionary baseline for medical_diet / AGA / beauty / finance / education.
+- Fixed ordering bug: `best_image_url` is now computed before media-quality scoring in insert flow.
+- Verification:
+  - `python -m py_compile backend/app/api/endpoints/rankings.py` OK
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py -q` => 9 passed
+
+## 2026-03-03 A49 Completion Update
+- Task: `A49_crawl_reflection_gap_closure.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - `/rankings/search` に crawl/topic メタデータ補完一致を追加
+  - helper: `_metadata_query_match`
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py -q` => 10 passed
+
+## 2026-03-03 A50 Completion Update
+- Task: `A50_zero_save_taxonomy_reporting.md`
+- 変更:
+  - `backend/scripts/quick_crawl_daily_report.py`
+  - zero-save 原因分類と媒体別 rate 出力を追加
+- 実行:
+  - `python -m scripts.quick_crawl_daily_report --days 7 --json-report exports/quick_crawl_daily_report_0303_zero_save.json`
+- 検証:
+  - `python -m py_compile backend/scripts/quick_crawl_daily_report.py` 成功
+
+## 2026-03-03 A51 Completion Update
+- Task: `A51_platform_recovery_feedback.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - quick-crawl recoveryに媒体別件数フィードバックを追加
+  - `recovery.base_platform_counts` / `recovery.attempts[].platform_counts` を記録
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 17 passed
+
+## 2026-03-03 A52 Completion Update
+- Task: `A52_auto_limit_tuning_metrics.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - helper: `_compute_platform_limit_map`
+  - quick-crawl初回/回復で媒体別limitを適用
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 18 passed
+
+## 2026-03-03 A53 Completion Update
+- Task: `A53_learned_fallback_query_dictionary.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - 媒体別 fallback 学習辞書（attempt/success）を導入
+  - 低件数回復で学習済みクエリを優先利用
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 19 passed
+
+## 2026-03-03 A54 Completion Update
+- Task: `A54_platform_expansion_query_strategy.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - `platform_expansion` クエリ生成と fallback マージ優先を追加
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 20 passed
+
+## 2026-03-03 A55 Completion Update
+- Task: `A55_learning_dictionary_prune_ops.md`
+- 変更:
+  - `backend/app/api/endpoints/rankings.py`
+  - `backend/scripts/prune_platform_query_learnings.py`
+  - 学習辞書 prune ロジック追加 + 運用スクリプト追加
+- 実行:
+  - `python -m scripts.prune_platform_query_learnings --min-attempts 3 --min-success-rate 0.15 --stale-days 14`
+  - 結果: before 10 / after 4 / removed 6
+- 検証:
+  - `python -m pytest backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 21 passed
+
+## 2026-03-03 A56 Completion Update
+- Task: `A56_daily_meta_instagram_priority_job.md`
+- 変更:
+  - `backend/scripts/run_daily_meta_instagram_boost.py` 追加
+  - Meta/Instagram 向け priority query 日次投入ジョブを実装
+- 検証:
+  - `python -m scripts.run_daily_meta_instagram_boost --dry-run --query-limit 6` 実行
+
+## 2026-03-03 A57 Completion Update
+- Task: `A57_runner_failure_policy_hardening.md`
+- 変更:
+  - `backend/scripts/scheduled_crawl_runner.py`
+  - strict/lenient failure policy を導入（`CRAWL_RUNNER_STRICT`）
+- 検証:
+  - `python -m pytest backend/tests/test_scheduled_crawl_runner.py -q` 成功
+
+## 2026-03-05 A96 Completion Update
+- Task: `A96_lambda_sourceip_fix.md`
+- 変更:
+  - `backend/lambda_handler.py`
+  - helper追加: `_get_forwarded_source_ip`, `_ensure_request_source_ip`
+  - Mangum呼び出し前に `requestContext.http.sourceIp`（v2）と `requestContext.identity.sourceIp`（v1）を安全補完
+- 追加確認:
+  - `terraform/api_gateway.tf` は `aws_apigatewayv2` + `payload_format_version = "2.0"`（HTTP API v2）を使用
+- 検証:
+  - `python -m py_compile backend/lambda_handler.py` 成功
+  - `python -m pytest backend/tests/test_scheduled_crawl_runner.py backend/tests/test_meta_instagram_boost.py backend/tests/test_rankings_dpro_parity.py backend/tests/test_quick_crawl_contract.py -q` => 24 passed
+
+## 2026-03-05 A97 Completion Update
+- Task: `A97_cicd_full_automation.md`
+- 変更:
+  - `.github/workflows/deploy.yml`
+    - backend/frontendテストを分離（`test-backend`, `test-frontend`）
+    - deploy jobs を `needs: [test-backend, test-frontend]` でゲート化
+    - `workflow_dispatch` 入力 `run_e2e_smoke` を追加
+    - Slack + GitHub summary 通知ジョブ `notify` を追加
+    - deploy concurrency 制御を追加
+  - `.github/DEPLOY_ROLLBACK.md` を新規追加
+- 検証:
+  - `python - << ... yaml.safe_load('.github/workflows/deploy.yml') ...` => `ok`
+  - 既存の backend 回帰テストセットは直前に 24 passed（A96検証時）
+
+## 2026-03-05 A99 Progress Update
+- Task: `A99_db_backup_automation.md`
+- 変更:
+  - `terraform/rds.tf`
+    - `delete_automated_backups = false` を追加
+  - `terraform/variables.tf`
+    - `rds_backup_retention_days` default を `7` に変更
+  - `terraform/scripts/create_manual_db_snapshot.sh` を追加（手動スナップショット取得）
+  - `terraform/RDS_RESTORE_RUNBOOK.md` を追加（snapshot復元/PITR手順）
+- 検証:
+  - `terraform fmt -recursive` 実行
+  - `terraform validate` => Success
+- 未完了:
+  - 実環境でのテスト復元1回（運用時間帯調整が必要）
+
+## 2026-03-05 A98 Progress Update
+- Task: `A98_monitoring_dashboard.md`
+- 変更:
+  - `terraform/monitoring.tf`
+    - CloudWatch dashboard `aws_cloudwatch_dashboard.ops_overview` を追加
+    - API Gateway 5xx アラーム `api_gateway_5xx_high` を追加
+    - Lambda API error rate >5% アラーム `lambda_api_error_rate_high` を追加
+    - 既存SQS/RDS/Lambdaアラーム群と統合
+- 検証:
+  - `terraform fmt -recursive` 実行
+  - `terraform validate` => Success
+- 未完了:
+  - `terraform apply` 後のダッシュボード可視化確認
+  - テストアラート発報確認（CloudWatch Alarm state transition）
+
+## 2026-03-05 A100 Progress Update
+- Task: `A100_mlops_pipeline.md`
+- 変更:
+  - `backend/scripts/mlops_retrain_pipeline.py` を追加
+    - build_features → train → quality gate → versioning → registry保存
+    - `model_registry.json` 管理、`models/versions/` へバージョン保存
+    - S3アップロード（任意）対応
+  - `backend/scripts/mlops_monitoring_snapshot.py` を追加
+    - 最新モデル指標 + 特徴量ドリフト要約を `exports/mlops_monitoring_snapshot.json` へ出力
+  - `backend/app/tasks/mlops_tasks.py` を追加
+    - `mlops_retrain_task`, `mlops_monitoring_task` を実装
+  - `backend/light_task_handler.py` 更新
+    - `mlops_retrain`, `mlops_monitoring` タスクルーティングを追加
+  - `terraform/eventbridge.tf` 更新
+    - `weekly_mlops_retrain`（週次）を追加
+    - `daily_mlops_monitoring`（日次）を追加
+    - 対応する Lambda invoke permission を追加
+- 検証:
+  - `python -m py_compile backend/light_task_handler.py backend/app/tasks/mlops_tasks.py backend/scripts/mlops_retrain_pipeline.py backend/scripts/mlops_monitoring_snapshot.py` 成功
+  - `python backend/scripts/mlops_retrain_pipeline.py --help` 成功
+  - `python backend/scripts/mlops_monitoring_snapshot.py` 成功（snapshot出力）
+  - `terraform validate` => Success
+- 未完了:
+  - `terraform apply` 後のEventBridge実行確認
+  - S3モデルアーティファクト保存の実環境確認
+  - 監視スナップショットのCloudWatch/Grafana可視化統合
+
+## 2026-03-05 A100 Runtime Integration Update
+- Terraform apply:
+  - A98/A99/A100関連リソースは反映済み（dashboard / alarms / schedules / permissions / RDS backup settings）
+  - 追加で `light_tasks` に ECS委譲用環境変数を反映
+- 本番invoke確認:
+  - `aws lambda invoke ... {"task":"mlops_monitoring"}` は 200 応答だが、実行中コードが旧イメージのため `/var/task` 書き込み失敗
+- ブロッカー:
+  - Docker Desktop障害により新APIイメージのビルド・ECR push が未完了
+  - `describe-images` で `a100-20260305-01` タグ未存在を確認
+
+## 2026-03-05 A100 Low-Memory Routing Update
+- 方針変更:
+  - `mlops_retrain` / `mlops_monitoring` を Lambda実行から ECS(Fargate)直実行へ切替（メモリ逼迫回避）
+- 反映:
+  - `terraform/eventbridge.tf` の MLOps 2スケジュールを ECS target + ecs_parameters へ変更
+  - `terraform/iam.tf` の scheduler role に `ecs:RunTask` / `iam:PassRole` を追加
+  - `backend/app/tasks/runner.py` に `mlops_retrain` / `mlops_monitoring` マッピング追加
+  - `terraform apply` 完了（schedules/permissions/policy 反映）
+- 実行検証:
+  - ECS task 起動自体は成功
+  - ただし `vaap-production-worker:latest` が旧コードのため `Unknown task: mlops_monitoring` で exit 1
+- 残課題:
+  - Docker daemon復旧後に worker イメージ再ビルド & ECR push
+  - ECS task definition 更新後に再検証
+
+## 2026-03-05 A98 Completion Verification Update
+- Task: `A98_monitoring_dashboard.md`
+- 実環境確認:
+  - `aws cloudwatch get-dashboard --dashboard-name vaap-production-ops-overview` でダッシュボード存在を確認
+  - `aws cloudwatch describe-alarms` で `vaap-production-api-gateway-5xx-high` / `vaap-production-lambda-api-error-rate-high` を確認
+  - `vaap-production-api-gateway-5xx-high` を `set-alarm-state` で ALARM→OK に手動遷移し、`describe-alarm-history` で state transition を確認
+- 結果:
+  - A98 完了条件を満たしたため Completed 化
+
+## 2026-03-05 A99 Restore Drill Update
+- Task: `A99_db_backup_automation.md`
+- 実環境テスト復元:
+  - 使用snapshot: `rds:vaap-production-db-2026-03-04-17-05`
+  - 復元先: `vaap-production-db-restore-a99`
+  - 実行: `aws rds restore-db-instance-from-db-snapshot ... --db-instance-class db.t4g.micro --no-publicly-accessible`
+  - 確認: `aws rds wait db-instance-available` 成功、status=`available`
+  - endpoint: `vaap-production-db-restore-a99.cxwsa6mgcgg6.ap-northeast-1.rds.amazonaws.com:5432`
+- 結果:
+  - A99 の「テスト復元1回実行」を達成
+
+## 2026-03-05 A100 Blocker Reconfirmed
+- ECS実行:
+  - `mlops_monitoring` を ECS RunTask で実行すると `Unknown task: mlops_monitoring`（旧worker image）で exit 1
+- 現状:
+  - インフラ定義（EventBridge→ECS）は反映済み
+  - 残課題は worker image 更新のみ（Docker daemon unavailable により未実施）
+
+## 2026-03-08 A100 Deploy Guard Update
+- Task: `A100_mlops_pipeline.md`
+- 変更:
+  - `.github/workflows/deploy.yml`
+    - worker image build 後に `docker run --entrypoint python ... -m app.tasks.runner mlops_monitoring '{}'` を追加
+    - ECS task definition register 結果の ARN を取得し、登録後イメージが `${github.sha}` を向いていることを検証
+  - `backend/scripts/deploy_worker_image_a100.ps1`
+    - push 前に `mlops_monitoring` 実行自己検証を追加
+  - `backend/tests/test_a100_mlops_runner_contract.py`
+    - worker runner が `mlops_retrain` / `mlops_monitoring` を公開している契約テストを追加
+- 検証:
+  - `python -m pytest backend/tests/test_a100_mlops_runner_contract.py -q` => 2 passed
+  - `python - << yaml.safe_load('.github/workflows/deploy.yml') >>` 相当の YAML 構文確認 => ok
+- 効果:
+  - 旧worker image のままデプロイが進み、ECS 実行時に `Unknown task: mlops_monitoring` で落ちる経路を CI/CD で事前検知可能にした
+
+## 2026-03-08 A100 Monitoring Integration Update
+- Task: `A100_mlops_pipeline.md`
+- 変更:
+  - `backend/scripts/mlops_monitoring_snapshot.py`
+    - `--publish-cloudwatch` / `MLOPS_PUBLISH_CLOUDWATCH` を追加
+    - `VAAP/MLOps` namespace に `DriftMaxAbs`, `FeatureRows`, `DriftWarning`, `ModelTestAccuracy` を送信可能にした
+    - snapshot 生成処理を `_build_snapshot()` として分離
+  - `terraform/monitoring.tf`
+    - `mlops_drift_high`, `mlops_accuracy_low` CloudWatch alarm を追加
+    - 既存 ops dashboard に MLOps drift / accuracy / feature rows widget を追加
+  - `backend/tests/test_a100_mlops_monitoring_snapshot.py`
+    - snapshot 計算と CloudWatch publish の契約テストを追加
+- 検証:
+  - `python -m pytest backend/tests/test_a100_mlops_runner_contract.py backend/tests/test_a100_mlops_monitoring_snapshot.py -q` => 4 passed
+  - `terraform validate` => Success
+- 進捗:
+  - A100 の「精度モニタリングダッシュボードが存在」はコード上の可視化統合まで完了
+  - 残りは実環境 apply / worker image 反映後の実行確認のみ
+
+## 2026-03-08 A101 Creative Library Coverage Audit Update
+- Task: `A101_creative_library_coverage_audit.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py` を追加
+    - `creative_viewable_rate` / `creative_downloadable_rate` / `lp_present_rate`
+    - `missing_media_count` / `missing_lp_count`
+    - 媒体別・ジャンル別 breakdown
+    - `priority_recovery_ads` Top N
+    - 前回監査との差分 (`deltas.summary/platform_breakdown/genre_breakdown`)
+    - 日次履歴 `backend/data/creative_library_audit_reports.json` へ保存
+  - `backend/app/tasks/metrics_tasks.py` 更新
+    - 日次 metrics task 後に creative library audit を生成し、戻り値に含めるよう変更
+  - `backend/app/api/endpoints/data_quality.py` 更新
+    - `GET /data-quality/creative-library-audit` を追加
+  - `backend/scripts/check_ad_survival.py` 更新
+    - survival 実行後に creative audit KPI を併記
+  - `backend/tests/test_a101_creative_library_audit.py` を追加
+    - KPI 算出 / delta / API 契約を固定
+- 検証:
+  - `python -m pytest backend/tests/test_a101_creative_library_audit.py -q` => 2 passed
+  - `python -m pytest backend/tests/test_a48_topic_enrichment.py -q` => 2 passed
+- 効果:
+  - Planner/Dashboard が `creative_library_audit` JSON を直接読める
+  - D/C/B の media / LP 改善の前後差分を日次で追跡可能
+
+## 2026-03-08 A102-A105 Creative Ops Audit Expansion
+- Tasks:
+  - `A102_creative_download_lp_gap_audit_and_priority_queue.md`
+  - `A103_creative_library_daily_ops_and_effect_report.md`
+  - `A104_creative_library_slo_and_ops_alerts.md`
+  - `A105_live_ad_ingestion_freshness_audit.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py`
+    - `creative_library_gap_audit` を追加
+    - ad単位の `needs_cr_recovery` / `needs_download_recovery` / `needs_lp_resolution` / `priority_score` を追加
+    - 固定 failure reason code:
+      - `missing_creative`
+      - `not_downloadable`
+      - `missing_lp`
+      - `lp_unresolved`
+      - `stale_snapshot`
+    - `creative_library_daily_report` を追加
+      - summary delta
+      - `top_regressions`
+      - `top_recoveries`
+      - `worsening_segments`
+    - `slo_status` と `ops_alert_candidates` を追加
+    - `live_ingestion_audit` を追加
+      - `daily_new_ads`
+      - `daily_unique_ads`
+      - `duplicate_rate`
+      - `stale_ad_rate`
+      - `inactive_keywords_7d`
+  - `backend/app/tasks/metrics_tasks.py`
+    - 日次 metrics 完了ログに creative ops status / lp unresolved / live ingestion を追加
+  - `backend/scripts/check_ad_survival.py`
+    - Creative audit / Live ingestion / Daily ops の要約を CLI 出力へ追加
+  - `backend/tests/test_a101_creative_library_audit.py`
+    - A101 契約を拡張し、A102-A105 の JSON と前日比較を固定
+- 検証:
+  - `python -m pytest backend/tests/test_a101_creative_library_audit.py -q` => 3 passed
+- 効果:
+  - CR/DL/LP 欠損監査から復旧優先順位、前日比効果、SLO alert、live ingestion 偏り監査まで日次 JSON 1本で追跡可能
+
+## 2026-03-08 A37 Smart Alert Engine Completion
+- Task: `A37_smart_alert_engine.md`
+- 変更:
+  - `backend/app/services/alert_engine.py`
+    - `score_change` ルール評価を実装
+    - default rule seed を 4 種へ拡張
+  - `backend/app/tasks/ranking_tasks.py`
+    - ランキング計算完了後に `evaluate_alert_rules_task.delay()` を dispatch
+  - `backend/app/tasks/crawl_tasks.py`
+    - クロール保存完了後に `evaluate_alert_rules_task.delay()` を dispatch
+  - `backend/app/api/endpoints/rankings_notifications.py`
+    - notifications 一覧の current_user dependency を復元
+  - `backend/tests/test_a37_a38_ops_contract.py`
+    - rule seed / score_change alert の契約を追加
+- 検証:
+  - `python -m pytest backend/tests/test_a37_a38_ops_contract.py backend/tests/test_tasks.py -q` => 3 passed, 1 skipped
+  - `python -m pytest backend/tests/test_c39_notification_contract.py backend/tests/test_ops_recovery.py backend/tests/test_lp_health_retry.py -q` => 10 passed
+- 効果:
+  - alert_rules / alert_history モデル、4種ルール評価、ranking/crawl 後の自動発火までローカルコード面で完了
+
+## 2026-03-08 A38 Data Freshness Automation Completion
+- Task: `A38_data_freshness_automation.md`
+- 変更:
+  - `backend/app/tasks/freshness_tasks.py` を追加
+    - freshness score 計算
+    - daily report 生成
+    - stale ad の auto-recrawl flag 付与
+  - `backend/app/tasks/worker.py`
+    - `refresh-data-freshness` beat schedule を追加
+    - freshness task route / autodiscover を追加
+  - `backend/tests/test_a37_a38_ops_contract.py`
+    - freshness score と auto-recrawl scheduling 契約を追加
+- 検証:
+  - `python -m pytest backend/tests/test_a37_a38_ops_contract.py backend/tests/test_tasks.py -q` => 3 passed, 1 skipped
+- 効果:
+  - ad_metadata の freshness 運用が日次 task で継続実行可能になった
+
+## 2026-03-08 A-R2-4 DB Retry Unification Verification
+- Task: `A_R2_4_db_retry_unification.md`
+- 確認:
+  - `backend/app/core/database.py`
+    - `get_session_with_retry()` 実装あり
+    - `get_db()` が retry session を使用
+    - retry warning / exhausted error の構造化ログ出力あり
+  - `backend/lambda_handler.py`
+    - DB 初期化で `get_session_with_retry()` を使用
+- 効果:
+  - API / task / Lambda で DB retry policy の統一が確認できたため task doc を完了化
+
+## 2026-03-08 A-R2-5 Metadata Validation Compatibility Update
+- Task: `A_R2_5_metadata_validation.md`
+- 変更:
+  - `backend/scripts/validate_metadata.py` を追加
+    - `validate_metadata_schema.py` への互換 wrapper
+- 確認:
+  - `backend/scripts/validate_metadata_schema.py`
+    - required/recommended schema を保持
+    - JSON report 出力あり
+    - gate audit log 出力あり
+- 効果:
+  - 旧 task doc / 手順が期待する `python -m scripts.validate_metadata` 経路を復元
+  - 必須欠落率の実データ判定以外はローカルで満たせる状態に整理
+
+## 2026-03-08 A-R2-6 Alert Engine Verification
+- Task: `A_R2_6_alert_engine.md`
+- 確認:
+  - `backend/app/models/alert_rule.py` / `backend/app/models/alert_history.py` が存在
+  - `backend/app/services/alert_engine.py` で `evaluate_all_rules()` が稼働
+  - default rules は `score_threshold` / `new_hit` / `data_quality` に加えて `score_change` を seed
+  - `backend/app/api/endpoints/rankings_notifications.py` と `backend/tests/test_c39_notification_contract.py` で C39 API 化の実装証跡あり
+- 効果:
+  - A37 phase 2 相当の alert engine / API 連携ローカル確認を完了
+
+## 2026-03-08 A39 Data Freshness + LP Intelligence Partial Implementation
+- Task: `A39_data_freshness_lp_intelligence.md`
+- 変更:
+  - `backend/app/models/ad.py`
+    - `ad_metadata` 保存時の標準化を追加
+    - `last_crawled_at` / `crawl_source` / `freshness_ttl_sec` / `lp_snapshot_at`
+    - `lp_info` 統合
+    - `lp_fetch_error_code` 正規化
+  - `backend/scripts/audit_data_freshness.py` を追加
+    - 24時間以内更新率
+    - LP情報欠損率
+    - platform別鮮度偏差
+    - stale広告 Top N
+  - `backend/scripts/audit_crawl_search_consistency.py` を追加
+    - `crawl_jobs.progress_detail` ベースで insert/search visible 差分を監査
+    - root cause 集計と不整合 job Top N をJSON出力可能化
+  - `backend/scripts/validate_metadata_schema.py`
+    - A39 標準キーを recommended schema に追加
+  - `backend/tests/test_a39_data_freshness_lp_intelligence.py` を追加
+    - 保存時正規化
+    - 鮮度監査サマリ
+    - crawl→search整合監査
+- 検証:
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py -q` => 3 passed
+  - `python -m pytest tests/test_a101_creative_library_audit.py -q` => 3 passed
+- 残課題:
+  - 既存全データの一括 backfill は未実施
+
+## 2026-03-08 A39 Data Freshness + LP Intelligence Follow-up
+- Task: `A39_data_freshness_lp_intelligence.md`
+- 変更:
+  - `backend/scripts/backfill_a39_operational_metadata.py` を追加
+    - 既存広告の `last_crawled_at` / `crawl_source` / `freshness_ttl_sec` / `lp_snapshot_at`
+    - `lp_info` / `lp_fetch_error_code` を dry-run / execute で backfill 可能化
+  - `backend/app/tasks/metrics_tasks.py`
+    - 日次 metrics task の戻り値に
+      - `data_freshness_audit`
+      - `crawl_search_consistency_audit`
+      を追加
+    - 完了ログに `freshness_24h_rate` / `crawl_search_consistency_rate` を追加
+  - `backend/tests/test_a39_data_freshness_lp_intelligence.py`
+    - backfill 契約
+    - daily metrics task 戻り値契約
+    を追加
+- 検証:
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py -q` => 5 passed
+  - `python -m pytest tests/test_a101_creative_library_audit.py -q` => 3 passed
+- 効果:
+  - A39 の「既存データ補正」と「日次自動実行」がローカルコード上で成立
+
+## 2026-03-08 A40 Ads Volume Recovery + Error Zero Partial Implementation
+- Task: `A40_ads_volume_recovery_and_error_zero.md`
+- 変更:
+  - `backend/app/tasks/metrics_tasks.py`
+    - `audit_incomplete_ads()` を追加
+    - `title` / `platform` / `advertiser_name` / `destination_url` の欠損を日次監査
+    - `ad_metadata.is_incomplete_record` / `incomplete_reason` / `incomplete_checked_at` を付与
+    - daily metrics task の戻り値に `incomplete_ads_audit` を追加
+  - `backend/scripts/audit_ads_volume_errors.py`
+    - A40 health report を追加
+    - `previous_day_new_ads`
+    - `seven_day_avg_new_ads`
+    - `save_failure_count`
+    - `field_missing_counts` / `field_missing_rates`
+    - `reprocess_pending_count`
+    - `incomplete_records_top_n`
+    - warning code:
+      - `below_target_min_ads`
+      - `save_failures_present`
+      - `incomplete_records_present`
+      - `reprocess_backlog_present`
+  - `backend/tests/test_a40_ads_volume_health.py` を追加
+    - incomplete record marking
+    - volume/save-failure/backlog health summary
+- 検証:
+  - `python -m pytest tests/test_a40_ads_volume_health.py -q` => 2 passed
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py tests/test_a101_creative_library_audit.py -q` => 8 passed
+- 残課題:
+  - incomplete record を一覧APIで除外する最終制御は C 側連携が必要
+
+## 2026-03-08 A40 Ads Volume Recovery Plan Automation Update
+- Task: `A40_ads_volume_recovery_and_error_zero.md`
+- 変更:
+  - `backend/scripts/audit_ads_volume_errors.py`
+    - `build_daily_recovery_plan()` を追加
+    - `target_min_ads_per_day` 未達時の deficit 算出
+    - focus keyword + helper query から日次 recovery query plan を自動生成
+    - `--execute-recovery` 時は plan に基づいて quick-crawl を実行し、
+      - `added_fetched_ads`
+      - `added_new_ads`
+      - `attempts`
+      をレポートに記録
+    - query/platform/country 集計の append 位置不具合を修正
+  - `backend/tests/test_a40_ads_volume_health.py`
+    - daily recovery plan build/execute 契約を追加
+- 検証:
+  - `python -m pytest tests/test_a40_ads_volume_health.py -q` => 3 passed
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py tests/test_a101_creative_library_audit.py -q` => 8 passed
+- 効果:
+  - A40 の「最低件数未達時に補助キーワードを自動投入して再収集」のローカルCLI運用経路を実装
+
+## 2026-03-08 A106 Real Metrics Coverage & Numeric Truth Audit
+- Task: `A106_real_metrics_coverage_and_numeric_truth_audit.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py`
+    - `build_numeric_truth_audit()` を追加
+    - `spend / impressions / reach / view_count / lp_score / extract_quality_score`
+      の `real / estimated / missing` を集計
+    - `estimated_only_count` / `missing_numeric_count` / `stale_real_metrics_count`
+      を集計
+    - platform / genre breakdown と `priority_backfill_targets` を追加
+    - `creative_library_audit.numeric_truth_audit` として日次 JSON に統合
+  - `backend/app/tasks/metrics_tasks.py`
+    - daily metrics task の戻り値と完了ログに numeric truth summary を追加
+  - `backend/scripts/data_quality_snapshot.py`
+    - snapshot の `field_fill_rates.numeric_truth` に A106 summary を追加
+  - `backend/scripts/daily_execution_report.py`
+    - `NUMERIC TRUTH` セクションを追加
+    - estimated only / missing / stale real と backfill priority を表示
+  - `backend/tests/test_a106_numeric_truth_audit.py` を追加
+    - real / estimated / missing 集計
+    - stale real metrics
+    - priority backfill target
+- 検証:
+  - `python -m pytest tests/test_a106_numeric_truth_audit.py -q` => 1 passed
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py tests/test_a101_creative_library_audit.py -q` => 8 passed
+- 効果:
+  - 実数値と推定値の依存度を日次監査 JSON と CLI の両方で追跡可能
+  - D へ渡す backfill 優先候補を ad 単位で抽出可能
+
+## 2026-03-08 A107 Japanese Inventory Audit & Exclusion Policy
+- Task: `A107_japanese_inventory_audit_and_exclusion_policy.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py`
+    - `build_japanese_inventory_audit()` を追加
+    - `jp / non_jp / unknown` 件数と rate を集計
+    - `jp_char_ratio` / `language_source` / `exclude_from_analysis` / `exclude_reason`
+      の coverage を集計
+    - Bedrock/AI language metadata と rule-based 判定の不一致サンプルを抽出
+    - `manual_review_queue` と `exclusion_policy` を追加
+    - `creative_library_audit.japanese_inventory_audit` として日次 JSON に統合
+  - `backend/app/tasks/metrics_tasks.py`
+    - daily metrics task の戻り値と完了ログに Japanese inventory summary を追加
+  - `backend/scripts/data_quality_snapshot.py`
+    - snapshot の `field_fill_rates.japanese_inventory` に A107 summary を追加
+  - `backend/scripts/daily_execution_report.py`
+    - `JAPANESE INVENTORY` セクションを追加
+  - `backend/tests/test_a107_japanese_inventory_audit.py` を追加
+    - count/rate
+    - mismatch sample
+    - manual review queue
+- 検証:
+  - `python -m pytest tests/test_a107_japanese_inventory_audit.py -q` => 1 passed
+  - `python -m pytest tests/test_a39_data_freshness_lp_intelligence.py tests/test_a101_creative_library_audit.py tests/test_a106_numeric_truth_audit.py -q` => 9 passed
+- 効果:
+  - 日本語広告比率と除外/レビュー候補を日次 JSON・snapshot・CLIで追跡可能
+  - D/C/B へ同じ除外ポリシー基準を渡せる土台を追加
+  - incomplete record を一覧APIで除外する最終制御は C 側連携が必要
+
+## 2026-03-08 A108 Bedrock Precision, ROI, and Review Policy
+- Task: `A108_bedrock_precision_roi_and_review_policy.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py`
+    - `build_bedrock_precision_roi_audit()` を追加
+    - `rule_only / bedrock_used / manual_review` の件数・比率を集計
+    - `language / product_category / topic_label / priority_score` の精度 proxy を追加
+    - 商材別の high-confidence false positive / false negative 棚卸しを追加
+    - `review_required_policy` と `bedrock_value_policy` を定義
+    - `priority_score_roi` と actual metrics capture の相関を追加
+    - `creative_library_audit.bedrock_precision_roi_audit` として日次 JSON に統合
+  - `backend/app/tasks/metrics_tasks.py`
+    - daily metrics task の戻り値と完了ログに A108 summary を追加
+  - `backend/scripts/data_quality_snapshot.py`
+    - snapshot の `field_fill_rates.bedrock_precision_roi` に A108 summary を追加
+  - `backend/scripts/mlops_monitoring_snapshot.py`
+    - 最新の creative library audit から A108 summary を読み込み、MLOps snapshot に統合
+  - `backend/tests/test_a108_bedrock_precision_roi_audit.py` を追加
+  - `backend/tests/test_a100_mlops_monitoring_snapshot.py`
+    - MLOps snapshot への A108 summary 連携を検証
+  - `backend/tests/test_a39_data_freshness_lp_intelligence.py`
+    - daily metrics task 戻り値の A108 契約を追加
+
+## 2026-03-08 A109 Meta Completion Audit and Acceptance
+- Task: `A109_meta_completion_audit_and_acceptance.md`
+- 変更:
+  - `backend/app/services/data_quality_report.py`
+    - `build_meta_completion_audit()` を追加
+    - Meta 限定で `real / estimated / missing` 数値状態を集計
+    - `jp_rate / new_saved_rate / lp_attached_rate / creative_attached_rate` を追加
+    - `saved_without_real_metrics` 棚卸しを追加
+    - `token_valid_but_api_failed` と `browser_fallback_dependency` を分離監査
+    - `completion_score` と `accepted_80 / accepted_90` を定義
+    - `creative_library_audit.meta_completion_audit` として日次 JSON に統合
+  - `backend/scripts/data_quality_snapshot.py`
+    - snapshot の `field_fill_rates.meta_completion_acceptance` に A109 summary を追加
+  - `backend/scripts/run_live_ad_ingestion_wave.py`
+    - 実行結果 JSON に `meta_completion_audit` summary を追加
+  - `backend/scripts/run_jp_growth_pipeline.py`
+    - 実行結果 JSON に `meta_completion_audit` summary を追加
+  - `backend/tests/test_a109_meta_completion_audit.py` を追加
+- 検証:
+  - `python -m pytest tests/test_a109_meta_completion_audit.py -q` => 1 passed
+  - `python -m pytest tests/test_a108_bedrock_precision_roi_audit.py tests/test_a39_data_freshness_lp_intelligence.py tests/test_a100_mlops_monitoring_snapshot.py -q` => 8 passed
+
+## 2026-03-08 A100 Local Hardening Update
+- Task: `A100_mlops_pipeline.md`
+- 変更:
+  - `backend/scripts/mlops_retrain_pipeline.py`
+    - S3 保存時に version artifact に加えて `hit_predictor_latest.pkl` alias を copy するよう追加
+    - `latest.json` に `latest_model_key` を含め、S3 側の latest pointer を明示化
+    - retrain result の `s3` summary に version/latest key を返すよう強化
+  - `backend/scripts/deploy_worker_image_a100.ps1`
+    - ECS register 後に task definition ARN を取得
+    - 実際に登録された container image が指定 tag を向いていることを検証
+  - `backend/tests/test_a100_mlops_pipeline_contract.py`
+    - S3 latest alias publish 契約
+    - deploy script の task-definition verification 契約
+- 検証:
+  - `python -m pytest tests/test_a100_mlops_pipeline_contract.py tests/test_a100_mlops_monitoring_snapshot.py tests/test_a100_mlops_runner_contract.py -q`
+- 効果:
+  - A100 の未完了項目のうち、ローカルコードで担保できる「latest alias 管理」と「worker image 反映確認」を追加
+  - 残りは AWS 実環境での S3 upload / ECS 実行 / dashboard apply 確認のみ
+
+## 2026-03-08 A100 Production Verification Follow-up
+- Task: `A100_mlops_pipeline.md`
+- 実施:
+  - `python scripts/mlops_retrain_pipeline.py --s3-bucket vaap-production-storage`
+    - version artifact / metadata の S3 upload を実環境で確認
+    - 結果は quality gate reject (`test_accuracy=0.22 < 0.60`) のため latest alias は未更新
+  - `python scripts/mlops_monitoring_snapshot.py --publish-cloudwatch`
+    - `VAAP/MLOps` namespace publish を確認
+    - `APP_ENV=production` でも再実行し、production dimension で publish 確認
+  - `backend/scripts/deploy_worker_image_a100.ps1`
+    - 実行時に Docker daemon 未起動で失敗
+    - あわせて task-definition temp JSON の BOM で `aws ecs register-task-definition` が失敗することを確認
+- 変更:
+  - `backend/scripts/deploy_worker_image_a100.ps1`
+    - `docker info` による daemon fail-fast を追加
+    - task-definition temp JSON を `utf8NoBOM` で書き出すよう修正
+- 残課題:
+  - Docker daemon を起動した状態で worker image deploy を再実行
+  - monitoring Terraform apply を実環境へ反映
+
+## 2026-03-08 A100 Production Monitoring Apply
+- Task: `A100_mlops_pipeline.md`
+- 実施:
+  - `terraform apply -auto-approve '-target=aws_cloudwatch_dashboard.ops_overview' '-target=aws_cloudwatch_metric_alarm.mlops_drift_high' '-target=aws_cloudwatch_metric_alarm.mlops_accuracy_low'`
+    - `vaap-production-mlops-drift-high`
+    - `vaap-production-mlops-accuracy-low`
+    - `vaap-production-ops-overview` の MLOps widgets
+    を本番へ反映
+  - `aws ecs run-task ... mlops_monitoring ...`
+    - ECS/Fargate 起動自体は成功
+    - ただし現行 task definition (`vaap-production-worker:13`, image=`:latest`) 上では exit code 1
+    - CloudWatch Logs では `app.tasks.runner` の `json.loads(sys.argv[2])` で `JSONDecodeError`
+- 状態:
+  - A100 の monitoring/alarm/dashboard は実環境で確認完了
+  - worker image の最新化と ECS runner 実行確認は、Docker Desktop Service を起動できないため継続ブロック

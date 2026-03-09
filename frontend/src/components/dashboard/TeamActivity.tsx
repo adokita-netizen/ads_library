@@ -28,25 +28,7 @@ interface WeeklySummary {
   collections: number;
 }
 
-// ─── Mock Data ───
-
-const MOCK_ACTIVITIES: ActivityItem[] = [
-  { id: "a1", user: "田中 太郎", userInitial: "田", action: "コレクションに追加", target: "美容系ヒット集", timestamp: new Date(Date.now() - 15 * 60000).toISOString() },
-  { id: "a2", user: "佐藤 花子", userInitial: "佐", action: "メモを追加", target: "スキンケア広告X", timestamp: new Date(Date.now() - 45 * 60000).toISOString() },
-  { id: "a3", user: "鈴木 一郎", userInitial: "鈴", action: "新規コレクション作成", target: "ダイエット系Q1", timestamp: new Date(Date.now() - 3 * 3600000).toISOString() },
-  { id: "a4", user: "田中 太郎", userInitial: "田", action: "エクスポート", target: "月次レポート2月", timestamp: new Date(Date.now() - 5 * 3600000).toISOString() },
-  { id: "a5", user: "佐藤 花子", userInitial: "佐", action: "競合分析を実施", target: "サプリメントA", timestamp: new Date(Date.now() - 8 * 3600000).toISOString() },
-  { id: "a6", user: "山田 二郎", userInitial: "山", action: "コレクションに追加", target: "金融系参考", timestamp: new Date(Date.now() - 24 * 3600000).toISOString() },
-];
-
-const MOCK_MEMBERS: TeamMember[] = [
-  { id: 1, name: "田中 太郎", initial: "田", isOnline: true },
-  { id: 2, name: "佐藤 花子", initial: "佐", isOnline: true },
-  { id: 3, name: "鈴木 一郎", initial: "鈴", isOnline: false },
-  { id: 4, name: "山田 二郎", initial: "山", isOnline: false },
-];
-
-const MOCK_SUMMARY: WeeklySummary = { activeMembers: 3, notes: 12, collections: 4 };
+// ─── Default empty state ───
 
 // ─── Helpers ───
 
@@ -63,9 +45,9 @@ function timeAgo(iso: string): string {
 // ─── Component ───
 
 export default function TeamActivity() {
-  const [activities, setActivities] = useState<ActivityItem[]>(MOCK_ACTIVITIES);
-  const [members, setMembers] = useState<TeamMember[]>(MOCK_MEMBERS);
-  const [summary, setSummary] = useState<WeeklySummary>(MOCK_SUMMARY);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [summary, setSummary] = useState<WeeklySummary>({ activeMembers: 0, notes: 0, collections: 0 });
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {

@@ -88,6 +88,7 @@ export default function SectionTabContent<T extends AdRecord>({
   const [profileAdvertiser, setProfileAdvertiser] = useState<string | null>(null);
   const [competitorName, setCompetitorName] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<{ id: string | number; format: string } | null>(null);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
 
   const genre = selectedGenre !== "all" ? selectedGenre : undefined;
 
@@ -170,8 +171,11 @@ export default function SectionTabContent<T extends AdRecord>({
       case "scenario":
         return (
           <div className="space-y-4">
-            <ScenarioBuilder />
-            <SavedScenarios onLoad={() => {}} />
+            <ScenarioBuilder
+              loadScenarioId={selectedScenarioId}
+              onScenarioLoaded={() => setSelectedScenarioId(null)}
+            />
+            <SavedScenarios onLoad={setSelectedScenarioId} />
           </div>
         );
 

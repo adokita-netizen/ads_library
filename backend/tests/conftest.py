@@ -2,6 +2,7 @@
 
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -64,6 +65,36 @@ db_mock.async_engine = MagicMock()
 db_mock.AsyncSessionLocal = MagicMock()
 db_mock.get_async_session = MagicMock()
 db_mock.get_sync_session = MagicMock()
+db_mock.get_async_read_session = MagicMock()
+db_mock.get_sync_read_session = MagicMock()
+db_mock.check_pool_health = lambda: {"utilization": 0.0}
+db_mock.is_in_memory_mode = lambda: True
+db_mock.get_connection_error = lambda: None
+db_mock.reconnect = lambda *_args, **_kwargs: {"ok": True}
+
+_job_locks: dict[str, float] = {}
+db_mock._job_locks = _job_locks
+def _acquire_job_lock(job_name: str, ttl: int = 600) -> bool:
+    if job_name in _job_locks:
+        return False
+    _job_locks[job_name] = ttl
+    return True
+db_mock.acquire_job_lock = _acquire_job_lock
+db_mock.release_job_lock = lambda job_name: _job_locks.pop(job_name, None)
+
+@contextmanager
+def _sync_session_scope():
+    sess = db_mock.SyncSessionLocal()
+    try:
+        yield sess
+        sess.commit()
+    except Exception:
+        sess.rollback()
+        raise
+    finally:
+        sess.close()
+
+db_mock.sync_session_scope = _sync_session_scope
 
 sys.modules["app.core.database"] = db_mock
 

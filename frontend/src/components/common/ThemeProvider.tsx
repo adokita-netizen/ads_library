@@ -42,8 +42,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   /* Read saved preference on mount */
   useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const initial: Theme = stored === "dark" ? "dark" : "light";
+    const stored = localStorage.getItem("vaap-theme") as Theme | null;
+    const legacy = localStorage.getItem("theme") as Theme | null;
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial: Theme =
+      stored === "dark" || stored === "light"
+        ? stored
+        : legacy === "dark" || legacy === "light"
+          ? legacy
+          : systemPrefersDark
+            ? "dark"
+            : "light";
     setTheme(initial);
     applyTheme(initial);
   }, [applyTheme]);
@@ -51,7 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next: Theme = prev === "light" ? "dark" : "light";
-      localStorage.setItem("theme", next);
+      localStorage.setItem("vaap-theme", next);
       applyTheme(next);
       return next;
     });

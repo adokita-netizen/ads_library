@@ -4,7 +4,7 @@
 resource "aws_sqs_queue" "heavy_tasks" {
   name                       = "${local.name_prefix}-heavy-tasks"
   visibility_timeout_seconds = 900 # 15 minutes (ECS task duration)
-  message_retention_seconds  = 86400
+  message_retention_seconds  = var.sqs_message_retention_seconds
   receive_wait_time_seconds  = 10
 
   redrive_policy = jsonencode({
@@ -17,7 +17,7 @@ resource "aws_sqs_queue" "heavy_tasks" {
 
 resource "aws_sqs_queue" "heavy_tasks_dlq" {
   name                      = "${local.name_prefix}-heavy-tasks-dlq"
-  message_retention_seconds = 604800 # 7 days
+  message_retention_seconds = var.sqs_dlq_retention_seconds
 
   tags = { Name = "${local.name_prefix}-heavy-tasks-dlq" }
 }
@@ -26,7 +26,7 @@ resource "aws_sqs_queue" "heavy_tasks_dlq" {
 resource "aws_sqs_queue" "light_tasks" {
   name                       = "${local.name_prefix}-light-tasks"
   visibility_timeout_seconds = 360 # 6 minutes (Lambda timeout + margin)
-  message_retention_seconds  = 86400
+  message_retention_seconds  = var.sqs_message_retention_seconds
   receive_wait_time_seconds  = 10
 
   redrive_policy = jsonencode({
@@ -39,7 +39,7 @@ resource "aws_sqs_queue" "light_tasks" {
 
 resource "aws_sqs_queue" "light_tasks_dlq" {
   name                      = "${local.name_prefix}-light-tasks-dlq"
-  message_retention_seconds = 604800 # 7 days
+  message_retention_seconds = var.sqs_dlq_retention_seconds
 
   tags = { Name = "${local.name_prefix}-light-tasks-dlq" }
 }

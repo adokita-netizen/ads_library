@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EC通販 - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>EC通販</h1>
+<p class="summary">ec_shopping | 29 ads | Avg views: 37.0K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">29</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">10</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">28</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">10</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">22</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in EC通販 ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>statistic</span>
+            <span style="color:#f59e0b;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:10.344827586206897%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>benefit</span>
+            <span style="color:#f59e0b;font-weight:600">7%</span>
+        </div>
+        <div class="pattern-bar" style="width:6.896551724137931%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>urgency</span>
+            <span style="color:#f59e0b;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">28%</span>
+        </div>
+        <div class="pattern-bar" style="width:27.586206896551722%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>line_add</span>
+            <span style="color:#22c55e;font-weight:600">14%</span>
+        </div>
+        <div class="pattern-bar" style="width:13.793103448275861%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">14%</span>
+        </div>
+        <div class="pattern-bar" style="width:13.793103448275861%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>purchase</span>
+            <span style="color:#22c55e;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>consultation</span>
+            <span style="color:#22c55e;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">24%</span>
+        </div>
+        <div class="pattern-bar" style="width:24.137931034482758%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>excitement</span>
+            <span style="color:#8b5cf6;font-weight:600">17%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.24137931034483%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:10.344827586206897%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>desire</span>
+            <span style="color:#8b5cf6;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:10.344827586206897%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>trust</span>
+            <span style="color:#8b5cf6;font-weight:600">7%</span>
+        </div>
+        <div class="pattern-bar" style="width:6.896551724137931%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">76%</span>
+        </div>
+        <div class="pattern-bar" style="width:75.86206896551724%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">31%</span>
+        </div>
+        <div class="pattern-bar" style="width:31.03448275862069%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>numbers</span>
+            <span style="color:#3b82f6;font-weight:600">14%</span>
+        </div>
+        <div class="pattern-bar" style="width:13.793103448275861%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>testimonial</span>
+            <span style="color:#3b82f6;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">62%</span>
+        </div>
+        <div class="pattern-bar" style="width:62.06896551724138%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">17%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.24137931034483%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>EC_site</span>
+            <span style="color:#60a5fa;font-weight:600">14%</span>
+        </div>
+        <div class="pattern-bar" style="width:13.793103448275861%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>article_lp</span>
+            <span style="color:#60a5fa;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.4482758620689653%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">28%</span>
+        </div>
+        <div class="pattern-bar" style="width:27.586206896551722%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">21%</span>
+        </div>
+        <div class="pattern-bar" style="width:20.689655172413794%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>form</span>
+            <span style="color:#22c55e;font-weight:600">17%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.24137931034483%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">14%</span>
+        </div>
+        <div class="pattern-bar" style="width:13.793103448275861%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">10%</span>
+        </div>
+        <div class="pattern-bar" style="width:10.344827586206897%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" class=active>EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=710481248151818" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/16.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">美容大国韓国からついに上陸🇰🇷</div>
+            <div class="ad-desc">美容大国韓国からついに上陸🇰🇷
+10年間無事故で安全性も抜群✨
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+JUNO-BEAUTY-PE.COM
+LINEでクーポンGET！
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">242.1K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 93</span><span>めちゃ痩せ 올짱女子</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=710481248151818" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">93</strong> (longevity:40, spend:20, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.01075268817204%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:21.50537634408602%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:21.50537634408602%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:10.75268817204301%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.225806451612903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://juno-beauty-pe.com/beauty/ryuzi48" target="_blank">https://juno-beauty-pe.com/beauty/ryuzi48</a>
+            <div class="lp-detail">
+                <div><strong>アンケートに答えてクーポンゲット！슬림(スルリム)式 脂肪破壊術</strong></div>
+                <div>アンケートに答えてクーポンゲット！슬림(スルリム)式 脂肪破壊術</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> ×</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/16.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1453240959453658" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/39.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">10年間無事故で安全性も抜群✨</div>
+            <div class="ad-desc">美容大国韓国からついに上陸🇰🇷
+10年間無事故で安全性も抜群✨
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+JUNO-BEAUTY-PE.COM
+LINEでクーポンGET！
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">236.7K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 93</span><span>めちゃ痩せ 올짱女子</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1453240959453658" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">93</strong> (longevity:40, spend:20, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.01075268817204%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:21.50537634408602%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:21.50537634408602%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:10.75268817204301%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:3.225806451612903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://juno-beauty-pe.com/beauty/ryuzi55" target="_blank">https://juno-beauty-pe.com/beauty/ryuzi55</a>
+            <div class="lp-detail">
+                <div><strong>アンケートに答えてクーポンゲット！슬림(スルリム)式 脂肪破壊術</strong></div>
+                <div>アンケートに答えてクーポンゲット！슬림(スルリム)式 脂肪破壊術</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> ×</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/39.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1777845266148495" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/122.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">6食1,000円（税込）送料無料でお届け！</div>
+            <div class="ad-desc">【リピーター続出中！】香川の老舗製麺会社の技術と旨さの絶品本格讃岐うどんを6食1,000円（税込）送料無料でお届け！
+STORE.ISIMARU.CO.JP
+＼累計販売数470万食突破／絶品本格讃岐うどん
+石丸製麺の公式通販サイト讃岐うどんのお取り寄せなら石丸製麺の人気のお試しセット！送料無料でお届けいたしますです。自慢の乾麺から人気のぶっかけうどんや『公式WEBサイト限定』お試しセットが初回ポイント利用で...
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">180.0K views</span><span class="badge-hit">HIT 89</span><span>おススメ！「食品×健康」ナビ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1777845266148495" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: purchase</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://www.store.isimaru.co.jp/html/page11.html?utm_source=facebook_Instagram&amp;utm_medium=cpm&amp;utm_campaign=ishimaru-udon&amp;utm_content=hs" target="_blank">https://www.store.isimaru.co.jp/html/page11.html?utm_source=facebook_Instagram&amp;utm_medium=cpm&amp;utm_ca</a>
+            <div class="lp-detail">
+                <div><strong>讃岐うどんのお取り寄せなら石丸製麺の人気のお試しセット！送料無料でお届けいたします 讃岐うどんの通販【石丸製麺】公式お取り寄せサイト</strong></div>
+                <div>明治37年創業。讃岐うどんの本場・香川県から工場直送！乾麺・半生麺など豊富な品揃え。お試しセットは初回ポイント利用で実質800円〜！讃岐うどん職人の技を活かした石丸独自の手打ち式製法で、本場の讃岐うどんが自宅で味わえる。石丸製麺の公式通販サイトなら、本州・九州・四国は5000円以上で全国送料無料でお届けいたします。さぬきうどんのことなら石丸製麺へ。</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> 石丸製麺 会社HPへ</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#CCCCCC;border-radius:2px;border:1px solid #333" title="#CCCCCC"></span><span style="display:inline-block;width:14px;height:14px;background:#6600FF;border-radius:2px;border:1px solid #333" title="#6600FF"></span><span style="display:inline-block;width:14px;height:14px;background:#333333;border-radius:2px;border:1px solid #333" title="#333333"></span><span style="display:inline-block;width:14px;height:14px;background:#666666;border-radius:2px;border:1px solid #333" title="#666666"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/122.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=759457170170015" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/113.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">2,000点以上。腎臓病食・介護食・流動食を医療機関など施設へ納入実績あり。</div>
+            <div class="ad-desc">腎臓病食・介護食・治療食専門通販【ビースタイル】
+商品点数2,000点以上。腎臓病食・介護食・流動食を医療機関など施設へ納入実績あり。
+専門スタッフがお困りごとを優しくサポートします。
+いつでもお気軽にご相談ください。
+#ビースタイル
+B-STYLE-MSC.COM
+【衛生商品】フジスーパーポリグローブ M 100枚
+腎臓病食・介護食を通販でお届けします！1500種以上の豊富な品揃えからお選び下さい。腎臓病で食事制限をされている方や介護を受けていて介護食・流動食を召し上がっている方にも毎日の食事に楽しさ、喜びをお届けし.....
+Learn More</div>
+            <div class="ad-meta"><span class="badge-views">160.2K views</span><span class="badge-hit">HIT 89</span><span>ビースタイル本店</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=759457170170015" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: consultation</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (EC_site)</h4>
+            <a class="lp-url" href="https://www.b-style-msc.com/SHOP/00094426.html" target="_blank">https://www.b-style-msc.com/SHOP/00094426.html</a>
+            <div class="lp-detail">
+                <div><strong>【衛生商品】フジスーパーポリグローブ M 100枚</strong></div>
+                <div>ビースタイル本店の【衛生商品】フジスーパーポリグローブ M 100枚の商品ページはこちらです。　介護食、福祉用品、介護用品の通販・宅配のビースタイル本店は商品品揃え1800種以上！</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FF66CC;border-radius:2px;border:1px solid #333" title="#FF66CC"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#F0F0F0;border-radius:2px;border:1px solid #333" title="#F0F0F0"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFF00;border-radius:2px;border:1px solid #333" title="#FFFF00"></span><span style="display:inline-block;width:14px;height:14px;background:#66CCFF;border-radius:2px;border:1px solid #333" title="#66CCFF"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/113.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1528378378307880" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/116.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">3種類のレトルトカレーセット（12食入り）！！エスビー食品公式通販「お届けサイト」で販売中。</div>
+            <div class="ad-desc">エスビー食品とタニタ食堂がコラボ♪♪１食塩分１ｇにこだわった3種類のレトルトカレーセット（12食入り）！！エスビー食品公式通販「お届けサイト」で販売中。
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂監修「適塩カレー」
+Learn More
+SBOTODOKE.COM
+S&amp;Bタニタ食堂</div>
+            <div class="ad-meta"><span class="badge-views">97.2K views</span><span class="badge-hit">HIT 87</span><span>エスビー食品お届けサイト</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1528378378307880" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">Offer: bundle</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">87</strong> (longevity:38, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:43.67816091954023%;background:#22c55e" title="longevity: 38"></div><div class="score-seg" style="width:22.988505747126435%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.988505747126435%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.896551724137931%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.4482758620689653%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (EC_site)</h4>
+            <a class="lp-url" href="https://www.sbotodoke.com/shop/pages/tekien_curry.aspx" target="_blank">https://www.sbotodoke.com/shop/pages/tekien_curry.aspx</a>
+            <div class="lp-detail">
+                <div><strong>適塩カレー｜エスビー食品公式通販 お届けサイト</strong></div>
+                <div>エスビー食品が運営する公式通販サイト「お届けサイト」。適塩カレースパイスやハーブ、カレー、パスタ、調味料、レトルト、業務用香辛料など豊富に品揃え。</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> お届けサイトお問い合わせフォーム, エスビー食品コーポレートサイト
+            お問い合わせフォーム</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1918173099048283" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/140.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#6</span>
+            <div class="ad-title">qoo10 #メガ割 #EIOM</div>
+            <div class="ad-desc">欠かさずやれば大きく効果が得られる事
+#qoo10 #メガ割 #EIOM
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+WWW.QOO10.JP
+Ryusk
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">52.2K views</span><span class="badge-video">VIDEO</span><span class="badge-hit">HIT 74</span><span>Ryusk スポンサー: Eiomイオム公式</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1918173099048283" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">74</strong> (longevity:34, spend:7, active_bonus:20, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:45.94594594594595%;background:#22c55e" title="longevity: 34"></div><div class="score-seg" style="width:9.45945945945946%;background:#3b82f6" title="spend: 7"></div><div class="score-seg" style="width:27.027027027027028%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:13.513513513513514%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:4.054054054054054%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (EC_site)</h4>
+            <a class="lp-url" href="https://www.qoo10.jp/g/1156722642" target="_blank">https://www.qoo10.jp/g/1156722642</a>
+            <div class="lp-detail">
+                <div><strong>Qoo10 - ãããéè²©ï½eBay Japan</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/140.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=820508563651991&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#7</span>
+            <div class="ad-title">🌵Upgrade Your Everyday Carry</div>
+            <div class="ad-desc">Considerately designed &amp; crafted for perfection. Each piece ages uniquely to the owner, meaning no two pieces will patina the same.
+
+⭐𝟐𝟎% 𝐎𝐅𝐅 code ➜ 𝐃𝐔𝐓𝐂𝐇𝐌𝐀𝐍𝟐𝟎
+✔️Guaranteed to last a lifetime.
+✔️Proudly made in the USA.
+✔️100% handcrafted.
+✔️Full-grained leather.
+✔️Sourced &amp; tanned in the USA. 
+✔️Minimal + functional designs.</div>
+            <div class="ad-meta"><span class="badge-views">22.2K views</span><span>Lost Dutchman Leather Goods</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=820508563651991&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.lostdutchmanleather.com" target="_blank">https://www.lostdutchmanleather.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1456561255618445&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#8</span>
+            <div class="ad-title">🌵Upgrade Your Everyday Carry</div>
+            <div class="ad-desc">Considerately designed &amp; crafted for perfection. Each piece ages uniquely to the owner, meaning no two pieces will patina the same.
+
+⭐𝟐𝟎% 𝐎𝐅𝐅 code ➜ 𝐃𝐔𝐓𝐂𝐇𝐌𝐀𝐍𝟐𝟎
+✔️Guaranteed to last a lifetime.
+✔️Proudly made in the USA.
+✔️100% handcrafted.
+✔️Full-grained leather.
+✔️Sourced &amp; tanned in the USA. 
+✔️Minimal + functional designs.</div>
+            <div class="ad-meta"><span class="badge-views">22.2K views</span><span>Lost Dutchman Leather Goods</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1456561255618445&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.lostdutchmanleather.com" target="_blank">https://www.lostdutchmanleather.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=2191184645038156" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/19.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#9</span>
+            <div class="ad-title">[日本初上陸]</div>
+            <div class="ad-desc">[日本初上陸]
+1回で約35%の脂肪細胞無くせる脂肪破壊術スルリムを
+JUNO独占✨
+15分で簡単に部分痩せ目指しちゃお！！
+JUNO-BEAUTY-PE.COM
+今すぐLINE追加してみてね✅
+脂肪細胞を最大35%破壊！슬림式 脂肪破壊 タップで回答後14,800円(税込)クーポンもらえる！
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">19.4K views</span><span class="badge-hit">HIT 58</span><span>강남オンニ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=2191184645038156" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">58</strong> (longevity:19, spend:15, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:33.10463121783877%;background:#22c55e" title="longevity: 19"></div><div class="score-seg" style="width:25.728987993138936%;background:#3b82f6" title="spend: 15"></div><div class="score-seg" style="width:25.728987993138936%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:10.291595197255575%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:5.145797598627787%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://juno-beauty-pe.com/beauty/BM25newJUNO9800asc2" target="_blank">https://juno-beauty-pe.com/beauty/BM25newJUNO9800asc2</a>
+            <div class="lp-detail">
+                <div><strong>脂肪細胞を最大35%破壊！슬림式脂肪破壊 タップで回答後9,800円(税込)クーポンもらえる！</strong></div>
+                <div>脂肪細胞を最大35%破壊！슬림式脂肪破壊 タップで回答後9,800円(税込)クーポンもらえる！</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> 次へ, ←1つ前の画面へ</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/19.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=33196339946680993" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/131.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#10</span>
+            <div class="ad-title">EC物流のニーズに柔軟に対応</div>
+            <div class="ad-desc">自社通販のノウハウで通販EC物流のニーズに柔軟に対応
+【大手通販ベルーナの物流発送代行】
+＼ベルーナが選ばれる理由／
+・物流課題に合ったオーダーメイドの提案
+・開封時に喜ばれる丁寧な梱包作業
+・リアルタイムでの在庫チェックが可能
+・発送リストごとに同梱物のパターン分けにも対応
+・専用の配送箱、同梱チラシの製作
+・物流とコールセンターをワンストップで対応
+物流コスト削減やコールセンターの品質向上でお悩みの方はお気軽にお問い合わせください。
+BELLUNA.BIZ
+【物流コスト削減】大手通販企業ベルーナの物流代行
+＜物流コスト削減＞＜同梱物のカスタマイズOK＞＜大量出荷対応＞＜相談無料＞
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">18.4K views</span><span class="badge-hit">HIT 53</span><span>ベルーナビジネスソリューション</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=33196339946680993" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">53</strong> (longevity:19, spend:10, active_bonus:15, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:35.48387096774193%;background:#22c55e" title="longevity: 19"></div><div class="score-seg" style="width:18.975332068311193%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:28.46299810246679%;background:#f59e0b" title="active_bonus: 15"></div><div class="score-seg" style="width:11.385199240986717%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:5.692599620493358%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (article_lp)</h4>
+            <a class="lp-url" href="https://www.belluna.biz/lp/lp7?utm_source=fbad&amp;utm_medium=cpc&amp;utm_campaign=fbad" target="_blank">https://www.belluna.biz/lp/lp7?utm_source=fbad&amp;utm_medium=cpc&amp;utm_campaign=fbad</a>
+            <div class="lp-detail">
+                <div><strong>éè²©ECä¼æ¥­åã ç©æµçºéä»£è¡ãµã¼ãã¹ | ãã«ã¼ãBiz</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/131.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1951999119000500" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/110.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#11</span>
+            <div class="ad-title">ビサクロンは健康な人のγ-GTP/AST/ALT改善に役立つ機能があると報告されています！</div>
+            <div class="ad-desc">＼肝機能の数値が、ちょっと気になり始めた方へ／ハウスの機能性表示食品【クルビサ】／クルクミン/ビサクロンは健康な人のγ-GTP/AST/ALT改善に役立つ機能があると報告されています！
+L.HOUSE-DIRECT.JP
+1袋30日分【初回限定980円】
+通販限定／送料無料
+詳しくはこちら</div>
+            <div class="ad-meta"><span class="badge-views">7.2K views</span><span>ハウスウェルネスフーズ株式会社</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1951999119000500" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">35</strong> (longevity:11, spend:5, active_bonus:10, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:31.818181818181813%;background:#22c55e" title="longevity: 11"></div><div class="score-seg" style="width:14.204545454545453%;background:#3b82f6" title="spend: 5"></div><div class="score-seg" style="width:28.409090909090907%;background:#f59e0b" title="active_bonus: 10"></div><div class="score-seg" style="width:17.045454545454543%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:8.522727272727272%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://l.house-direct.jp/cb/devlp02/?argument=PEWd6Cdr&amp;dmai=a68db63660384d&amp;utm_source=facebook&amp;utm_medium=sns&amp;utm_campaign=cubs_asc" target="_blank">https://l.house-direct.jp/cb/devlp02/?argument=PEWd6Cdr&amp;dmai=a68db63660384d&amp;utm_source=facebook&amp;utm_</a>
+            <div class="lp-detail">
+                <div><strong>健康な人の肝機能酵素値の改善に役立つ｜ハウスのクルビサ｜ハウス公式通販</strong></div>
+                <div>サプリでできる、肝機能数値のための新習慣。ハウスのクルビサ | ウコン研究のハウスが開発した機能性表示食品。クルクミン＋ビサクロンで肝機能酵素値が低下することが報告されています。</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/110.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1237940118291428" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/90.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#12</span>
+            <div class="ad-title">30時間※崩れない生ツヤ肌クッションファンデからイエベ向けの新色が出たので使ってみた！</div>
+            <div class="ad-desc">レブロンの30時間※崩れない生ツヤ肌クッションファンデからイエベ向けの新色が出たので使ってみた！
+私は004番を使ったよ！肌馴染みいいのに肌が明るく見えてめちゃ馴染みいい！
+2025年にLDK、VOCEのべスコスを受賞した実力派クッションファンデ🤍
+ーーーーー
+レブロン カラーステイ ロングウェア UV クッション ファンデーション
+ーーーーー
+※レブロン研究所調べ（個人差が出る場合があります）
+#PR #レブロン #レブロンカラーステイロングウェアUVクッションファンデーション #ツヤ肌クッション #カラーステイ 
+@revlonjapan @cchannel_lemonsquare
+ITEM.RAKUTEN.CO.JP
+【楽天市場】★今だけ送料無料★【公式】レブロン カラーステイ ロングウェア UV クッション ファンデーション 12.5mL 全3色 クッションファンデ SPF50 P</div>
+            <div class="ad-meta"><span class="badge-views">6.9K views</span><span>Bamliバンリ / コスメ・美容 スポンサー: レブロン/Revlon</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1237940118291428" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Testimonial</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">40</strong> (longevity:11, spend:10, active_bonus:10, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:26.767676767676768%;background:#22c55e" title="longevity: 11"></div><div class="score-seg" style="width:25.252525252525253%;background:#3b82f6" title="spend: 10"></div><div class="score-seg" style="width:25.252525252525253%;background:#f59e0b" title="active_bonus: 10"></div><div class="score-seg" style="width:15.151515151515152%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:7.575757575757576%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (EC_site)</h4>
+            <a class="lp-url" href="https://item.rakuten.co.jp/revlon/10000474/" target="_blank">https://item.rakuten.co.jp/revlon/10000474/</a>
+            <div class="lp-detail">
+                <div><strong>【楽天市場】★送料無料★【公式】レブロン カラーステイ ロングウェア UV クッション ファンデーション 12.5mL 全6色  クッションファンデ SPF50 PA++++ くずれない ツヤ肌 カバー力 透明感 保湿 毛穴 美白 崩れにく</strong></div>
+                <div>美肌フィルターが30時間※続く！超密着クッション。★送料無料★【公式】レブロン カラーステイ ロングウェア UV クッション ファンデーション 12.5mL 全6色  クッションファンデ SPF50 PA++++ くずれない ツヤ肌 カバー力 透明感 保湿 毛穴 美白 崩れにくい</div>
+                <div style="margin-top:4px"><strong>CTA:</strong> 商品についてのお問い合わせ</div>
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-yes">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#000000;border-radius:2px;border:1px solid #333" title="#000000"></span><span style="display:inline-block;width:14px;height:14px;background:#FF6600;border-radius:2px;border:1px solid #333" title="#FF6600"></span><span style="display:inline-block;width:14px;height:14px;background:#BF0000;border-radius:2px;border:1px solid #333" title="#BF0000"></span><span style="display:inline-block;width:14px;height:14px;background:#666666;border-radius:2px;border:1px solid #333" title="#666666"></span><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/90.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1294133645918433&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#13</span>
+            <div class="ad-title">リボンスニーカーサンダル</div>
+            <div class="ad-desc">トレンド満載！流行のアイテムが手に入るファッション通販サイト「GRL」</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>GRL グレイル</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1294133645918433&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:32.35294117647059%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:8.823529411764707%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:58.82352941176471%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1629886994857557&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#14</span>
+            <div class="ad-title">Super Beauty (スーパービューティ) 配色ボーダー柄ニットワンピース ホワイト×ブラウン サイズ:40 未使用品 レディース 半袖ワンピース 中古・古着</div>
+            <div class="ad-desc">トレファク公式ファッション通販サイト。ブランド古着やトレンドアイテムが毎日入荷！</div>
+            <div class="ad-meta"><span class="badge-views">858 views</span><span>古着買取トレファクスタイル</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1629886994857557&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:32.35294117647059%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:8.823529411764707%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:58.82352941176471%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1218165707149643&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#15</span>
+            <div class="ad-title">-</div>
+            <div class="ad-desc">✨Mga Suki! ✨ kung ikaw ay anaghahanap ng de-kalidad at &quot;Pinoy Pride&quot; na mga produkto , 
+narito ang listahan ng mga top-rated na beauty products , mga sariwang gulay 🥬🍆🌶️, 
+at iba pang pangunahing produkto sa Pilipinas. Pili na po! 😍💕
+
+Marami pa pong produktong available. Mag message lang po sa amin para sa mga detalye.
+
+💌💌💌https://www.manilamart.net/</div>
+            <div class="ad-meta"><span class="badge-views">780 views</span><span>Manila Mart 24</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1218165707149643&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=787515367210333&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#16</span>
+            <div class="ad-title">3/1までの特別価格</div>
+            <div class="ad-desc">\新刊記念セール中！/
+『女系天皇は絶対ダメだ！』なぜなのか？
+私たち日本人が「皇統の歴史」について正しく学んでこなかったので“女系天皇誕生”による皇統断絶の危機にさらされています。
+
+はっきり言いますが
+“女系天皇が誕生”すれば
+その時点で日本の皇統は断絶します。
+
+こうした危機を防ぐために、この新書籍を書きました。
+2000年続く皇統を我々の代で終わらせないために、
+ぜひご一読ください。
+
+🎉3/1(日)23:59までならお得にすぐ読めます！
+詳細はこちらから
+https://in.38news.jp/38tenno_joke_release_fb_3choice2?cap=asc3new2_img7</div>
+            <div class="ad-meta"><span class="badge-views">499 views</span><span>三橋TV</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=787515367210333&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">0</strong> (longevity:0)
+        <div class="score-bar"><div class="score-seg" style="width:100.0%;background:#22c55e" title="longevity: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://in.38news.jp" target="_blank">https://in.38news.jp</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=790232554135246&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#17</span>
+            <div class="ad-title">3/1までの特別価格</div>
+            <div class="ad-desc">\新刊記念セール中！/
+『女系天皇は絶対ダメだ！』なぜなのか？
+私たち日本人が「皇統の歴史」について正しく学んでこなかったので“女系天皇誕生”による皇統断絶の危機にさらされています。
+
+はっきり言いますが
+“女系天皇が誕生”すれば
+その時点で日本の皇統は断絶します。
+
+こうした危機を防ぐために、この新書籍を書きました。
+2000年続く皇統を我々の代で終わらせないために、
+ぜひご一読ください。
+
+🎉3/1(日)23:59までならお得にすぐ読めます！
+詳細はこちらから
+https://in.38news.jp/38tenno_joke_release_fb_3choice2?cap=asc3new2_img5</div>
+            <div class="ad-meta"><span class="badge-views">499 views</span><span>三橋TV</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=790232554135246&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:25.0%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:3.571428571428572%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:71.42857142857143%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://in.38news.jp" target="_blank">https://in.38news.jp</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=918240663925293&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#18</span>
+            <div class="ad-title">3/1までの特別価格</div>
+            <div class="ad-desc">\新刊記念セール中！/
+『女系天皇は絶対ダメだ！』なぜなのか？
+私たち日本人が「皇統の歴史」について正しく学んでこなかったので“女系天皇誕生”による皇統断絶の危機にさらされています。
+
+はっきり言いますが
+“女系天皇が誕生”すれば
+その時点で日本の皇統は断絶します。
+
+こうした危機を防ぐために、この新書籍を書きました。
+2000年続く皇統を我々の代で終わらせないために、
+ぜひご一読ください。
+
+🎉3/1(日)23:59までならお得にすぐ読めます！
+詳細はこちらから
+https://in.38news.jp/38tenno_joke_release_fb_3choice?cap=asc3new_img7</div>
+            <div class="ad-meta"><span class="badge-views">499 views</span><span>三橋TV</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=918240663925293&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">excitement</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:1, spend:1, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:26.190476190476193%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:26.190476190476193%;background:#3b82f6" title="spend: 1"></div><div class="score-seg" style="width:47.61904761904761%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://in.38news.jp" target="_blank">https://in.38news.jp</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=803634655414025&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#19</span>
+            <div class="ad-title">Chat in Messenger</div>
+            <div class="ad-desc">Flying to Guangzhou for CIFF this March? ✈️ Make Booth 1.2C11 your first stop!
+For furniture wholesalers and e-commerce brands in Asia, high warehouse rent and expensive last-mile delivery are major profit killers. 📉
+COOC International has the solution. Our premium Vacuum Compressed Sofas are specifically engineered to:
+📦 Save up to 60% of your local warehouse space.
+🚚 Make e-commerce fulfillment </div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>COOC Furniture - Compressed Sofa Manufacturer</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=803634655414025&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://fb.com" target="_blank">https://fb.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1243802407192770&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#20</span>
+            <div class="ad-title">⭐ ⭐ ⭐ ⭐ ⭐ 4.9/5 | أكثر من 20,000 عميل</div>
+            <div class="ad-desc">✨ أضئ لياليك بسحر الإضاءة المتلألئة من مصابيح الحديقة الشمسية Dansing FireFly! 🌟 صديقة للبيئة وأنيقة التصميم، ستحول مساحتك إلى واحة ساحرة. 🏡✨ تسوق الآن وأنر حياتك! 💫
+
+احصل عليها من هنا 👉 https://lightsstockholm.com/products/dansing-firefly-solar-garden-lights</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Stockholm-Lights-Official</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1243802407192770&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://lightsstockholm.com" target="_blank">https://lightsstockholm.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2423989231399274&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#21</span>
+            <div class="ad-title">フットカバー 浅履き (無地)</div>
+            <div class="ad-desc">【公式／グンゼ(GUNZE)】限定アイテムやオトクなセール商品など多数。今すぐ人気アイテムをチェック！</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>GUNZE STORE</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2423989231399274&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: urgency</span><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: discount</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2632639437104564&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#22</span>
+            <div class="ad-title">【公式】サンリオキャラクターズ / Little Twin Stars マリッジリング K18ピンクゴールド / リング / 通常販売 / U-TREASURE / ユートレジャー</div>
+            <div class="ad-desc">U-TREASURE/公式オンラインショップ</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>U-TREASURE</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2632639437104564&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=675391565631780&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#23</span>
+            <div class="ad-title">pepiアップリケ アイロン接着タイプのアップリケ(ワッペン) 横田 ダルマ 01</div>
+            <div class="ad-desc">Recommended</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>リバティプリントショップmerci</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=675391565631780&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://merci-fabric.co.jp" target="_blank">https://merci-fabric.co.jp</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=902399399426483&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#24</span>
+            <div class="ad-title">訪問着 No.AA-3043-Mサイズ,ピンク系,【結婚式・入学式・卒業式・七五三・パーティー】</div>
+            <div class="ad-desc">着物のネット宅配レンタル＆通販なら【きもの365】。訪問着・留袖・振袖・卒業袴などさまざまな着物を取り揃えております。</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>きもの365</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=902399399426483&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1453974822930620&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#25</span>
+            <div class="ad-title">らぶいーず／ゆるトップス</div>
+            <div class="ad-desc">【ハニーズ公式通販】プチプラオシャレの定番。ベーシックからトレンドまで、アイテム豊富に揃ってます！</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>株式会社ハニーズ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1453974822930620&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1565150858115050&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#26</span>
+            <div class="ad-title">3人掛けソファ 布張りタイプ (tm02 gr)</div>
+            <div class="ad-desc">家具・インテリアの通販ニトリネット。税込み11,000円以上で送料無料</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>ニトリ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1565150858115050&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag ca-feature">Numbers</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://cat.as.criteo.com" target="_blank">https://cat.as.criteo.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1473063774206892&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#27</span>
+            <div class="ad-title">Hyperfy E-commerce</div>
+            <div class="ad-desc">Connect with Hyperfy E-commerce</div>
+            <div class="ad-meta"><span class="badge-views">300 views</span><span>Hyperfy E-commerce</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1473063774206892&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://facebook.com" target="_blank">https://facebook.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1239762761674429&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#28</span>
+            <div class="ad-title">Hyperfy E-commerce</div>
+            <div class="ad-desc">Connect with Hyperfy E-commerce</div>
+            <div class="ad-meta"><span class="badge-views">300 views</span><span>Hyperfy E-commerce</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1239762761674429&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://facebook.com" target="_blank">https://facebook.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1687480535958886&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#29</span>
+            <div class="ad-title">Hyperfy E-commerce</div>
+            <div class="ad-desc">Connect with Hyperfy E-commerce</div>
+            <div class="ad-meta"><span class="badge-views">300 views</span><span>Hyperfy E-commerce</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1687480535958886&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://facebook.com" target="_blank">https://facebook.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

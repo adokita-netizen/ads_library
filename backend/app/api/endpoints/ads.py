@@ -1,6 +1,8 @@
 """Ad management API endpoints."""
 
+import asyncio
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 # Video file magic bytes for upload validation
@@ -12,10 +14,16 @@ _VIDEO_MAGIC_BYTES = {
     b"\x52\x49\x46": "avi/webp",       # RIFF (AVI)
 }
 
+ALLOWED_VIDEO_MIME_TYPES = {
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+}
+
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_optional_user
@@ -36,11 +44,34 @@ from app.schemas.ad import (
     CrawlResponse,
     LPKeywordExtractionRequest,
     LPKeywordExtractionResponse,
+    build_media_status_payload,
+    build_lp_info_payload,
 )
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/ads", tags=["ads"])
 settings = get_settings()
+
+
+def _classify_destination_type(url: str | None) -> str:
+    if not url:
+        return ""
+    lowered = str(url).lower()
+    if "apps.apple.com" in lowered or "play.google.com" in lowered:
+        return "app_download"
+    if "line.me" in lowered or "lin.ee" in lowered:
+        return "line_add"
+    if any(token in lowered for token in ("/cart", "/checkout", "/buy", "/purchase")):
+        return "purchase"
+    return "lp"
+
+
+def _build_media_status(ad: Ad) -> dict:
+    return build_media_status_payload(ad)
+
+
+def _build_lp_info(ad: Ad) -> dict:
+    return build_lp_info_payload(ad)
 
 
 @router.get("", response_model=AdListResponse)
@@ -50,6 +81,7 @@ async def list_ads(
     platform: Optional[str] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
+    q: Optional[str] = Query(None, max_length=200),
     advertiser: Optional[str] = Query(None, max_length=200),
     _user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
@@ -66,6 +98,16 @@ async def list_ads(
         query = query.where(Ad.category == category)
     if status:
         query = query.where(Ad.status == status)
+    if q:
+        escaped = f"%{_escape_like(q)}%"
+        query = query.where(
+            or_(
+                Ad.title.ilike(escaped),
+                Ad.description.ilike(escaped),
+                Ad.advertiser_name.ilike(escaped),
+                cast(Ad.ad_metadata, String).ilike(escaped),
+            )
+        )
     if advertiser:
         query = query.where(Ad.advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
 
@@ -90,8 +132,8 @@ async def list_ads(
             try:
                 storage = get_storage_client()
                 resp.thumbnail_url = storage.get_presigned_url(ad.thumbnail_s3_key)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("presigned_url_failed", ad_id=ad.id, s3_key=ad.thumbnail_s3_key, error=str(e))
         if not resp.thumbnail_url and ad.thumbnail_url:
             resp.thumbnail_url = ad.thumbnail_url
         if not resp.thumbnail_url and ad.image_url:
@@ -212,7 +254,7 @@ async def ad_data_integrity(
 
 
 @router.post("/thumbnails/fetch-all")
-def fetch_all_thumbnails(
+async def fetch_all_thumbnails(
     use_playwright: bool = True,
     batch_size: int = Query(10, ge=1, le=50),
 ):
@@ -223,8 +265,6 @@ def fetch_all_thumbnails(
     2. Meta Graph API ad_snapshot_url (authenticated URL)
     3. MediaExtractor (HTTP+BS4 → Playwright)
     """
-    import concurrent.futures
-
     # Load Meta access_token from DB
     meta_token = None
     try:
@@ -248,9 +288,13 @@ def fetch_all_thumbnails(
         finally:
             session.close()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_run)
-        stats = future.result(timeout=600)
+    try:
+        stats = await asyncio.wait_for(asyncio.to_thread(_run), timeout=600)
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Thumbnail fetch timed out after 600 seconds",
+        ) from exc
 
     return stats
 
@@ -272,8 +316,8 @@ async def get_ad(
         try:
             storage = get_storage_client()
             resp.thumbnail_url = storage.get_presigned_url(ad.thumbnail_s3_key)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("presigned_url_failed", ad_id=ad_id, s3_key=ad.thumbnail_s3_key, error=str(e))
     if not resp.thumbnail_url and ad.thumbnail_url:
         resp.thumbnail_url = ad.thumbnail_url
     if not resp.thumbnail_url and ad.image_url:
@@ -292,8 +336,8 @@ async def get_ad(
         if row:
             resp.cumulative_views = row.cumulative_views or resp.view_count or 0
             resp.cumulative_spend = round(row.cumulative_spend or resp.spend or 0)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("cumulative_metrics_fetch_failed", ad_id=ad_id, error=str(e))
 
     return resp
 
@@ -334,8 +378,13 @@ async def upload_ad_video(
     db: AsyncSession = Depends(get_async_session),
 ):
     """Upload a video file for analysis."""
-    if not file.content_type or not file.content_type.startswith("video/"):
-        raise HTTPException(status_code=400, detail="File must be a video")
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_VIDEO_MIME_TYPES:
+        allowed_types = ", ".join(sorted(ALLOWED_VIDEO_MIME_TYPES))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file.content_type}'. Allowed: {allowed_types}",
+        )
 
     # Read file in chunks to avoid loading entire file into memory
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
@@ -348,7 +397,7 @@ async def upload_ad_video(
         total_size += len(chunk)
         if total_size > max_bytes:
             raise HTTPException(
-                status_code=400,
+                status_code=413,
                 detail=f"File too large. Max size: {settings.max_upload_size_mb}MB",
             )
         chunks.append(chunk)
@@ -485,6 +534,9 @@ def crawl_ads(
                 limit_per_platform=request.limit_per_platform,
                 auto_analyze=request.auto_analyze,
                 country=request.country,
+                trigger_source=request.trigger_source,
+                schedule_window=request.schedule_window,
+                priority=request.priority,
             )
             _logger.info("crawl_dispatched_to_sqs", task_id=result.id, query=request.query, platforms=active_platforms)
             msg = f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体: {', '.join(active_platforms)})"
@@ -504,6 +556,9 @@ def crawl_ads(
                     limit_per_platform=request.limit_per_platform,
                     auto_analyze=request.auto_analyze,
                     country=request.country,
+                    trigger_source=request.trigger_source,
+                    schedule_window=request.schedule_window,
+                    priority=request.priority,
                 )
                 _logger.info("crawl_dispatched_to_celery", task_id=result.id, query=request.query)
                 return CrawlResponse(task_id=result.id, status="started", message=f"クロールを開始しました: '{request.query}' ({len(active_platforms)}媒体)")
@@ -530,8 +585,8 @@ def crawl_ads(
         )
         inline_session.add(crawl_job)
         inline_session.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("crawl_job_create_failed", job_id=inline_job_id, error=str(e))
     finally:
         inline_session.close()
 
@@ -542,6 +597,9 @@ def crawl_ads(
             category=request.category,
             limit_per_platform=request.limit_per_platform,
             country=request.country,
+            trigger_source=request.trigger_source,
+            schedule_window=request.schedule_window,
+            priority=request.priority,
         )
 
         # Update CrawlJob to COMPLETED
@@ -554,8 +612,8 @@ def crawl_ads(
                 cj.total_ads_found = saved_count
                 cj.current_platform = None
                 done_session.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("crawl_job_complete_update_failed", job_id=inline_job_id, error=str(e))
         finally:
             done_session.close()
 
@@ -578,8 +636,8 @@ def crawl_ads(
                 cj.status = CrawlJobStatusEnum.FAILED
                 cj.error_message = str(crawl_err)[:500]
                 fail_session.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("crawl_job_fail_update_failed", job_id=inline_job_id, error=str(e))
         finally:
             fail_session.close()
 
@@ -596,6 +654,9 @@ def _inline_crawl(
     category: str | None,
     limit_per_platform: int,
     country: str = "JP",
+    trigger_source: str = "manual",
+    schedule_window: str | None = None,
+    priority: str = "normal",
 ) -> int:
     """Run the real crawlers inline (same logic as Celery task, but synchronous)."""
     import asyncio
@@ -614,6 +675,7 @@ def _inline_crawl(
 
     # Save to DB
     saved = 0
+    saved_ids: list[int] = []
     session = SyncSessionLocal()
     try:
         for platform, crawled_ads in results.items():
@@ -702,6 +764,8 @@ def _inline_crawl(
                     status=AdStatusEnum.PENDING,
                 )
                 session.add(ad)
+                session.flush()
+                saved_ids.append(ad.id)
                 saved += 1
 
         session.commit()
@@ -721,6 +785,24 @@ def _inline_crawl(
                 _logger = structlog.get_logger()
                 _logger.warning("inline_crawl_metrics_failed", error=str(metrics_err))
                 session.rollback()
+
+        try:
+            from app.tasks.crawl_tasks import _run_post_crawl_knowledge_pipeline, _schedule_window_label
+
+            _run_post_crawl_knowledge_pipeline(
+                session,
+                ad_ids=saved_ids,
+                query=query,
+                trigger_source=trigger_source,
+                trigger_job_id=f"inline-{uuid.uuid4().hex[:8]}",
+                schedule_window=schedule_window or ("manual" if trigger_source == "manual" else _schedule_window_label()),
+                priority=priority,
+            )
+            session.commit()
+        except Exception as knowledge_err:
+            _logger = structlog.get_logger()
+            _logger.warning("inline_crawl_knowledge_pipeline_failed", error=str(knowledge_err))
+            session.rollback()
 
         # Dispatch media extraction for ads with snapshot_url
         try:
@@ -783,7 +865,10 @@ async def get_ad_media(
         "image_url": ad.image_url,
         "video_url": ad.video_url,
         "snapshot_url": ad.snapshot_url,
+        "download_url": f"/api/v1/media/download/{ad_id}",
     }
+    media_info["media_status"] = _build_media_status(ad)
+    media_info["lp_info"] = _build_lp_info(ad)
 
     # Generate presigned URLs for stored media
     try:
@@ -832,32 +917,72 @@ async def trigger_media_extraction(
 
         def _run():
             extractor = MediaExtractor()
-            return asyncio.run(extractor.extract(ad.snapshot_url, use_playwright=False))
+            return asyncio.run(extractor.extract(ad.snapshot_url, use_playwright=True))
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(_run)
-                extracted = future.result(timeout=30)
+                extracted = future.result(timeout=45)
 
-            ad.creative_type = extracted.creative_type
+            meta = dict(ad.ad_metadata or {})
+            has_any_media = bool(extracted.image_urls or extracted.video_urls or extracted.thumbnail_url)
+            if extracted.creative_type and extracted.creative_type != "unknown":
+                ad.creative_type = extracted.creative_type
             if extracted.image_urls:
                 ad.image_url = extracted.image_urls[0]
                 if not ad.thumbnail_url:
                     ad.thumbnail_url = extracted.image_urls[0]
+            elif extracted.thumbnail_url and not ad.thumbnail_url:
+                ad.thumbnail_url = extracted.thumbnail_url
             if extracted.video_urls and not ad.video_url:
                 ad.video_url = extracted.video_urls[0]
-            ad.media_extraction_status = MediaExtractionStatus.COMPLETED
-            await db.flush()
+            if extracted.destination_url and not ad.destination_url:
+                ad.destination_url = extracted.destination_url
+                meta.setdefault("destination_url", extracted.destination_url)
+                meta.setdefault("destination_type", _classify_destination_type(extracted.destination_url))
+            if extracted.destination_domain:
+                meta["destination_domain"] = extracted.destination_domain
+            if extracted.ad_title and not ad.title:
+                ad.title = extracted.ad_title[:500]
+            if extracted.ad_text and not ad.description:
+                ad.description = extracted.ad_text[:5000]
+
+            meta["creative_fetch_status"] = "success" if has_any_media else "failed"
+            meta["creative_fetch_source"] = extracted.extraction_method or "inline_extract"
+            meta["creative_fetch_reason"] = None if has_any_media else "media_url_missing"
+            recorded_at = datetime.now(timezone.utc).isoformat()
+            meta["creative_fetched_at"] = recorded_at
+            extractor_version = getattr(extracted, "extractor_version", "")
+            meta["extractor_version"] = extractor_version
+            history = meta.get("extractor_version_history")
+            history_items = history if isinstance(history, list) else []
+            history_items = [
+                *history_items[-9:],
+                {
+                    "version": extractor_version,
+                    "status": meta["creative_fetch_status"],
+                    "source": meta["creative_fetch_source"],
+                    "recorded_at": recorded_at,
+                },
+            ]
+            meta["extractor_version_history"] = history_items
+            ad.ad_metadata = meta
+            ad.media_extraction_status = MediaExtractionStatus.COMPLETED if has_any_media else MediaExtractionStatus.FAILED
+            await db.commit()
+            await db.refresh(ad)
 
             return {
-                "status": "completed",
+                "status": "completed" if has_any_media else "failed",
                 "creative_type": extracted.creative_type,
                 "image_count": len(extracted.image_urls),
                 "video_count": len(extracted.video_urls),
                 "image_url": ad.image_url,
                 "thumbnail_url": ad.thumbnail_url,
                 "video_url": ad.video_url,
-                "message": "メディア抽出が完了しました（インライン実行）",
+                "destination_url": ad.destination_url,
+                "destination_type": meta.get("destination_type", ""),
+                "media_status": _build_media_status(ad),
+                "message": "メディア抽出が完了しました（インライン実行）" if has_any_media else "LP遷移先は取得できましたが、保存可能な素材は不足しています",
             }
         except Exception as inline_err:
             logger.error("inline_media_extraction_failed", ad_id=ad_id, error=str(inline_err))
@@ -944,8 +1069,8 @@ def enrich_metrics_batch(
         keys = load_api_keys_from_db()
         meta_keys = keys.get("meta", keys.get("facebook", {}))
         meta_token = meta_keys.get("access_token")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("meta_token_load_failed", error=str(e))
     if not meta_token:
         meta_token = settings.meta_access_token
 

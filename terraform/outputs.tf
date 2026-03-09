@@ -42,3 +42,13 @@ output "sqs_light_queue_url" {
   description = "SQS light tasks queue URL"
   value       = aws_sqs_queue.light_tasks.url
 }
+
+output "ops_alerts_sns_topic_arn" {
+  description = "SNS topic ARN for operational alerts"
+  value       = aws_sns_topic.ops_alerts.arn
+}
+
+output "budget_guardrail_enabled" {
+  description = "Whether monthly cost budget guardrail is enabled"
+  value       = var.enable_budget_guardrails
+}

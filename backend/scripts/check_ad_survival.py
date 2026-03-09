@@ -15,6 +15,7 @@ Run from the backend directory:
     python scripts/check_ad_survival.py
 """
 
+import argparse
 import sys
 import time
 
@@ -27,6 +28,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import SyncSessionLocal
 from app.models.ad import Ad
 from app.api.endpoints.settings import load_api_keys_from_db
+from app.services.data_quality_report import build_creative_library_audit
 
 
 # ── Config ────────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ def get_access_token() -> str | None:
         return None
 
 
-def fetch_ads_by_page_id(page_id: str, token: str) -> list[dict]:
+def fetch_ads_by_page_id(page_id: str, token: str, request_delay: float = REQUEST_DELAY) -> list[dict]:
     """Fetch ads for a page_id from Meta Ad Library API."""
     all_results = []
     params = {
@@ -86,7 +88,7 @@ def fetch_ads_by_page_id(page_id: str, token: str) -> list[dict]:
 
             pages_fetched = 1
             while "paging" in data and "next" in data["paging"] and pages_fetched < 10:
-                time.sleep(REQUEST_DELAY)
+                time.sleep(request_delay)
                 next_url = data["paging"]["next"]
                 resp = client.get(next_url)
                 if resp.status_code != 200:
@@ -271,9 +273,25 @@ def update_ad_snapshot_result(ad: Ad, snapshot_result: dict):
 # ── Main ──────────────────────────────────────────────────────────
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Check ad survival status (API + snapshot)")
+    parser.add_argument("--max-page-ids", type=int, default=None, help="Limit Stage1 page_id checks")
+    parser.add_argument("--max-snapshot-checks", type=int, default=None, help="Limit Stage2 snapshot checks")
+    parser.add_argument("--max-seconds", type=int, default=None, help="Abort after this many seconds")
+    parser.add_argument("--request-delay", type=float, default=REQUEST_DELAY, help="Delay between API requests")
+    parser.add_argument("--snapshot-delay", type=float, default=0.5, help="Delay between snapshot checks")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     session = SyncSessionLocal()
     try:
+        started = time.monotonic()
+
+        def time_exceeded() -> bool:
+            return args.max_seconds is not None and (time.monotonic() - started) >= args.max_seconds
+
         # Try to get Meta API token (optional)
         token = get_access_token()
         has_api = token is not None
@@ -305,7 +323,11 @@ def main():
             else:
                 no_page_id.append(ad)
 
-        total_pages = len(page_id_to_ads)
+        page_items = list(page_id_to_ads.items())
+        if args.max_page_ids is not None:
+            page_items = page_items[: max(0, args.max_page_ids)]
+
+        total_pages = len(page_items)
         print(f"Total ads: {total_ads}")
         print(f"Unique page_ids: {total_pages}")
         print(f"Ads without page_id: {len(no_page_id)}")
@@ -346,12 +368,15 @@ def main():
             print("STAGE 1: Meta Ad Library API Check")
             print("=" * 60)
 
-            for i, (page_id, page_ads) in enumerate(page_id_to_ads.items()):
+            for i, (page_id, page_ads) in enumerate(page_items):
+                if time_exceeded():
+                    print("  Stage1 aborted by max-seconds limit")
+                    break
                 ext_id_map = {ad.external_id: ad for ad in page_ads if ad.external_id}
                 page_name = (page_ads[0].ad_metadata or {}).get("page_name", "?")
                 print(f"[{i+1}/{total_pages}] Page {page_id} ({page_name}) - {len(page_ads)} ads")
 
-                api_results = fetch_ads_by_page_id(page_id, token)
+                api_results = fetch_ads_by_page_id(page_id, token, request_delay=args.request_delay)
                 stats["api_calls"] += 1
                 print(f"  API returned {len(api_results)} ads")
 
@@ -386,7 +411,7 @@ def main():
                 session.commit()
 
                 if i + 1 < total_pages:
-                    time.sleep(REQUEST_DELAY)
+                    time.sleep(args.request_delay)
 
         # ── Stage 2: Snapshot URL check ──────────────────────────────
         # Check ads that were NOT verified via API (no_page_id + unmatched)
@@ -399,6 +424,8 @@ def main():
             ad for ad in ads
             if ad.id not in api_checked_ids and ad.snapshot_url
         ]
+        if args.max_snapshot_checks is not None:
+            ads_needing_snapshot = ads_needing_snapshot[: max(0, args.max_snapshot_checks)]
         ads_no_snapshot = [
             ad for ad in ads
             if ad.id not in api_checked_ids and not ad.snapshot_url
@@ -409,6 +436,9 @@ def main():
         stats["snapshot_skipped"] = len(ads_no_snapshot)
 
         for i, ad in enumerate(ads_needing_snapshot):
+            if time_exceeded():
+                print("  Stage2 aborted by max-seconds limit")
+                break
             result = check_snapshot_url(ad.snapshot_url)
             update_ad_snapshot_result(ad, result)
             stats["snapshot_checked"] += 1
@@ -431,7 +461,7 @@ def main():
 
             # Rate limit snapshot checks
             if i + 1 < len(ads_needing_snapshot):
-                time.sleep(0.5)
+                time.sleep(args.snapshot_delay)
 
         # Handle ads without page_id and without snapshot_url
         now = datetime.now(timezone.utc)
@@ -504,7 +534,33 @@ def main():
             print(f"  {label}: {count}")
 
         print()
+        creative_audit = build_creative_library_audit(session, persist=False)["creative_library_audit"]
+        print("Creative library audit:")
+        print(f"  viewable_rate:        {creative_audit['summary']['creative_viewable_rate']:.2%}")
+        print(f"  downloadable_rate:    {creative_audit['summary']['creative_downloadable_rate']:.2%}")
+        print(f"  lp_present_rate:      {creative_audit['summary']['lp_present_rate']:.2%}")
+        print(f"  lp_resolved_rate:     {creative_audit['summary']['lp_resolved_rate']:.2%}")
+        print(f"  missing_media_count:  {creative_audit['summary']['missing_media_count']}")
+        print(f"  missing_lp_count:     {creative_audit['summary']['missing_lp_count']}")
+        print(f"  lp_unresolved_count:  {creative_audit['summary']['lp_unresolved_count']}")
+        print(f"  ops_status:           {creative_audit['slo_status']['overall_status']}")
+        print(f"  ops_alerts:           {len(creative_audit['ops_alert_candidates'])}")
+        print()
+        print("Live ingestion audit:")
+        print(f"  daily_new_ads:        {creative_audit['live_ingestion_audit']['daily_new_ads']}")
+        print(f"  daily_unique_ads:     {creative_audit['live_ingestion_audit']['daily_unique_ads']}")
+        print(f"  duplicate_rate:       {creative_audit['live_ingestion_audit']['duplicate_rate']:.2%}")
+        print(f"  stale_ad_rate:        {creative_audit['live_ingestion_audit']['stale_ad_rate']:.2%}")
+        print(f"  inactive_keywords_7d: {len(creative_audit['live_ingestion_audit']['inactive_keywords_7d'])}")
+        print()
+        print("Daily ops report:")
+        print(f"  top_regressions:      {len(creative_audit['creative_library_daily_report']['top_regressions'])}")
+        print(f"  top_recoveries:       {len(creative_audit['creative_library_daily_report']['top_recoveries'])}")
+        print()
         print("Done!")
+        if args.max_seconds is not None:
+            elapsed = round(time.monotonic() - started, 1)
+            print(f"Elapsed: {elapsed}s (limit={args.max_seconds}s)")
 
     except Exception as e:
         session.rollback()

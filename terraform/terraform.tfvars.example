@@ -1,0 +1,27 @@
+# Copy this file to terraform.tfvars and adjust for production.
+
+project_name = "vaap"
+environment  = "production"
+aws_region   = "ap-northeast-1"
+
+# Cost guardrails (email optional)
+enable_budget_guardrails       = true
+monthly_budget_limit_usd       = 800
+budget_alert_threshold_percent = 80
+alert_email                    = ""
+
+# RDS durability
+rds_backup_retention_days        = 30
+rds_max_allocated_storage        = 400
+rds_performance_insights_enabled = true
+
+# S3 lifecycle (long-term accumulation)
+s3_transition_to_ia_days      = 30
+s3_transition_to_glacier_days = 180
+s3_noncurrent_transition_days = 30
+s3_noncurrent_expiration_days = 365
+
+# SQS retention
+sqs_message_retention_seconds = 345600
+sqs_dlq_retention_seconds     = 1209600
+

@@ -14,9 +14,47 @@ from app.api.deps import get_current_user
 from app.core.database import get_async_session, check_pool_health
 from app.models.ad import Ad
 from app.models.ad_metrics import AdDailyMetrics
+from app.models.data_quality import DataQualitySnapshot
 from app.models.user import User
+from app.services.data_quality_report import build_creative_library_audit
 
 router = APIRouter(prefix="/data-quality", tags=["Data Quality"])
+
+
+@router.get("/history")
+async def get_quality_history(
+    days: int = Query(30, ge=7, le=365),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Get time-series data quality snapshots."""
+    result = await db.execute(
+        select(DataQualitySnapshot)
+        .order_by(DataQualitySnapshot.snapshot_date.desc())
+        .limit(days)
+    )
+    rows = list(reversed(result.scalars().all()))
+
+    history = [
+        {
+            "date": r.snapshot_date.isoformat(),
+            "total_ads": r.total_ads,
+            "null_rate": round(float(r.null_rate or 0.0), 1),
+            "fill_rate": round(float(r.fill_rate or 0.0), 1),
+            "freshness_score": round(float(r.freshness_score or 0.0), 1),
+            "field_fill_rates": r.field_fill_rates or {},
+        }
+        for r in rows
+    ]
+
+    latest = history[-1] if history else None
+    return {
+        "history": history,
+        "count": len(history),
+        "days_requested": days,
+        "latest": latest,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/overview")
@@ -101,6 +139,23 @@ async def get_quality_overview(
         "freshness": freshness_dist,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/creative-library-audit")
+async def get_creative_library_audit(
+    top_n: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Return creative library coverage KPI for planner/dashboard consumption."""
+    _ = current_user
+
+    def _build(sync_session):
+        return build_creative_library_audit(sync_session, top_n=top_n, persist=False)
+
+    report = await db.run_sync(_build)
+    report["generated_at"] = datetime.now(timezone.utc).isoformat()
+    return report
 
 
 @router.get("/metrics-health")

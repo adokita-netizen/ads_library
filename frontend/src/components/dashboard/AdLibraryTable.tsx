@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { fetchApi, adsApi } from "@/lib/api";
 import { platformLabels, platformColors, genreOptions as sharedGenreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
-import { useUrlParam, useUrlParamNumber } from "@/lib/useUrlParam";
+import { commitUrlSearchParams, useUrlParam, useUrlParamNumber } from "@/lib/useUrlParam";
 import { useDebounce } from "@/lib/useDebounce";
 
 interface AdLibraryTableProps {
@@ -32,7 +32,7 @@ interface FilterState {
   search: string;
 }
 
-interface MockAd {
+interface AdRecord {
   id: number;
   rank: number;
   thumbnail: string;
@@ -55,6 +55,92 @@ interface MockAd {
   creativeType: string;
   imageUrl: string;
   snapshotUrl: string;
+  languageStatus?: string;
+  excludeFromAnalysis?: boolean;
+}
+
+interface CrawlSuccessPayload {
+  query: string;
+  found: number;
+  finishedAt: string;
+}
+
+function normalizeThumbnailUrl(raw: string): string {
+  return raw
+    .replace(/([?&](?:width|height|w|h)=)\d+/gi, "$11280")
+    .replace(/([_/.-])s\d+x\d+([_/.-])/gi, "$1s1080x1080$2")
+    .replace(/([_/.-])p\d+x\d+([_/.-])/gi, "$1p1080x1080$2");
+}
+
+function buildThumbnailCandidates(ad: AdRecord): string[] {
+  const candidates: string[] = [];
+  if (ad.id) {
+    candidates.push(`/api/v1/media/thumbnail/${ad.id}`);
+    candidates.push(`/api/v1/media/image/${ad.id}`);
+  }
+  for (const raw of [ad.imageUrl, ad.thumbnail, ad.snapshotUrl]) {
+    if (!raw) continue;
+    const normalized = normalizeThumbnailUrl(raw);
+    if (normalized) candidates.push(normalized);
+    candidates.push(raw);
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+function ThumbnailPreview({ ad }: { ad: AdRecord }) {
+  const sources = useMemo(() => buildThumbnailCandidates(ad), [ad]);
+  const [srcIndex, setSrcIndex] = useState(0);
+  const currentSrc = sources[srcIndex] || "";
+  const hasImage = currentSrc.length > 0;
+
+  useEffect(() => {
+    setSrcIndex(0);
+  }, [ad.id, ad.thumbnail, ad.imageUrl, ad.snapshotUrl]);
+
+  return (
+    <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
+      {hasImage ? (
+        <img
+          src={currentSrc}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+          onError={() => {
+            setSrcIndex((prev) => {
+              const next = prev + 1;
+              return next < sources.length ? next : prev;
+            });
+          }}
+        />
+      ) : null}
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
+        style={{ display: hasImage ? "none" : "flex" }}
+      >
+        {ad.creativeType === "image" ? (
+          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+          </svg>
+        ) : ad.creativeType === "carousel" ? (
+          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 6h12M6 12h12m-6-6v12M3.75 3h16.5A2.25 2.25 0 0122.5 5.25v13.5A2.25 2.25 0 0120.25 21H3.75A2.25 2.25 0 011.5 18.75V5.25A2.25 2.25 0 013.75 3z" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+          </svg>
+        )}
+      </div>
+      {(ad.creativeType === "video" || ad.creativeType === "unknown") && ad.duration > 0 && (
+        <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[9px] px-1 rounded leading-relaxed">
+          {Math.floor(ad.duration / 60)}:{(ad.duration % 60).toString().padStart(2, "0")}
+        </span>
+      )}
+      <span className={`absolute top-0.5 left-0.5 platform-icon ${platformColors[ad.platform]}`}>
+        {platformLabels[ad.platform]}
+      </span>
+    </div>
+  );
 }
 
 
@@ -92,7 +178,7 @@ const intervalOptions: { value: IntervalType; label: string }[] = [
   { value: "30days", label: "30日間隔の統計" },
 ];
 
-function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }): MockAd[] {
+function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<string, unknown>[]; results?: Record<string, unknown>[] }): AdRecord[] {
   const items = data?.items || data?.rankings || data?.results;
   if (!Array.isArray(items) || items.length === 0) return [];
   return items.map((item: Record<string, unknown>, idx: number) => {
@@ -121,8 +207,27 @@ function mapItems(data: { items?: Record<string, unknown>[]; rankings?: Record<s
       creativeType: (item.creative_type as string) || "unknown",
       imageUrl: (item.image_url as string) || "",
       snapshotUrl: (item.snapshot_url as string) || "",
+      languageStatus: (item.language_status as string) || "",
+      excludeFromAnalysis: Boolean(item.exclude_from_analysis),
     };
   });
+}
+
+function dedupeAds(ads: AdRecord[]): AdRecord[] {
+  const byKey = new Map<string, AdRecord>();
+  for (const ad of ads) {
+    const key = [
+      (ad.productName || "").trim().toLowerCase(),
+      (ad.description || "").trim().slice(0, 120).toLowerCase(),
+      (ad.destination || "").trim().toLowerCase(),
+      (ad.platform || "").trim().toLowerCase(),
+    ].join("|");
+    const prev = byKey.get(key);
+    if (!prev || ad.id > prev.id) {
+      byKey.set(key, ad);
+    }
+  }
+  return Array.from(byKey.values());
 }
 
 export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
@@ -143,6 +248,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
   const [sortField, setSortField] = useState<SortField>("rank");
   const [sortAsc, setSortAsc] = useState(true);
   const [currentPage, setCurrentPage] = useState(urlPage);
+  const [lastRefreshAt, setLastRefreshAt] = useState<string>("");
+  const [lastCrawl, setLastCrawl] = useState<CrawlSuccessPayload | null>(null);
 
   // Sync filter/page state changes to URL
   useEffect(() => {
@@ -154,10 +261,9 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
     update("genre", filters.genre, "all");
     update("media", filters.media, "all");
     if (currentPage > 1) sp.set("page", String(currentPage)); else sp.delete("page");
-    const qs = sp.toString();
-    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    commitUrlSearchParams(sp, "replace");
   }, [filters.genre, filters.media, currentPage]);
-  const pageSize = 50;
+  const pageSize = 20;
 
   const queryClient = useQueryClient();
   const [showCrawlModal, setShowCrawlModal] = useState(false);
@@ -177,6 +283,8 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
         const params: Record<string, string | number | undefined> = {
           q: searchText,
           search_scope: "all",
+          sort_by: "relevance",
+          page_size: 200,
         };
         if (filters.media !== "all") params.platform = filters.media;
         if (filters.genre !== "all") params.genre = filters.genre;
@@ -201,9 +309,14 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
   // Reset page on filter change
   useEffect(() => { setCurrentPage(1); }, [filters.media, filters.genre, filters.interval, debouncedSearch]);
+  useEffect(() => {
+    if (!loading) setLastRefreshAt(new Date().toISOString());
+  }, [loading, queryResult]);
 
   const filteredAds = useMemo(() => {
-    let result = [...ads];
+    let result = dedupeAds([...ads]).filter(
+      (ad) => !ad.excludeFromAnalysis && (!ad.languageStatus || ad.languageStatus === "ja"),
+    );
 
     // Apply search filter
     if (filters.search) {
@@ -347,10 +460,22 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
         </div>
 
         {/* Results count */}
-        <span className="text-[11px] text-gray-400 whitespace-nowrap">
-          {filteredAds.length}件の結果
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-gray-400 whitespace-nowrap">{filteredAds.length}件の結果</span>
+          {lastRefreshAt && (
+            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+              最終更新: {new Date(lastRefreshAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          )}
+        </div>
       </div>
+
+      {lastCrawl && (
+        <div className="mx-4 mt-1 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-[11px] text-blue-700">
+          クロール反映: 「{lastCrawl.query}」で追加 {lastCrawl.found}件 / 反映時刻{" "}
+          {new Date(lastCrawl.finishedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </div>
+      )}
 
       {/* Data source indicator */}
       {!loading && isFallback && ads.length > 0 && (
@@ -485,62 +610,7 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
 
                 {/* Thumbnail — B10: prefer proxy URL */}
                 <td>
-                  <div className="relative w-20 h-12 rounded overflow-hidden bg-gray-100 group">
-                    {(() => {
-                      const proxySrc = ad.id ? `/api/v1/media/thumbnail/${ad.id}` : (ad.thumbnail || ad.imageUrl || "");
-                      return proxySrc ? (
-                      <img
-                        src={proxySrc}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          // B10: Fallback chain: proxy -> thumbnail -> imageUrl -> hide
-                          if (ad.thumbnail && target.src !== ad.thumbnail) {
-                            target.src = ad.thumbnail;
-                          } else if (ad.imageUrl && target.src !== ad.imageUrl) {
-                            target.src = ad.imageUrl;
-                          } else if (ad.snapshotUrl && target.src !== ad.snapshotUrl) {
-                            target.src = ad.snapshotUrl;
-                          } else {
-                            target.style.display = "none";
-                            if (target.nextElementSibling) (target.nextElementSibling as HTMLElement).style.display = "flex";
-                          }
-                        }}
-                      />
-                    ) : null;
-                    })()}
-                    <div
-                      className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center"
-                      style={{ display: (ad.thumbnail || ad.imageUrl) ? "none" : "flex" }}
-                    >
-                      {/* Creative type icon */}
-                      {ad.creativeType === "image" ? (
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                        </svg>
-                      ) : ad.creativeType === "carousel" ? (
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 6h12M6 12h12m-6-6v12M3.75 3h16.5A2.25 2.25 0 0122.5 5.25v13.5A2.25 2.25 0 0120.25 21H3.75A2.25 2.25 0 011.5 18.75V5.25A2.25 2.25 0 013.75 3z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                        </svg>
-                      )}
-                    </div>
-                    {/* Duration overlay — only for video */}
-                    {(ad.creativeType === "video" || ad.creativeType === "unknown") && ad.duration > 0 && (
-                      <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[9px] px-1 rounded leading-relaxed">
-                        {Math.floor(ad.duration / 60)}:{(ad.duration % 60).toString().padStart(2, "0")}
-                      </span>
-                    )}
-                    {/* Platform icon */}
-                    <span className={`absolute top-0.5 left-0.5 platform-icon ${platformColors[ad.platform]}`}>
-                      {platformLabels[ad.platform]}
-                    </span>
-                  </div>
+                  <ThumbnailPreview ad={ad} />
                 </td>
 
                 {/* Management ID */}
@@ -715,9 +785,16 @@ export default function AdLibraryTable({ onAdSelect }: AdLibraryTableProps) {
       {showCrawlModal && (
         <CrawlModal
           onClose={() => setShowCrawlModal(false)}
-          onSuccess={() => {
+          onSuccess={(result?: CrawlSuccessPayload) => {
             setShowCrawlModal(false);
-            queryClient.invalidateQueries({ queryKey: ["adLibrary"] });
+            if (result?.query?.trim()) {
+              setCurrentPage(1);
+              setFilters((prev) => ({ ...prev, search: result.query.trim() }));
+            }
+            if (result) setLastCrawl(result);
+            // Ensure latest crawled ads are pulled immediately after modal closes.
+            queryClient.invalidateQueries({ queryKey: ["adLibrary"], exact: false });
+            queryClient.refetchQueries({ queryKey: ["adLibrary"], type: "active", exact: false });
           }}
         />
       )}
@@ -746,9 +823,9 @@ const PLATFORM_LABELS_MAP: Record<string, string> = {
   google_ads: "Google Ads", gunosy: "Gunosy",
 };
 
-function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (result?: CrawlSuccessPayload) => void }) {
   const [query, setQuery] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["facebook"]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["facebook", "instagram"]);
   const [category, setCategory] = useState("");
   const [limit, setLimit] = useState(20);
   const [crawling, setCrawling] = useState(false);
@@ -791,7 +868,11 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           if (pollRef.current) clearInterval(pollRef.current);
           setCrawling(false);
           toast.success(`クロール完了: ${status.total_ads_found}件の広告を取得しました`);
-          onSuccess();
+          onSuccess({
+            query: query.replace(/\u3000/g, " ").trim(),
+            found: status.total_ads_found || 0,
+            finishedAt: new Date().toISOString(),
+          });
         } else if (status.status === "failed") {
           if (pollRef.current) clearInterval(pollRef.current);
           setCrawling(false);
@@ -819,7 +900,12 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
   };
 
   const handleCrawl = async () => {
-    if (!query.trim()) return;
+    // Normalize full-width spaces so Japanese input behaves predictably.
+    const normalizedQuery = query.replace(/\u3000/g, " ").trim();
+    if (!normalizedQuery) {
+      setMessage("検索キーワードを入力してください");
+      return;
+    }
     if (selectedPlatforms.length === 0) {
       setMessage("媒体を1つ以上選択してください");
       return;
@@ -834,26 +920,60 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 
     try {
       // Use quick-crawl endpoint (fast, inline, no timeout issues)
-      const data = await fetchApi<{ job_id?: string; status?: string; message?: string; new_ads_count?: number; total_ads_found?: number; ads_found?: number }>("/rankings/quick-crawl", {
+      const data = await fetchApi<{
+        job_id?: string;
+        status?: string;
+        message?: string;
+        error?: string;
+        detail?: string;
+        error_code?: string | null;
+        failure_reason?: string | null;
+        new_ads_count?: number;
+        total_ads_found?: number;
+        ads_found?: number;
+        saved_ads_count?: number;
+        inserted_count?: number;
+        updated_count?: number;
+        skipped_invalid_count?: number;
+      }>("/rankings/quick-crawl", {
         method: "POST",
+        timeoutMs: 180_000,
         body: {
-          query: query.trim(),
+          query: normalizedQuery,
           limit,
+          platforms: selectedPlatforms,
         },
       });
 
       const found = data?.total_ads_found ?? data?.ads_found ?? data?.new_ads_count ?? 0;
+      const saved = data?.saved_ads_count ?? ((data?.inserted_count || 0) + (data?.updated_count || 0));
+      const skippedInvalid = data?.skipped_invalid_count ?? 0;
 
       if (data?.status === "failed") {
-        setMessage(data.message || (data as Record<string, unknown>).error as string || "クロール中にエラーが発生しました");
+        const failReason = data.failure_reason || data.error_code;
+        const failPrefix = failReason ? `[${failReason}] ` : "";
+        setMessage(failPrefix + (data.message || data.detail || data.error || "クロール中にエラーが発生しました"));
         setCrawling(false);
       } else {
         setProgress(100);
         setCrawling(false);
-        const msg = `クロール完了: ${found}件の広告を取得しました`;
+        const baseMsg =
+          saved > 0
+            ? `クロール完了: 取得${found}件 / 保存${saved}件`
+            : `クロール完了: 取得${found}件 / 保存0件（新規反映なし）`;
+        const skipMsg = skippedInvalid > 0 ? ` / 無効データ${skippedInvalid}件をスキップ` : "";
+        const msg = `${baseMsg}${skipMsg}`;
         setMessage(msg);
-        toast.success(msg);
-        onSuccess();
+        if (saved > 0) {
+          toast.success(msg);
+        } else {
+          toast.error(msg);
+        }
+        onSuccess({
+          query: normalizedQuery,
+          found: saved > 0 ? saved : found,
+          finishedAt: new Date().toISOString(),
+        });
       }
     } catch (err: unknown) {
       const fetchErr = err as { status?: number; data?: { detail?: string; error?: { message?: string } }; message?: string };
@@ -872,7 +992,13 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
         <h3 className="text-base font-semibold text-gray-900">広告クロール</h3>
         <p className="text-[11px] text-gray-400 mt-0.5">各媒体の広告ライブラリから広告データを収集します</p>
 
-        <div className="mt-4 space-y-4">
+        <form
+          className="mt-4 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!crawling) void handleCrawl();
+          }}
+        >
           {/* Query */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -881,7 +1007,16 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (message) setMessage("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!crawling) void handleCrawl();
+                }
+              }}
               placeholder="商材名、競合名、カテゴリなど"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4A7DFF]/30 focus:border-[#4A7DFF]"
               autoFocus
@@ -893,13 +1028,14 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-gray-700">対象媒体</label>
-              <button className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll} disabled={crawling}>
+              <button type="button" className="text-[10px] text-[#4A7DFF] hover:underline" onClick={toggleAll} disabled={crawling}>
                 {selectedPlatforms.length === ALL_CRAWL_PLATFORMS.length ? "全解除" : "全選択"}
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {ALL_CRAWL_PLATFORMS.map((p) => (
                 <button
+                  type="button"
                   key={p.value}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${
                     selectedPlatforms.includes(p.value)
@@ -969,7 +1105,7 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
               </div>
             </div>
           )}
-        </div>
+        </form>
 
         {/* Message */}
         {message && !crawling && (
@@ -980,12 +1116,13 @@ function CrawlModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: ()
 
         {/* Actions */}
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors">
             キャンセル
           </button>
           <button
-            onClick={handleCrawl}
-            disabled={crawling || !query.trim()}
+            type="button"
+            onClick={() => void handleCrawl()}
+            disabled={crawling || !query.replace(/\u3000/g, " ").trim()}
             className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[#4A7DFF] hover:bg-[#3a6dee] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {crawling ? "クロール中..." : "クロール開始"}

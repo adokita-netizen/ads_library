@@ -44,7 +44,12 @@ class FetchError extends Error {
  */
 export async function fetchApi<T = unknown>(
   path: string,
-  options?: { method?: string; body?: unknown; params?: Record<string, string | number | undefined> },
+  options?: {
+    method?: string;
+    body?: unknown;
+    params?: Record<string, string | number | undefined>;
+    timeoutMs?: number;
+  },
 ): Promise<T> {
   let url = `${API_BASE}${path}`;
   if (options?.params) {
@@ -67,16 +72,22 @@ export async function fetchApi<T = unknown>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const init: RequestInit = { method, headers };
+  const init: RequestInit = {
+    method,
+    headers,
+    // Ranking/crawl data must always reflect latest backend state.
+    cache: "no-store",
+  };
   if (options?.body) {
     init.body = JSON.stringify(options.body);
   }
 
   let lastError: FetchError | Error | null = null;
+  const timeoutMs = options?.timeoutMs ?? 55_000;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55_000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...init, signal: controller.signal });
       clearTimeout(timeoutId);
@@ -200,6 +211,11 @@ export const adsApi = {
     platforms: string[] | null;
   }>(`/ads/crawl/${jobId}/status`),
   delete: (id: number) => api.delete(`/ads/${id}`),
+};
+
+export const dataQualityApi = {
+  getCreativeLibraryAudit: (params?: Record<string, string | number | undefined>) =>
+    fetchApi("/data-quality/creative-library-audit", { params }),
 };
 
 // Creative API

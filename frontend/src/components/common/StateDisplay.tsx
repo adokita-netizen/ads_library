@@ -4,6 +4,7 @@
  * Unified loading / empty / error state display components.
  * B45: CI-019 — consistent state UI across all views.
  */
+import UnifiedEmptyState from "@/components/common/EmptyState";
 
 interface LoadingSpinnerProps {
   /** Optional label. Defaults to "読み込み中..." */
@@ -125,20 +126,19 @@ export function EmptyState({
   onAction,
   icon = "data",
 }: EmptyStateProps) {
+  const mappedIcon =
+    icon === "data" ? "collection" :
+    icon === "document" ? "collection" :
+    icon === "bell" ? "alert" :
+    icon;
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      {emptyIcons[icon]}
-      <p className="mt-3 text-[13px] font-medium text-gray-500">{message}</p>
-      {description && <p className="mt-1 text-[11px] text-gray-400 max-w-xs">{description}</p>}
-      {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="mt-4 px-4 py-1.5 text-[12px] font-medium text-white bg-[#4A7DFF] rounded-lg hover:bg-[#3a6de8] transition-colors"
-        >
-          {actionLabel}
-        </button>
-      )}
-    </div>
+    <UnifiedEmptyState
+      icon={mappedIcon}
+      title={message}
+      description={description || ""}
+      actionLabel={actionLabel}
+      onAction={onAction}
+    />
   );
 }
 

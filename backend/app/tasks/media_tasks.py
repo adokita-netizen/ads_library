@@ -8,16 +8,26 @@ import re
 import subprocess
 import time
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import SyncSessionLocal
-from app.models.ad import Ad, MediaExtractionStatus
+from app.models.ad import Ad, MediaExtractionStatus, normalize_creative_fetch_reason
 from app.tasks.worker import celery_app
 
 logger = structlog.get_logger()
+
+MEDIA_FETCH_REASON_FALLBACK = "unknown_schema"
+_META_DISCLAIMER_TEXTS = {
+    "This ad ran without a required disclaimer.",
+    "This ad was run by an account or Page we later disabled for not following our Advertising Standards.",
+    "This content was removed because it didn't follow our Advertising Standards.",
+    "この広告は必要な免責事項なしで配信されました。",
+}
 
 
 # ── CI-135: Media Pipeline Metrics ────────────────────────────
@@ -101,46 +111,177 @@ def _sanitize_url_for_log(url: str) -> str:
     return _re.sub(r'access_token=[^&]+', 'access_token=***', url)
 
 
-def _build_render_ad_url(ad: "Ad") -> str | None:
-    """Build a server-rendered render_ad URL for a Meta ad.
+def _compute_media_completeness_score(ad: "Ad") -> int:
+    score = 0
+    if ad.video_url or ad.video_s3_key or ad.s3_key:
+        score += 35
+    if ad.image_url or ad.image_s3_key:
+        score += 30
+    if ad.thumbnail_url or ad.thumbnail_s3_key:
+        score += 20
+    if ad.snapshot_url:
+        score += 10
+    if ad.destination_url:
+        score += 5
+    return min(score, 100)
 
-    Prefers the render_ad endpoint (returns static HTML parseable without JS)
-    over the SPA library URL (/ads/library/?id=...).
+
+def _is_viewable(ad: "Ad") -> bool:
+    return bool(ad.thumbnail_url or ad.image_url or ad.video_url or ad.snapshot_url)
+
+
+def _media_access_tier(ad: "Ad") -> str:
+    if _is_downloadable(ad):
+        return "downloadable_with_lp" if ad.destination_url else "downloadable"
+    if ad.thumbnail_url or ad.image_url or ad.video_url:
+        return "viewable_only"
+    if ad.snapshot_url:
+        return "snapshot_only"
+    return "missing"
+
+
+def _normalize_media_reason(reason: str | None) -> str | None:
+    normalized = normalize_creative_fetch_reason(reason)
+    return normalized or MEDIA_FETCH_REASON_FALLBACK
+
+
+def _classify_download_error(message: str | None) -> str:
+    text = str(message or "").lower()
+    if any(token in text for token in ("403", "forbidden", "expired", "signature", "access denied")):
+        return "blocked_or_expired"
+    if any(token in text for token in ("404", "not found")):
+        return "not_found_in_api"
+    if any(token in text for token in ("format", "mime", "content-type", "decode")):
+        return "format_mismatch"
+    if any(token in text for token in ("timeout", "timed out", "429", "502", "503", "connection")):
+        return "download_failed"
+    return "download_failed"
+
+
+def _is_downloadable(ad: "Ad") -> bool:
+    return bool(
+        ad.video_s3_key or ad.s3_key or ad.image_s3_key or ad.thumbnail_s3_key
+    )
+
+
+def _record_media_recovery_state(
+    ad: "Ad",
+    *,
+    status: str,
+    reason: str | None = None,
+    source: str | None = None,
+    extractor_version: str | None = None,
+) -> None:
+    meta = dict(ad.ad_metadata or {})
+    event_at = datetime.now(timezone.utc).isoformat()
+    meta["last_recovery_attempt_at"] = event_at
+    completeness_score = _compute_media_completeness_score(ad)
+    meta["media_completeness_score"] = completeness_score
+    meta["extract_quality_score"] = completeness_score
+    meta["extract_quality_score_source"] = "creative_extraction"
+    meta["extract_quality_score_measured_at"] = event_at
+    meta["downloadable"] = _is_downloadable(ad)
+    meta["viewable"] = _is_viewable(ad)
+    meta["has_lp"] = bool(ad.destination_url)
+    meta["media_access_tier"] = _media_access_tier(ad)
+    meta["media_extraction_status"] = ad.media_extraction_status
+    if source:
+        meta["creative_fetch_source"] = source
+        meta["last_recovery_source"] = source
+    if extractor_version:
+        meta["extractor_version"] = extractor_version
+        history = meta.get("extractor_version_history")
+        history_items = history if isinstance(history, list) else []
+        history_entry = {
+            "version": extractor_version,
+            "status": status,
+            "source": source or "",
+            "recorded_at": event_at,
+        }
+        if not history_items or history_items[-1] != history_entry:
+            history_items = [*history_items[-9:], history_entry]
+        meta["extractor_version_history"] = history_items
+    meta["creative_fetch_status"] = status
+    if reason:
+        meta["creative_fetch_reason"] = _normalize_media_reason(reason)
+    elif status == "success":
+        meta["creative_fetch_reason"] = None
+        meta["last_meta_retry_error"] = None
+    if source:
+        meta["extract_source"] = source
+        meta["extraction_method"] = source
+    ad.ad_metadata = meta
+    flag_modified(ad, "ad_metadata")
+
+
+def _build_meta_library_url(ad: "Ad") -> str | None:
+    """Build a URL for extracting media from a Meta ad.
+
+    NOTE:
+    - `render_ad` is a Meta endpoint name, not Render.com.
+    - Infrastructure is AWS-only; this function always targets Meta public URLs.
+    - Prefer public Ads Library page (no token needed, stable on AWS/ECS egress).
     """
     external_id = ad.external_id
     if not external_id:
         return ad.snapshot_url
 
-    # Always rebuild render_ad URL with current token (tokens expire)
-    # Try to get access_token from config
-    try:
-        from app.core.config import get_settings
-        settings = get_settings()
-        token = settings.meta_access_token
-    except Exception:
-        token = None
+    # Use public Ads Library page (works without token, needs Playwright for JS)
+    return f"https://www.facebook.com/ads/library/?id={external_id}"
 
-    # Also check DB-stored keys
-    if not token:
-        try:
-            from app.api.endpoints.settings import load_api_keys_from_db
-            db_keys = load_api_keys_from_db()
-            token = db_keys.get("meta", {}).get("access_token")
-        except Exception:
-            pass
 
-    if token and external_id:
-        # NOTE: Meta's render_ad endpoint requires token in URL query param.
-        # This URL may appear in logs — ensure log sanitization is in place.
-        return (
-            f"https://www.facebook.com/ads/archive/render_ad/"
-            f"?id={external_id}&access_token={token}"
-        )
+# Backward-compatible alias (old name remained in logs/docs)
+def _build_render_ad_url(ad: "Ad") -> str | None:
+    return _build_meta_library_url(ad)
 
-    # Fallback: construct library URL
-    if not ad.snapshot_url and external_id:
-        return f"https://www.facebook.com/ads/library/?id={external_id}"
-    return ad.snapshot_url
+
+def _metadata_image_fallback(ad: "Ad") -> str | None:
+    meta = dict(ad.ad_metadata or {})
+    lp_info = meta.get("lp_info") if isinstance(meta.get("lp_info"), dict) else {}
+    lp_data = meta.get("lp_data") if isinstance(meta.get("lp_data"), dict) else {}
+    lp_analysis = meta.get("lp_analysis") if isinstance(meta.get("lp_analysis"), dict) else {}
+
+    candidates = (
+        lp_info.get("og_image"),
+        lp_data.get("og_image"),
+        lp_data.get("og_image_url"),
+        lp_analysis.get("og_image"),
+        lp_analysis.get("og_image_url"),
+        meta.get("lp_og_image"),
+        meta.get("og_image"),
+        meta.get("og_image_url"),
+    )
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+    return None
+
+
+def _metadata_destination_fallback(ad: "Ad") -> str | None:
+    meta = dict(ad.ad_metadata or {})
+    lp_info = meta.get("lp_info") if isinstance(meta.get("lp_info"), dict) else {}
+    lp_data = meta.get("lp_data") if isinstance(meta.get("lp_data"), dict) else {}
+    lp_analysis = meta.get("lp_analysis") if isinstance(meta.get("lp_analysis"), dict) else {}
+
+    candidates = (
+        lp_info.get("final_url"),
+        lp_data.get("final_url"),
+        lp_analysis.get("final_url"),
+        meta.get("lp_final_url"),
+        meta.get("final_url"),
+        meta.get("destination_url"),
+    )
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value.startswith(("http://", "https://")) and "facebook.com" not in value and "instagram.com" not in value:
+            return value
+    return None
+
+
+def _is_placeholder_text(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    return raw in _META_DISCLAIMER_TEXTS
 
 
 def extract_video_metadata(video_path: str) -> dict:
@@ -218,6 +359,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
 
     session = SyncSessionLocal()
     try:
+        download_failures: list[str] = []
         ad = session.query(Ad).filter(Ad.id == ad_id).first()
         if not ad:
             logger.error("media_extraction_ad_not_found", ad_id=ad_id)
@@ -252,7 +394,20 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
             loop.close()
 
         # Update ad with extracted data
-        ad.creative_type = extracted.creative_type
+        if extracted.creative_type and extracted.creative_type != "unknown":
+            ad.creative_type = extracted.creative_type
+
+        if not extracted.image_urls:
+            metadata_image = _metadata_image_fallback(ad)
+            if metadata_image:
+                extracted.image_urls = [metadata_image]
+                if not extracted.thumbnail_url:
+                    extracted.thumbnail_url = metadata_image
+                if extracted.creative_type == "unknown":
+                    extracted.creative_type = "image"
+
+        if not getattr(extracted, "destination_url", None):
+            extracted.destination_url = _metadata_destination_fallback(ad)
 
         if extracted.image_urls:
             ad.image_url = extracted.image_urls[0]
@@ -261,36 +416,42 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
             ad.video_url = extracted.video_urls[0]
 
         # Update text fields if currently missing
-        if extracted.ad_text and not ad.description:
+        if extracted.ad_text and not ad.description and not _is_placeholder_text(extracted.ad_text):
             ad.description = extracted.ad_text
-        if extracted.ad_title and not ad.title:
+        if extracted.ad_title and not ad.title and not _is_placeholder_text(extracted.ad_title):
             ad.title = extracted.ad_title
+        if getattr(extracted, "destination_url", None) and not ad.destination_url:
+            ad.destination_url = extracted.destination_url
 
         # Fallback: if extraction found nothing but ad has thumbnail_url from API, use it
         if not extracted.image_urls and not extracted.video_urls and ad.thumbnail_url:
-            # Try to get full-size image by removing size restrictions from fbcdn URLs
-            full_url = _upgrade_fbcdn_thumbnail(ad.thumbnail_url)
+            # Try multiple URL variants (larger size first, original as fallback)
+            url_variants = _fbcdn_url_variants(ad.thumbnail_url)
             logger.info("media_extraction_fallback_to_thumbnail", ad_id=ad_id,
-                        thumbnail_url=_sanitize_url_for_log(full_url))
-            try:
-                thumb_data = _download_sync(full_url)
-                if thumb_data and len(thumb_data) > 500:
-                    from app.core.storage import get_storage_client
-                    storage = get_storage_client()
-                    url_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
-                    s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
-                    storage.upload_bytes(s3_key, thumb_data, content_type="image/jpeg")
-                    ad.image_s3_key = s3_key
-                    ad.thumbnail_s3_key = s3_key
-                    ad.image_url = ad.thumbnail_url
-                    ad.creative_type = "image"
-                    extracted.creative_type = "image"
-                    extracted.image_urls = [ad.thumbnail_url]
-                    _save_to_local_cache(thumb_data, "images", ad_id)
-                    logger.info("media_fallback_thumbnail_uploaded", ad_id=ad_id, s3_key=s3_key,
-                                size_bytes=len(thumb_data))
-            except Exception as e:
-                logger.warning("media_fallback_thumbnail_failed", ad_id=ad_id, error=str(e))
+                        variants=len(url_variants))
+            for variant_url in url_variants:
+                try:
+                    thumb_data = _download_sync(variant_url)
+                    if thumb_data and len(thumb_data) > 200:
+                        from app.core.storage import get_storage_client
+                        storage = get_storage_client()
+                        url_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+                        s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
+                        storage.upload_bytes(s3_key, thumb_data, content_type="image/jpeg")
+                        ad.image_s3_key = s3_key
+                        ad.thumbnail_s3_key = s3_key
+                        ad.image_url = variant_url
+                        ad.creative_type = "image"
+                        extracted.creative_type = "image"
+                        extracted.image_urls = [variant_url]
+                        _save_to_local_cache(thumb_data, "images", ad_id)
+                        logger.info("media_fallback_thumbnail_uploaded", ad_id=ad_id, s3_key=s3_key,
+                                    size_bytes=len(thumb_data), variant=variant_url[:60])
+                        break  # Success, stop trying variants
+                except Exception as e:
+                    download_failures.append(_classify_download_error(e))
+                    logger.warning("media_fallback_variant_failed", ad_id=ad_id,
+                                   variant=_sanitize_url_for_log(variant_url)[:60], error=str(e))
 
         # Try to download and store the primary image
         if extracted.image_urls:
@@ -322,6 +483,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     except Exception as qe:
                         logger.debug("image_quality_check_skipped", ad_id=ad_id, error=str(qe))
             except Exception as e:
+                download_failures.append(_classify_download_error(e))
                 logger.warning("image_upload_failed", ad_id=ad_id, error=str(e))
 
         # Download and store video to S3
@@ -335,6 +497,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     video_key = f"videos/{uuid.uuid4()}_{url_hash}.mp4"
                     storage.upload_bytes(video_key, video_data, content_type="video/mp4")
                     ad.video_s3_key = video_key
+                    ad.s3_key = video_key
                     local_path = _save_to_local_cache(video_data, "videos", ad_id)
                     logger.info("video_uploaded_to_storage", ad_id=ad_id, s3_key=video_key,
                                 size_mb=round(len(video_data) / 1024 / 1024, 1))
@@ -351,7 +514,6 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                                 ad.resolution_height = video_meta["resolution_height"]
                             if video_meta.get("file_size_bytes"):
                                 ad.file_size_bytes = video_meta["file_size_bytes"]
-                            from sqlalchemy.orm.attributes import flag_modified
                             meta = dict(ad.ad_metadata or {})
                             meta["video_codec"] = video_meta.get("codec", "")
                             meta["video_bitrate"] = video_meta.get("bitrate", 0)
@@ -361,6 +523,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                             logger.info("video_metadata_extracted", ad_id=ad_id,
                                         duration=video_meta.get("duration_seconds"))
             except Exception as e:
+                download_failures.append(_classify_download_error(e))
                 logger.warning("video_upload_failed", ad_id=ad_id, error=str(e))
 
         # CI-042: Optimized thumbnail fallback order
@@ -371,6 +534,9 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                 thumb_candidates.extend(extracted.image_urls[:3])
             if extracted.thumbnail_url:
                 thumb_candidates.insert(0, extracted.thumbnail_url)
+            metadata_image = _metadata_image_fallback(ad)
+            if metadata_image:
+                thumb_candidates.append(metadata_image)
             for candidate in thumb_candidates:
                 if candidate and candidate.startswith("http"):
                     ad.thumbnail_url = candidate
@@ -398,9 +564,47 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                     _save_to_local_cache(thumb_data, "thumbnails", ad_id)
                     logger.info("thumbnail_uploaded_to_storage", ad_id=ad_id, s3_key=thumb_key)
             except Exception as e:
+                download_failures.append(_classify_download_error(e))
                 logger.warning("thumbnail_upload_failed", ad_id=ad_id, error=str(e))
 
-        ad.media_extraction_status = MediaExtractionStatus.COMPLETED
+        downloadable = _is_downloadable(ad)
+        has_any_media = bool(ad.thumbnail_url or ad.image_url or ad.video_url)
+        failure_reason = download_failures[0] if download_failures else None
+        if downloadable:
+            ad.media_extraction_status = MediaExtractionStatus.COMPLETED
+            _record_media_recovery_state(
+                ad,
+                status="success",
+                source=getattr(extracted, "extraction_method", "") or ("playwright" if use_playwright else "http_bs4"),
+                extractor_version=getattr(extracted, "extractor_version", ""),
+            )
+        elif has_any_media:
+            ad.media_extraction_status = MediaExtractionStatus.ENRICHED
+            _record_media_recovery_state(
+                ad,
+                status="partial",
+                reason=failure_reason or "download_failed",
+                source=getattr(extracted, "extraction_method", "") or ("playwright" if use_playwright else "http_bs4"),
+                extractor_version=getattr(extracted, "extractor_version", ""),
+            )
+        else:
+            failure_reason = (
+                getattr(extracted, "restriction_reason", None)
+                or failure_reason
+                or ("media_url_missing" if ad.snapshot_url else "download_failed")
+            )
+            ad.media_extraction_status = (
+                MediaExtractionStatus.FAILED
+                if getattr(extracted, "restriction_reason", None) == "login_required"
+                else (MediaExtractionStatus.PENDING_HEAVY if ad.snapshot_url else MediaExtractionStatus.FAILED)
+            )
+            _record_media_recovery_state(
+                ad,
+                status="failed",
+                reason=failure_reason,
+                source=getattr(extracted, "extraction_method", "") or ("playwright" if use_playwright else "http_bs4"),
+                extractor_version=getattr(extracted, "extractor_version", ""),
+            )
         session.commit()
 
         _duration = time.time() - _start_time
@@ -412,11 +616,28 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                      duration_s=round(_duration, 2))
 
         return {
-            "status": "completed",
+            "status": "completed" if downloadable else ("enriched" if has_any_media else "failed"),
             "creative_type": extracted.creative_type,
             "image_count": len(extracted.image_urls),
             "video_count": len(extracted.video_urls),
             "duration_s": round(_duration, 2),
+            "downloadable": downloadable,
+            "reason": (
+                None
+                if downloadable
+                else (
+                    getattr(extracted, "restriction_reason", None)
+                    or
+                    failure_reason
+                    or ("media_url_missing" if ad.snapshot_url else "download_failed")
+                )
+            ),
+            "extraction_method": getattr(extracted, "extraction_method", "") or ("playwright" if use_playwright else "http_bs4"),
+            "restriction_reason": getattr(extracted, "restriction_reason", None),
+            "debug_title": getattr(extracted, "debug_title", None),
+            "debug_excerpt": getattr(extracted, "debug_excerpt", None),
+            "debug_dialog_count": int(getattr(extracted, "debug_dialog_count", 0) or 0),
+            "debug_stage": getattr(extracted, "debug_stage", None),
         }
 
     except Exception as e:
@@ -440,12 +661,18 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                 max_retries = self.max_retries or 3
                 if is_permanent or retries >= max_retries:
                     ad.media_extraction_status = MediaExtractionStatus.FAILED
-                    from sqlalchemy.orm.attributes import flag_modified
                     meta = dict(ad.ad_metadata or {})
                     meta["extraction_failure_type"] = "permanent" if is_permanent else "max_retries"
                     meta["extraction_error"] = str(e)[:200]
                     ad.ad_metadata = meta
                     flag_modified(ad, "ad_metadata")
+                    _record_media_recovery_state(
+                        ad,
+                        status="failed",
+                        reason=_classify_download_error(str(e)) if is_transient or is_permanent else "media_url_missing",
+                        source="extract_media_task",
+                        extractor_version=str((ad.ad_metadata or {}).get("extractor_version") or ""),
+                    )
                 else:
                     ad.media_extraction_status = MediaExtractionStatus.RETRYING
                 session.commit()
@@ -489,11 +716,17 @@ def download_thumbnail_task(self, ad_id: int):
             storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
             ad.thumbnail_s3_key = thumb_key
             _save_to_local_cache(thumb_data, "thumbnails", ad_id)
+            if not ad.image_s3_key and ad.image_url == ad.thumbnail_url:
+                ad.image_s3_key = thumb_key
+            ad.media_extraction_status = MediaExtractionStatus.COMPLETED if _is_downloadable(ad) else MediaExtractionStatus.ENRICHED
+            _record_media_recovery_state(ad, status="success" if _is_downloadable(ad) else "partial", source="download_thumbnail_task")
             session.commit()
             logger.info("thumbnail_downloaded", ad_id=ad_id, s3_key=thumb_key)
-            return {"status": "completed", "s3_key": thumb_key}
+            return {"status": "completed", "s3_key": thumb_key, "downloadable": _is_downloadable(ad)}
         else:
             logger.warning("thumbnail_download_empty", ad_id=ad_id, url=ad.thumbnail_url)
+            _record_media_recovery_state(ad, status="failed", reason="download_failed", source="download_thumbnail_task")
+            session.commit()
             return {"status": "failed", "message": "Download returned no data"}
 
     except Exception as e:
@@ -647,7 +880,17 @@ def enrich_ad_creative_task(self, ad_id: int):
             except Exception as e:
                 logger.warning("enrich_image_upload_failed", ad_id=ad_id, error=str(e))
 
-        ad.media_extraction_status = MediaExtractionStatus.ENRICHED
+        ad.media_extraction_status = (
+            MediaExtractionStatus.COMPLETED
+            if _is_downloadable(ad)
+            else MediaExtractionStatus.ENRICHED
+        )
+        _record_media_recovery_state(
+            ad,
+            status="success" if _is_downloadable(ad) else "partial",
+            reason=None if _is_downloadable(ad) else "download_failed",
+            source="enrich_ad_creative_task",
+        )
         session.commit()
 
         logger.info(
@@ -670,6 +913,7 @@ def enrich_ad_creative_task(self, ad_id: int):
             ad = session.query(Ad).filter(Ad.id == ad_id).first()
             if ad:
                 ad.media_extraction_status = MediaExtractionStatus.PENDING_HEAVY
+                _record_media_recovery_state(ad, status="failed", reason="download_failed", source="enrich_ad_creative_task")
                 session.commit()
         except Exception:
             session.rollback()
@@ -690,18 +934,33 @@ def _escalate_to_extract_media(ad_id: int):
 
 
 def _upgrade_fbcdn_thumbnail(url: str) -> str:
-    """Remove size restrictions from fbcdn thumbnail URLs to get full-size image.
+    """Try to get a larger image from fbcdn thumbnail URL.
 
-    Facebook CDN URLs contain 'stp=dst-jpg_s60x60' or similar size params.
-    Removing the size suffix returns the original resolution image.
+    Facebook CDN URLs contain 'stp=dst-jpg_s60x60' size params.
+    Returns a list of URLs to try: [larger_size, original].
+    Stripping size entirely returns 403 from AWS IPs, so we request
+    a larger explicit size instead.
     """
     if not url or "fbcdn" not in url:
         return url
-    # Replace stp=dst-jpg_s60x60 (or similar sizes) with just stp=dst-jpg
-    upgraded = re.sub(r'(stp=dst-jpg)_s\d+x\d+', r'\1', url)
-    # Also handle stp=dst-jpg_s60x60_tt6 patterns
-    upgraded = re.sub(r'(stp=dst-jpg)_tt\d+', r'\1', upgraded)
+    # Request 600x600 instead of stripping size (stripping causes 403 from AWS)
+    upgraded = re.sub(r'(stp=dst-jpg)_s\d+x\d+', r'\1_s600x600', url)
+    # Also remove _tt6 suffix which may cause issues
+    upgraded = re.sub(r'_tt\d+', '', upgraded)
     return upgraded
+
+
+def _fbcdn_url_variants(url: str) -> list[str]:
+    """Return fbcdn URL variants to try, from best to worst quality."""
+    if not url:
+        return []
+    variants = []
+    upgraded = _upgrade_fbcdn_thumbnail(url)
+    if upgraded != url:
+        variants.append(upgraded)
+    # Always include original URL as last resort (60x60 but works reliably)
+    variants.append(url)
+    return variants
 
 
 def _download_sync(url: str, timeout: float = 15.0) -> bytes | None:

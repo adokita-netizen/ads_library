@@ -45,43 +45,6 @@ interface AdvertiserProfileData {
   top_ads: TopAd[];
 }
 
-/* ─── Mock Data ─── */
-
-// TODO: API実装後に削除
-function getMockProfile(name: string): AdvertiserProfileData {
-  return {
-    advertiser_name: name,
-    total_ads: 87,
-    hit_rate: 23.0,
-    total_spend: 145000000,
-    avg_score: 62.5,
-    genre_distribution: [
-      { genre: "美容", count: 35, percentage: 40.2 },
-      { genre: "健康食品", count: 22, percentage: 25.3 },
-      { genre: "ダイエット", count: 18, percentage: 20.7 },
-      { genre: "スキンケア", count: 12, percentage: 13.8 },
-    ],
-    monthly_trends: [
-      { month: "2025-09", ad_count: 8, total_spend: 12000000, avg_score: 55 },
-      { month: "2025-10", ad_count: 12, total_spend: 18000000, avg_score: 58 },
-      { month: "2025-11", ad_count: 15, total_spend: 22000000, avg_score: 61 },
-      { month: "2025-12", ad_count: 11, total_spend: 19000000, avg_score: 64 },
-      { month: "2026-01", ad_count: 18, total_spend: 35000000, avg_score: 67 },
-      { month: "2026-02", ad_count: 23, total_spend: 39000000, avg_score: 65 },
-    ],
-    preferred_hooks: ["問題提起", "権威性", "体験談"],
-    preferred_ctas: ["LP誘導", "LINE登録", "無料サンプル"],
-    avg_duration_days: 34,
-    top_ads: [
-      { ad_id: 101, product_name: "美容液プレミアムケア", platform: "instagram", hit_score: 89, cumulative_views: 450000, cumulative_spend: 12000000 },
-      { ad_id: 102, product_name: "ダイエットサプリX", platform: "facebook", hit_score: 82, cumulative_views: 380000, cumulative_spend: 9500000 },
-      { ad_id: 103, product_name: "育毛トニック", platform: "youtube", hit_score: 76, cumulative_views: 290000, cumulative_spend: 7800000 },
-      { ad_id: 104, product_name: "脱毛サロンLP", platform: "tiktok", hit_score: 71, cumulative_views: 210000, cumulative_spend: 5400000 },
-      { ad_id: 105, product_name: "プロテインバー", platform: "line", hit_score: 65, cumulative_views: 150000, cumulative_spend: 3200000 },
-    ],
-  };
-}
-
 /* ─── Score color ─── */
 
 function scoreColor(score: number): string {
@@ -122,8 +85,7 @@ export default function AdvertiserProfile({ advertiserName, onAdSelect, onBack }
       );
       setData(res);
     } catch {
-      // API未実装時はモックデータを使用
-      setData(getMockProfile(advertiserName));
+      setData(null);
       setUsingMock(true);
     } finally {
       setLoading(false);

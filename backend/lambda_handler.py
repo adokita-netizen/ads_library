@@ -2,6 +2,7 @@
 
 import os
 import json
+import time
 
 import structlog
 
@@ -24,22 +25,45 @@ def _init_database():
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
-    try:
-        from app.core.database import sync_engine, Base
-        # These imports register SQLAlchemy models with Base.metadata.
-        # Do NOT remove even though they appear unused — required for create_all().
-        import app.models.ad  # noqa: F401
-        import app.models.ad_metrics  # noqa: F401
-        import app.models.analysis  # noqa: F401
-        import app.models.user  # noqa: F401
-        import app.models.landing_page  # noqa: F401
-        import app.models.api_key  # noqa: F401
-        import app.models.alert_rule  # noqa: F401
-        import app.models.alert_history  # noqa: F401
-        Base.metadata.create_all(bind=sync_engine)
-        _DB_INITIALIZED = True
-    except Exception as e:
-        logger.warning("db_init_skipped", error=str(e))
+    max_retries = 3
+    for attempt in range(max_retries):
+        session = None
+        try:
+            from app.core.database import sync_engine, Base, get_session_with_retry
+            # These imports register SQLAlchemy models with Base.metadata.
+            # Do NOT remove even though they appear unused — required for create_all().
+            import app.models.ad  # noqa: F401
+            import app.models.ad_metrics  # noqa: F401
+            import app.models.analysis  # noqa: F401
+            import app.models.user  # noqa: F401
+            import app.models.landing_page  # noqa: F401
+            import app.models.api_key  # noqa: F401
+            import app.models.alert_rule  # noqa: F401
+            import app.models.alert_history  # noqa: F401
+            import app.models.crawl_job  # noqa: F401
+            session = get_session_with_retry()
+            Base.metadata.create_all(bind=sync_engine)
+            _DB_INITIALIZED = True
+            return
+        except Exception as e:
+            if attempt >= max_retries - 1:
+                logger.warning("db_init_skipped", error=str(e), attempts=max_retries)
+                return
+            delay = float(2 ** attempt)
+            logger.warning(
+                "db_init_retry",
+                attempt=attempt + 1,
+                max_retries=max_retries,
+                delay=delay,
+                error=str(e),
+            )
+            time.sleep(delay)
+        finally:
+            if session is not None:
+                try:
+                    session.close()
+                except Exception:
+                    pass
 
 _init_database()
 
@@ -47,6 +71,49 @@ from mangum import Mangum
 from app.main import app
 
 _mangum_handler = Mangum(app, lifespan="off")
+
+
+def _get_forwarded_source_ip(event: dict) -> str:
+    """Extract source IP from forwarded headers with safe fallback."""
+    if not isinstance(event, dict):
+        return "0.0.0.0"
+    headers = event.get("headers") or {}
+    if not isinstance(headers, dict):
+        headers = {}
+    forwarded = (
+        headers.get("x-forwarded-for")
+        or headers.get("X-Forwarded-For")
+        or headers.get("x-real-ip")
+        or headers.get("X-Real-IP")
+        or "0.0.0.0"
+    )
+    return str(forwarded).split(",")[0].strip() or "0.0.0.0"
+
+
+def _ensure_request_source_ip(event: dict) -> None:
+    """Backfill sourceIp fields expected by Mangum for API Gateway events."""
+    if not isinstance(event, dict):
+        return
+    request_context = event.get("requestContext")
+    if not isinstance(request_context, dict):
+        request_context = {}
+        event["requestContext"] = request_context
+
+    source_ip = _get_forwarded_source_ip(event)
+
+    # HTTP API v2 shape: requestContext.http.sourceIp
+    http_ctx = request_context.get("http")
+    if not isinstance(http_ctx, dict):
+        http_ctx = {}
+        request_context["http"] = http_ctx
+    http_ctx.setdefault("sourceIp", source_ip)
+
+    # REST API v1 shape: requestContext.identity.sourceIp
+    identity = request_context.get("identity")
+    if not isinstance(identity, dict):
+        identity = {}
+        request_context["identity"] = identity
+    identity.setdefault("sourceIp", source_ip)
 
 
 def handler(event, context):
@@ -57,7 +124,7 @@ def handler(event, context):
             from alembic.config import Config
             from alembic import command
             from alembic.migration import MigrationContext
-            from app.core.database import sync_engine
+            from app.core.database import sync_engine, Base
 
             alembic_cfg = Config("alembic.ini")
 
@@ -72,6 +139,10 @@ def handler(event, context):
                 command.stamp(alembic_cfg, "001")
 
             command.upgrade(alembic_cfg, "head")
+            # Some newer models (e.g. crawl_jobs) are not covered by early revisions.
+            # Ensure they exist after migration for runtime safety.
+            import app.models.crawl_job  # noqa: F401
+            Base.metadata.create_all(bind=sync_engine)
             return {"statusCode": 200, "body": json.dumps({"status": "migration_complete", "from_rev": current_rev})}
         except Exception as e:
             logger.error("migration_error", error=str(e), exc_info=True)
@@ -96,6 +167,13 @@ def handler(event, context):
     # Direct invocation for updating API keys in DB
     if isinstance(event, dict) and event.get("action") == "update_api_key":
         return _update_api_key(event)
+
+    # Direct invocation for re-downloading thumbnails for existing ads
+    if isinstance(event, dict) and event.get("action") == "refresh_thumbnails":
+        return _refresh_thumbnails(event)
+
+    # Backfill sourceIp for Mangum compatibility (HTTP API v2 / REST API v1).
+    _ensure_request_source_ip(event)
 
     return _mangum_handler(event, context)
 
@@ -269,6 +347,9 @@ def _run_crawl(event: dict) -> dict:
                         saved += 1
 
                 session.commit()
+
+                # Download thumbnails immediately while URLs are fresh
+                _download_thumbnails_inline(session)
                 total_saved += saved
                 query_results[query] = {"saved": saved, "platforms": list(results.keys())}
                 logger.info("crawl_query_done", query=query, saved=saved)
@@ -464,6 +545,18 @@ def _run_extract_media(event: dict) -> dict:
 
     session = SyncSessionLocal()
     try:
+        # Reset ads that have no image_s3_key back to pending for re-extraction
+        if event.get("reset_no_image"):
+            reset_result = session.execute(text("""
+                UPDATE ads SET media_extraction_status = 'pending',
+                    snapshot_url = NULL
+                WHERE image_s3_key IS NULL
+                AND (media_extraction_status IN ('completed', 'dispatched', 'failed', 'skipped'))
+                AND (external_id IS NOT NULL)
+            """))
+            session.commit()
+            logger.info("reset_no_image_ads", count=reset_result.rowcount)
+
         rows = session.execute(text("""
             SELECT id, external_id, snapshot_url, media_extraction_status
             FROM ads
@@ -546,3 +639,165 @@ def _update_api_key(event: dict) -> dict:
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
     finally:
         db.close()
+
+
+def _download_thumbnails_inline(session):
+    """Download thumbnails for ads that have thumbnail_url but no image_s3_key.
+
+    Called during crawl to grab images while fbcdn URLs are still fresh.
+    """
+    import hashlib
+    import uuid
+    import httpx
+
+    from app.models.ad import Ad
+
+    ads = session.query(Ad).filter(
+        Ad.thumbnail_url.isnot(None),
+        Ad.image_s3_key.is_(None),
+    ).limit(50).all()
+
+    if not ads:
+        return
+
+    from app.core.storage import get_storage_client
+    storage = get_storage_client()
+
+    downloaded = 0
+    for ad in ads:
+        try:
+            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                r = client.get(ad.thumbnail_url)
+                r.raise_for_status()
+                data = r.content
+
+            if data and len(data) > 200:
+                url_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+                s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
+                storage.upload_bytes(s3_key, data, content_type="image/jpeg")
+                ad.image_s3_key = s3_key
+                ad.thumbnail_s3_key = s3_key
+                if ad.creative_type == "unknown":
+                    ad.creative_type = "image"
+                ad.media_extraction_status = "completed"
+                downloaded += 1
+        except Exception as e:
+            logger.debug("inline_thumbnail_download_failed", ad_id=ad.id, error=str(e))
+
+    if downloaded:
+        session.commit()
+        logger.info("inline_thumbnails_downloaded", count=downloaded, total=len(ads))
+
+
+def _refresh_thumbnails(event: dict) -> dict:
+    """Re-fetch thumbnail URLs from Graph API and download them for existing ads.
+
+    For ads that have external_id but no image_s3_key, this:
+    1. Queries the Graph API for fresh ad_creative_link_thumbnails
+    2. Downloads the thumbnail immediately (before fbcdn token expires)
+    3. Uploads to S3 and updates DB
+    """
+    import hashlib
+    import uuid
+    import httpx
+    from sqlalchemy import text
+    from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad
+
+    limit = event.get("limit", 50)
+    session = SyncSessionLocal()
+
+    try:
+        # Get access token
+        token_row = session.execute(text(
+            "SELECT key_value FROM platform_api_keys "
+            "WHERE platform='meta' AND key_name='access_token' AND is_active=true"
+        )).first()
+        if not token_row:
+            return {"statusCode": 400, "body": json.dumps({"error": "No Meta access token in DB"})}
+        token = token_row[0]
+
+        # Get ads needing thumbnails
+        ads = session.query(Ad).filter(
+            Ad.image_s3_key.is_(None),
+            Ad.external_id.isnot(None),
+        ).order_by(Ad.id).limit(limit).all()
+
+        if not ads:
+            return {"statusCode": 200, "body": json.dumps({"message": "No ads need thumbnails", "count": 0})}
+
+        from app.core.storage import get_storage_client
+        storage = get_storage_client()
+
+        results = {"total": len(ads), "downloaded": 0, "api_failed": 0, "dl_failed": 0}
+
+        # Batch query Graph API (max 50 IDs per request)
+        for i in range(0, len(ads), 50):
+            batch = ads[i:i+50]
+            ext_ids = [a.external_id for a in batch]
+            ad_map = {a.external_id: a for a in batch}
+
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    for ext_id in ext_ids:
+                        ad = ad_map[ext_id]
+                        try:
+                            r = client.get(
+                                f"https://graph.facebook.com/v25.0/ads_archive",
+                                params={
+                                    "access_token": token,
+                                    "search_terms": "",
+                                    "ad_reached_countries": '["JP"]',
+                                    "search_page_ids": ext_id.split("_")[0] if "_" in ext_id else "",
+                                    "fields": "id,ad_creative_link_thumbnails",
+                                    "limit": "1",
+                                },
+                            )
+                            # Graph API search might not find the exact ad
+                            # Try direct ad lookup instead
+                            r2 = client.get(
+                                f"https://graph.facebook.com/v25.0/{ext_id}",
+                                params={
+                                    "access_token": token,
+                                    "fields": "ad_creative_link_thumbnails",
+                                },
+                            )
+                            if r2.status_code == 200:
+                                data = r2.json()
+                                thumbnails = data.get("ad_creative_link_thumbnails", [])
+                                if thumbnails:
+                                    thumb_url = thumbnails[0] if isinstance(thumbnails[0], str) else thumbnails[0].get("url", "")
+                                    if thumb_url:
+                                        # Download immediately
+                                        try:
+                                            tr = client.get(thumb_url, follow_redirects=True)
+                                            tr.raise_for_status()
+                                            thumb_data = tr.content
+                                            if thumb_data and len(thumb_data) > 200:
+                                                url_hash = hashlib.md5(thumb_url.encode()).hexdigest()[:12]
+                                                s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
+                                                storage.upload_bytes(s3_key, thumb_data, content_type="image/jpeg")
+                                                ad.image_s3_key = s3_key
+                                                ad.thumbnail_s3_key = s3_key
+                                                ad.thumbnail_url = thumb_url
+                                                if ad.creative_type == "unknown":
+                                                    ad.creative_type = "image"
+                                                ad.media_extraction_status = "completed"
+                                                results["downloaded"] += 1
+                                        except Exception:
+                                            results["dl_failed"] += 1
+                            else:
+                                results["api_failed"] += 1
+                        except Exception:
+                            results["api_failed"] += 1
+            except Exception as e:
+                logger.error("refresh_thumbnails_batch_error", error=str(e))
+
+        session.commit()
+        return {"statusCode": 200, "body": json.dumps(results, default=str)}
+    except Exception as e:
+        session.rollback()
+        logger.error("refresh_thumbnails_error", error=str(e), exc_info=True)
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+    finally:
+        session.close()

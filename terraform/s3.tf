@@ -15,14 +15,28 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   bucket = aws_s3_bucket.storage.id
 
   rule {
-    id     = "move-to-ia"
+    id     = "long-term-media-retention"
     status = "Enabled"
 
     filter {}
 
     transition {
-      days          = 90
+      days          = var.s3_transition_to_ia_days
       storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = var.s3_transition_to_glacier_days
+      storage_class = "GLACIER_IR"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = var.s3_noncurrent_transition_days
+      storage_class   = "GLACIER_IR"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.s3_noncurrent_expiration_days
     }
   }
 }

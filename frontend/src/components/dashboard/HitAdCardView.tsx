@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { platformLabels, platformColors, genreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
+import { NumericProvenanceBadge, type NumericProvenanceState } from "../common/NumericProvenance";
 import { CreativeViewer } from "../common/CreativeViewer";
 
 interface HitAd {
@@ -36,6 +37,15 @@ interface HitAd {
   days_running?: number;
   is_still_running?: boolean;
   estimation_method?: string;
+  metric_source?: string;
+  creative_source?: string;
+  lp_source?: string;
+  metric_status?: NumericProvenanceState;
+  creative_status?: NumericProvenanceState;
+  freshness_status?: "fresh" | "missing" | "stale" | string;
+  last_meta_success_at?: string;
+  meta_quality_state?: NumericProvenanceState;
+  meta_recovery_reason?: string;
 }
 
 interface HitAdCardViewProps {
@@ -66,6 +76,24 @@ const qualityDot: Record<string, string> = {
   incomplete: "bg-red-400",
 };
 
+function isMetaPlatform(platform: string | undefined): boolean {
+  return platform === "facebook" || platform === "instagram" || platform === "meta";
+}
+
+function formatMetaSource(value: string | undefined): string {
+  const normalized = (value || "missing").replaceAll("_", " ");
+  if (normalized === "api") return "API";
+  if (normalized === "db") return "DB";
+  return normalized;
+}
+
+function isFreshMetaAd(lastMetaSuccessAt?: string): boolean {
+  if (!lastMetaSuccessAt) return false;
+  const ts = Date.parse(lastMetaSuccessAt);
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts <= 1000 * 60 * 60 * 48;
+}
+
 export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -74,6 +102,9 @@ export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
           (ad.hit_score || 0) >= 80 ? "#ef4444" : (ad.hit_score || 0) >= 50 ? "#f59e0b" : "#4A7DFF";
         const quality = getDataQuality(ad);
         const isProvisional = ad.days_running != null && ad.days_running < 7;
+        const showMeta = isMetaPlatform(ad.platform);
+        const metaState = (ad.meta_quality_state || "missing") as NumericProvenanceState;
+        const isNewMeta = showMeta && isFreshMetaAd(ad.last_meta_success_at);
 
         return (
           <div
@@ -112,6 +143,12 @@ export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
                     </span>
                   )}
                   <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${qualityDot[quality]}`} title={quality === "complete" ? "データ完全" : quality === "partial" ? "一部データ不足" : "データ不足"} />
+                  {showMeta ? <NumericProvenanceBadge state={metaState} /> : null}
+                  {isNewMeta ? (
+                    <span className="shrink-0 rounded bg-sky-100 px-1 py-px text-[8px] font-bold leading-none text-sky-700">
+                      NEW
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-[10px] text-gray-400 truncate">{ad.advertiser_name || "-"}</p>
               </div>
@@ -171,6 +208,24 @@ export default function HitAdCardView({ ads, onAdSelect }: HitAdCardViewProps) {
               {ad.estimation_method === "audience_based" && (
                 <span className="badge text-[8px] bg-green-100 text-green-700">実データ</span>
               )}
+              {showMeta ? (
+                <>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] text-slate-700">
+                    metrics {formatMetaSource(ad.metric_source)}
+                  </span>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] text-slate-700">
+                    creative {formatMetaSource(ad.creative_source)}
+                  </span>
+                  {!ad.destination_url ? (
+                    <span className="rounded bg-gray-100 px-2 py-0.5 text-[9px] text-gray-600">LP missing</span>
+                  ) : null}
+                  {ad.meta_recovery_reason ? (
+                    <span className="rounded bg-rose-50 px-2 py-0.5 text-[9px] text-rose-700">
+                      {ad.meta_recovery_reason.replaceAll("_", " ")}
+                    </span>
+                  ) : null}
+                </>
+              ) : null}
             </div>
 
             {/* Action buttons */}

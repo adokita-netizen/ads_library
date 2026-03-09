@@ -7,8 +7,8 @@ resource "aws_iam_role" "lambda" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "lambda.amazonaws.com" }
       }
     ]
@@ -118,8 +118,8 @@ resource "aws_iam_role" "ecs_execution" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "ecs-tasks.amazonaws.com" }
       }
     ]
@@ -142,8 +142,8 @@ resource "aws_iam_role" "ecs_task" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "ecs-tasks.amazonaws.com" }
       }
     ]
@@ -207,8 +207,8 @@ resource "aws_iam_role" "eventbridge_scheduler" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "scheduler.amazonaws.com" }
       }
     ]
@@ -240,6 +240,24 @@ resource "aws_iam_role_policy" "eventbridge_scheduler" {
           aws_sqs_queue.heavy_tasks.arn,
         ]
       },
+      {
+        Sid    = "ECSRunTask"
+        Effect = "Allow"
+        Action = [
+          "ecs:RunTask",
+          "ecs:DescribeTasks",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "PassRoleToECS"
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = [
+          aws_iam_role.ecs_execution.arn,
+          aws_iam_role.ecs_task.arn,
+        ]
+      },
     ]
   })
 }
@@ -253,8 +271,8 @@ resource "aws_iam_role" "nat_instance" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "ec2.amazonaws.com" }
       }
     ]

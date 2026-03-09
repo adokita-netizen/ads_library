@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlencode
 
 import structlog
 from bs4 import BeautifulSoup
@@ -35,8 +36,13 @@ class TikTokAdCrawler(BaseCrawler):
 
         if self.access_token:
             results = await self._search_via_api(query, category, limit, region)
+            if not results:
+                results = await self._search_via_scraping(query, limit, region)
         else:
             results = await self._search_via_scraping(query, limit, region)
+
+        if not results:
+            results = await self._search_via_playwright(query=query, limit=limit, region=region)
 
         logger.info("tiktok_ads_search", query=query, results_count=len(results))
         return results
@@ -223,3 +229,76 @@ class TikTokAdCrawler(BaseCrawler):
     async def get_advertiser_ads(self, advertiser_name: str, limit: int = 50) -> list[CrawledAd]:
         """Get all ads from a TikTok advertiser."""
         return await self.search_ads(query=advertiser_name, limit=limit)
+
+    async def _search_via_playwright(
+        self,
+        query: str,
+        limit: int,
+        region: str,
+    ) -> list[CrawledAd]:
+        """Playwright fallback for JS-heavy TikTok library pages."""
+        try:
+            from playwright.async_api import async_playwright
+        except Exception:
+            logger.warning("tiktok_playwright_not_installed")
+            return []
+
+        results: list[CrawledAd] = []
+        target_url = f"{TIKTOK_AD_LIBRARY_URL}?{urlencode({'q': query, 'region': region, 'type': 'video'})}"
+        browser = None
+        pw = None
+        try:
+            pw = await async_playwright().start()
+            browser = await pw.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2500)
+            cards = await page.evaluate(
+                """(maxCount) => {
+                    const nodes = Array.from(document.querySelectorAll('.ad-card, [data-ad-id], .search-result-item')).slice(0, maxCount);
+                    return nodes.map((el) => {
+                      const txt = (s) => {
+                        const n = el.querySelector(s);
+                        return n && n.textContent ? n.textContent.trim() : null;
+                      };
+                      const img = el.querySelector('img');
+                      const vid = el.querySelector('video source');
+                      const link = el.querySelector('a[href]:not([href*=\"tiktok.com\"])');
+                      return {
+                        ad_id: el.getAttribute('data-ad-id') || null,
+                        title: txt('.ad-title, h3'),
+                        description: txt('.ad-body, .ad-text, p'),
+                        advertiser_name: txt('.business-name, .advertiser'),
+                        video_url: vid ? vid.getAttribute('src') : null,
+                        thumbnail_url: img ? (img.getAttribute('src') || img.getAttribute('data-src')) : null,
+                        destination_url: link ? link.getAttribute('href') : null
+                      };
+                    });
+                }""",
+                limit,
+            )
+            for idx, card in enumerate(cards or []):
+                results.append(
+                    CrawledAd(
+                        external_id=str(card.get("ad_id") or f"tt_pw_{idx}_{hash(query) & 0xffff:x}"),
+                        platform="tiktok",
+                        title=card.get("title"),
+                        description=card.get("description"),
+                        advertiser_name=card.get("advertiser_name"),
+                        video_url=card.get("video_url"),
+                        thumbnail_url=card.get("thumbnail_url"),
+                        destination_url=card.get("destination_url"),
+                        metadata={"source": "tiktok_playwright_fallback"},
+                    )
+                )
+        except Exception as e:
+            logger.error("tiktok_playwright_fallback_failed", query=query, error=str(e))
+        finally:
+            try:
+                if browser:
+                    await browser.close()
+                if pw:
+                    await pw.stop()
+            except Exception:
+                pass
+        return results

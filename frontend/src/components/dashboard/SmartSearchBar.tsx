@@ -3,9 +3,14 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { useDebounce } from "@/lib/useDebounce";
+import { useSearchUxSettings } from "@/lib/useSearchUxSettings";
+import SearchUxSettingsPanel from "../common/SearchUxSettingsPanel";
+import SearchFallbackChips, {
+  type SearchFallbackSuggestion,
+} from "../common/SearchFallbackChips";
 
 interface AutocompleteSuggestion {
-  type: "all" | "genre" | "product" | "advertiser";
+  type: "all" | "genre" | "product" | "advertiser" | "keyword";
   label: string;
   value: string;
   count?: number;
@@ -27,7 +32,7 @@ export default function SmartSearchBar({
   onProductFilter,
   onAdvertiserFilter,
   onSaveCollection,
-  placeholder = "広告・商材・広告主を検索...",
+  placeholder = "広告・商材・広告主を検索... 例: GLP-1 / マンジャロ / ピラティス / 24時間ジム",
   currentQuery = "",
 }: SmartSearchBarProps) {
   const [query, setQuery] = useState(currentQuery);
@@ -35,9 +40,152 @@ export default function SmartSearchBar({
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [defaultSuggestions, setDefaultSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [suggestionTypeStats, setSuggestionTypeStats] = useState<
+    { type: "keyword" | "genre" | "product" | "advertiser"; count: number }[]
+  >([]);
+  const [suggestionTypeWeights, setSuggestionTypeWeights] = useState<
+    Partial<Record<"keyword" | "genre" | "product" | "advertiser", number>>
+  >({});
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debouncedQuery = useDebounce(query);
+  const {
+    showSuggestionWeights,
+    setShowSuggestionWeights,
+    defaultSuggestionLimit,
+    setDefaultSuggestionLimit,
+    autoOpenDefaultSuggestions,
+    setAutoOpenDefaultSuggestions,
+    allowedSuggestionLimits,
+  } = useSearchUxSettings();
+
+  const trackSearchInteraction = useCallback(
+    async ({
+      queryText,
+      selectedValue,
+      suggestionType,
+    }: {
+      queryText: string;
+      selectedValue?: string;
+      suggestionType?: AutocompleteSuggestion["type"] | "text";
+    }) => {
+      const normalizedQuery = queryText.trim();
+      const normalizedSelected = selectedValue?.trim() ?? "";
+      if (!normalizedQuery && !normalizedSelected) return;
+
+      try {
+        await fetchApi("/rankings/search-analytics/track", {
+          method: "POST",
+          body: {
+            query: normalizedQuery || normalizedSelected,
+            selected_value: normalizedSelected || null,
+            suggestion_type: suggestionType ?? "text",
+          },
+        });
+      } catch {
+        // Ignore analytics failures to keep search responsive.
+      }
+    },
+    []
+  );
+
+  const fetchDefaultSuggestions = useCallback(async () => {
+    if (defaultSuggestions.length > 0) {
+      setSuggestions(defaultSuggestions);
+      setShowDropdown(true);
+      setActiveIndex(-1);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await fetchApi<{
+        default_suggestions?: SearchFallbackSuggestion[];
+        default_suggestion_weights?: Partial<
+          Record<"keyword" | "genre" | "product" | "advertiser", number>
+        >;
+        popular_suggestion_types?: {
+          type: "keyword" | "genre" | "product" | "advertiser";
+          count: number;
+        }[];
+        popular_keywords?: { keyword: string; count?: number }[];
+        popular_genres?: { genre: string; search_count?: number }[];
+        popular_products?: { product: string; count?: number }[];
+        popular_advertisers?: { advertiser: string; count?: number }[];
+      }>("/rankings/search-analytics");
+
+      const items: AutocompleteSuggestion[] = [];
+
+      if (data.default_suggestions?.length) {
+        data.default_suggestions.forEach((item) => {
+          items.push({
+            type: item.type,
+            label:
+              item.type === "genre"
+                ? `${item.label} で絞り込み`
+                : `${item.label} で検索`,
+            value: item.value,
+            count: item.count,
+          });
+        });
+      } else {
+
+        data.popular_keywords?.slice(0, 6).forEach((item) => {
+          if (!item.keyword?.trim()) return;
+          items.push({
+            type: "keyword",
+            label: `${item.keyword} で検索`,
+            value: item.keyword,
+            count: item.count,
+          });
+        });
+
+        data.popular_genres?.slice(0, 4).forEach((item) => {
+          if (!item.genre?.trim()) return;
+          items.push({
+            type: "genre",
+            label: `${item.genre} で絞り込み`,
+            value: item.genre,
+            count: item.search_count,
+          });
+        });
+
+        data.popular_products?.slice(0, 3).forEach((item) => {
+          if (!item.product?.trim()) return;
+          items.push({
+            type: "product",
+            label: `${item.product} で絞り込み`,
+            value: item.product,
+            count: item.count,
+          });
+        });
+
+        data.popular_advertisers?.slice(0, 3).forEach((item) => {
+          if (!item.advertiser?.trim()) return;
+          items.push({
+            type: "advertiser",
+            label: `${item.advertiser} で絞り込み`,
+            value: item.advertiser,
+            count: item.count,
+          });
+        });
+      }
+
+      setDefaultSuggestions(items);
+      setSuggestionTypeStats(data.popular_suggestion_types?.slice(0, 4) || []);
+      setSuggestionTypeWeights(data.default_suggestion_weights || {});
+      setSuggestions(items.slice(0, defaultSuggestionLimit));
+      setShowDropdown(items.length > 0);
+      setActiveIndex(-1);
+    } catch {
+      setDefaultSuggestions([]);
+      setSuggestionTypeStats([]);
+      setSuggestionTypeWeights({});
+    } finally {
+      setLoading(false);
+    }
+  }, [defaultSuggestionLimit, defaultSuggestions]);
 
   // Fetch autocomplete suggestions
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -50,6 +198,7 @@ export default function SmartSearchBar({
     try {
       const data = await fetchApi<{
         suggestions?: AutocompleteSuggestion[];
+        keywords?: { label: string; value: string; count?: number }[];
         genres?: { label: string; value: string; count?: number }[];
         products?: { label: string; value: string; count?: number }[];
         advertisers?: { label: string; value: string; count?: number }[];
@@ -70,6 +219,16 @@ export default function SmartSearchBar({
         items.push(...data.suggestions);
       } else {
         // Build from separate arrays
+        if (data.keywords) {
+          data.keywords.forEach((k) =>
+            items.push({
+              type: "keyword",
+              label: `${k.label} で検索`,
+              value: k.value,
+              count: k.count,
+            })
+          );
+        }
         if (data.genres) {
           data.genres.forEach((g) =>
             items.push({
@@ -129,6 +288,11 @@ export default function SmartSearchBar({
   // Select a suggestion
   const handleSelect = (item: AutocompleteSuggestion) => {
     setShowDropdown(false);
+    void trackSearchInteraction({
+      queryText: query,
+      selectedValue: item.value,
+      suggestionType: item.type === "all" ? "text" : item.type,
+    });
     switch (item.type) {
       case "genre":
         onGenreFilter(item.value);
@@ -153,6 +317,7 @@ export default function SmartSearchBar({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showDropdown) {
       if (e.key === "Enter") {
+        void trackSearchInteraction({ queryText: query, suggestionType: "text" });
         onSearch(query);
       }
       return;
@@ -175,6 +340,7 @@ export default function SmartSearchBar({
         if (activeIndex >= 0 && suggestions[activeIndex]) {
           handleSelect(suggestions[activeIndex]);
         } else {
+          void trackSearchInteraction({ queryText: query, suggestionType: "text" });
           onSearch(query);
           setShowDropdown(false);
         }
@@ -220,6 +386,12 @@ export default function SmartSearchBar({
             商材
           </span>
         );
+      case "keyword":
+        return (
+          <span className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700">
+            検索語
+          </span>
+        );
       case "advertiser":
         return (
           <span className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700">
@@ -255,7 +427,13 @@ export default function SmartSearchBar({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            if (query.trim() && suggestions.length > 0) setShowDropdown(true);
+            if (query.trim() && suggestions.length > 0) {
+              setShowDropdown(true);
+              return;
+            }
+            if (!query.trim() && autoOpenDefaultSuggestions) {
+              fetchDefaultSuggestions();
+            }
           }}
           placeholder={placeholder}
           aria-label="広告・商材・広告主を検索"
@@ -353,7 +531,42 @@ export default function SmartSearchBar({
           aria-label="検索候補"
           className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-72 overflow-y-auto"
         >
-          {suggestions.map((item, idx) => (
+          {!query.trim() && defaultSuggestions.length > 0 && (
+            <div className="px-3 py-2 border-b border-gray-100">
+              <SearchUxSettingsPanel
+                autoOpenDefaultSuggestions={autoOpenDefaultSuggestions}
+                onToggleAutoOpen={() =>
+                  setAutoOpenDefaultSuggestions((prev) => !prev)
+                }
+                showSuggestionWeights={showSuggestionWeights}
+                onToggleSuggestionWeights={() =>
+                  setShowSuggestionWeights((prev) => !prev)
+                }
+                defaultSuggestionLimit={defaultSuggestionLimit}
+                allowedSuggestionLimits={allowedSuggestionLimits}
+                onChangeSuggestionLimit={setDefaultSuggestionLimit}
+                suggestionTypeStats={suggestionTypeStats}
+                suggestionTypeWeights={suggestionTypeWeights}
+              />
+              <SearchFallbackChips
+                suggestions={
+                  defaultSuggestions.slice(
+                    0,
+                    defaultSuggestionLimit
+                  ) as SearchFallbackSuggestion[]
+                }
+                onSelect={(suggestion) =>
+                  handleSelect({
+                    type: suggestion.type,
+                    label: suggestion.label,
+                    value: suggestion.value,
+                    count: suggestion.count,
+                  })
+                }
+              />
+            </div>
+          )}
+          {(query.trim() ? suggestions : []).map((item, idx) => (
             <button
               id={`suggestion-${idx}`}
               key={`${item.type}-${item.value}-${idx}`}

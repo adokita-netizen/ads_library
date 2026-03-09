@@ -2,6 +2,33 @@
 
 import { useState, useCallback, useEffect } from "react";
 
+export const URL_STATE_CHANGE_EVENT = "vaap:url-state-change";
+
+export function notifyUrlStateChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(URL_STATE_CHANGE_EVENT));
+}
+
+export function commitUrlSearchParams(
+  searchParams: URLSearchParams,
+  mode: "replace" | "push" = "replace",
+) {
+  if (typeof window === "undefined") return;
+  const qs = searchParams.toString();
+  const nextUrl = qs ? `?${qs}` : window.location.pathname;
+  if (mode === "push") {
+    window.history.pushState(null, "", nextUrl);
+  } else {
+    window.history.replaceState(null, "", nextUrl);
+  }
+  notifyUrlStateChange();
+}
+
+function readUrlParamValue(key: string, defaultValue: string) {
+  if (typeof window === "undefined") return defaultValue;
+  return new URLSearchParams(window.location.search).get(key) || defaultValue;
+}
+
 /**
  * Sync a single state value with a URL search parameter.
  * Uses replaceState to avoid page reloads and history pollution.
@@ -12,12 +39,20 @@ import { useState, useCallback, useEffect } from "react";
 export function useUrlParam(key: string, defaultValue: string): [string, (value: string) => void] {
   const [value, setValue] = useState(defaultValue);
 
-  // Sync from URL after hydration (client-only)
   useEffect(() => {
-    const urlValue = new URLSearchParams(window.location.search).get(key);
-    if (urlValue && urlValue !== defaultValue) {
-      setValue(urlValue);
-    }
+    if (typeof window === "undefined") return;
+
+    const syncFromUrl = () => {
+      setValue(readUrlParamValue(key, defaultValue));
+    };
+
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    window.addEventListener(URL_STATE_CHANGE_EVENT, syncFromUrl);
+    return () => {
+      window.removeEventListener("popstate", syncFromUrl);
+      window.removeEventListener(URL_STATE_CHANGE_EVENT, syncFromUrl);
+    };
   }, [key, defaultValue]);
 
   const setUrlParam = useCallback(
@@ -30,8 +65,7 @@ export function useUrlParam(key: string, defaultValue: string): [string, (value:
       } else {
         sp.set(key, newValue);
       }
-      const qs = sp.toString();
-      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+      commitUrlSearchParams(sp, "replace");
     },
     [key, defaultValue]
   );

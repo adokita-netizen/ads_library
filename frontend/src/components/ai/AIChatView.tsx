@@ -34,6 +34,7 @@ interface StoredConversation {
   title: string;
   date: string;
   messages: ChatMsg[];
+  backendConversationId?: number;
 }
 
 interface AIChatViewProps {
@@ -53,74 +54,6 @@ const SUGGESTED_QUESTIONS = [
   { title: "LP改善のヒント", prompt: "ランディングページの改善ポイントをデータに基づいて提案してください。" },
   { title: "来月のクリエイティブ戦略", prompt: "来月に向けたクリエイティブ戦略を、現在のトレンドデータに基づいて提案してください。" },
 ];
-
-/* ─── Mock Response Generator ─── */
-
-function generateMockResponse(userMessage: string): ChatMsg {
-  const now = new Date();
-  const timestamp = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-
-  // Generate realistic Japanese analysis text
-  const responses: Array<{ content: string; ads?: AdItem[] }> = [
-    {
-      content:
-        "分析結果をお伝えします。\n\n" +
-        "直近30日間のデータを確認したところ、ヒット広告には以下の共通パターンが見られます。\n\n" +
-        "**1. フック（冒頭3秒）**\n" +
-        "「まだ○○で悩んでいますか？」のような問いかけ型が63%で最多。視聴維持率が平均42%高い結果です。\n\n" +
-        "**2. ビジュアル構成**\n" +
-        "Before/After比較を使用した広告のCVRが2.3倍。特にスプリットスクリーン形式が効果的です。\n\n" +
-        "**3. CTA配置**\n" +
-        "動画の60%地点にCTAを入れた広告のクリック率が最高（平均CTR: 3.8%）。\n\n" +
-        "以下の広告が特に参考になります：",
-      ads: [
-        { ad_id: 101, product_name: "薬用ホワイトニングジェル", hit_score: 89, advertiser_name: "ビューティラボ株式会社" },
-        { ad_id: 205, product_name: "プロテインスムージー", hit_score: 76, advertiser_name: "ヘルスケア・ジャパン" },
-        { ad_id: 312, product_name: "AI英会話アプリ", hit_score: 72, advertiser_name: "エデュテック合同会社" },
-      ],
-    },
-    {
-      content:
-        "ご質問の内容について分析しました。\n\n" +
-        "現在のトレンドデータから、以下のポイントが重要です。\n\n" +
-        "**市場動向**\n" +
-        "今月の広告出稿量は前月比+15%で増加傾向。特にショート動画フォーマット（15秒以下）が全体の58%を占めています。\n\n" +
-        "**注目のクリエイティブ要素**\n" +
-        "- UGC風の撮影スタイル：CVR +34%\n" +
-        "- テキストオーバーレイ（字幕付き）：視聴完了率 +28%\n" +
-        "- 実証データの提示：信頼性スコア +45%\n\n" +
-        "関連する高パフォーマンス広告を表示します：",
-      ads: [
-        { ad_id: 158, product_name: "オーガニック美容液", hit_score: 92, advertiser_name: "ナチュラルコスメ株式会社" },
-        { ad_id: 267, product_name: "睡眠サポートサプリ", hit_score: 81, advertiser_name: "ウェルネスファーム" },
-      ],
-    },
-    {
-      content:
-        "データベースを検索し、分析を行いました。\n\n" +
-        "お問い合わせの件について、以下の知見が得られました。\n\n" +
-        "**コピーライティングの傾向**\n" +
-        "高CTR広告のヘッドラインには「数字 + ベネフィット」の組み合わせが73%の割合で使用されています。\n" +
-        "例：「たった7日で実感」「3ステップで完了」など。\n\n" +
-        "**ターゲティング示唆**\n" +
-        "25-34歳女性向け広告のエンゲージメント率が最も高く、特に夜21-23時の配信で最大効果が見られます。\n\n" +
-        "**改善提案**\n" +
-        "現在の広告セットに対して、以下の調整を推奨します：\n" +
-        "1. ヘッドラインに具体的な数字を追加\n" +
-        "2. サムネイルに人物の顔を配置\n" +
-        "3. 最初の1秒にインパクトのあるビジュアルを使用",
-    },
-  ];
-
-  const selected = responses[Math.floor(Math.random() * responses.length)];
-
-  return {
-    role: "assistant",
-    content: selected.content,
-    timestamp,
-    ads: selected.ads,
-  };
-}
 
 /* ─── Storage Helpers ─── */
 
@@ -191,6 +124,14 @@ export default function AIChatView({ onAdSelect }: AIChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const getBackendConversationId = useCallback(
+    (convId: string | null): number | undefined => {
+      if (!convId) return undefined;
+      return conversations.find((c) => c.id === convId)?.backendConversationId;
+    },
+    [conversations],
+  );
+
   // Load conversations from localStorage on mount
   useEffect(() => {
     const stored = loadConversations();
@@ -222,7 +163,12 @@ export default function AIChatView({ onAdSelect }: AIChatViewProps) {
 
   // Persist current conversation to storage
   const persistConversation = useCallback(
-    (convId: string, msgs: ChatMsg[], allConversations: StoredConversation[]) => {
+    (
+      convId: string,
+      msgs: ChatMsg[],
+      allConversations: StoredConversation[],
+      backendConversationId?: number,
+    ) => {
       const idx = allConversations.findIndex((c) => c.id === convId);
       const title =
         msgs.length > 0
@@ -233,6 +179,7 @@ export default function AIChatView({ onAdSelect }: AIChatViewProps) {
         title,
         date: formatDate(new Date()),
         messages: msgs,
+        backendConversationId,
       };
 
       let newConversations: StoredConversation[];
@@ -275,45 +222,67 @@ export default function AIChatView({ onAdSelect }: AIChatViewProps) {
     setIsLoading(true);
 
     // Persist with user message
-    const latestConversations = persistConversation(convId, updatedMessages, conversations);
+    const existingBackendConversationId = getBackendConversationId(convId);
+    const latestConversations = persistConversation(
+      convId,
+      updatedMessages,
+      conversations,
+      existingBackendConversationId,
+    );
 
     try {
       // Try real API first
       const response = await fetchApi<{
-        content: string;
-        ads?: AdItem[];
-      }>("/ai/chat", {
+        conversation_id: number;
+        response: {
+          message: string;
+          data?: {
+            top_ads?: Array<{
+              ad_id: number;
+              title?: string;
+              hit_score?: number;
+              advertiser_name?: string;
+            }>;
+          };
+        };
+      }>("/ai-chat/message", {
         method: "POST",
         body: {
           message: trimmed,
-          context: {},
-          conversation_id: convId,
+          conversation_id: existingBackendConversationId ?? null,
         },
       });
 
+      const ads: AdItem[] = (response?.response?.data?.top_ads || []).map((ad) => ({
+        ad_id: ad.ad_id,
+        product_name: ad.title || `広告 #${ad.ad_id}`,
+        hit_score: Math.round(Number(ad.hit_score || 0)),
+        advertiser_name: ad.advertiser_name,
+      }));
+
       const assistantMsg: ChatMsg = {
         role: "assistant",
-        content: response.content,
+        content: response.response?.message || "応答が空でした。",
         timestamp: formatTimestamp(new Date()),
-        ads: response.ads,
+        ads,
       };
 
       const withResponse = [...updatedMessages, assistantMsg];
       setMessages(withResponse);
-      persistConversation(convId, withResponse, latestConversations);
+      persistConversation(convId, withResponse, latestConversations, response.conversation_id);
     } catch {
-      // Fallback to mock response
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 1200 + Math.random() * 800));
-
-      const mockMsg = generateMockResponse(trimmed);
-      const withMock = [...updatedMessages, mockMsg];
-      setMessages(withMock);
-      persistConversation(convId, withMock, latestConversations);
+      const errorMsg: ChatMsg = {
+        role: "assistant",
+        content: "AI応答の取得に失敗しました。しばらく経ってから再試行してください。",
+        timestamp: formatTimestamp(new Date()),
+      };
+      const withError = [...updatedMessages, errorMsg];
+      setMessages(withError);
+      persistConversation(convId, withError, latestConversations, existingBackendConversationId);
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, messages, activeConversationId, conversations, persistConversation]);
+  }, [inputValue, isLoading, messages, activeConversationId, conversations, persistConversation, getBackendConversationId]);
 
   // Keyboard handler
   const handleKeyDown = useCallback(

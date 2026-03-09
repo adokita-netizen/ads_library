@@ -175,12 +175,14 @@ def _try_create_engines(async_url: str, sync_url: str):
         ae = create_async_engine(
             async_url,
             echo=settings.debug,
+            hide_parameters=True,
             connect_args=sqlite_connect_args,
             poolclass=StaticPool,
         )
         se = create_engine(
             sync_url,
             echo=settings.debug,
+            hide_parameters=True,
             connect_args=sqlite_connect_args,
             poolclass=StaticPool,
         )
@@ -199,9 +201,10 @@ def _try_create_engines(async_url: str, sync_url: str):
 
         if _is_lambda:
             pool_kwargs = {
-                "pool_size": 1,
-                "max_overflow": 0,
+                "pool_size": 2,
+                "max_overflow": 1,
                 "pool_recycle": 300,
+                "pool_timeout": 10,
             }
         else:
             pool_kwargs = {
@@ -218,12 +221,14 @@ def _try_create_engines(async_url: str, sync_url: str):
         ae = create_async_engine(
             async_url,
             echo=settings.debug,
+            hide_parameters=True,
             pool_pre_ping=True,
             **pool_kwargs,
         )
         se = create_engine(
             sync_url,
             echo=settings.debug,
+            hide_parameters=True,
             pool_pre_ping=True,
             connect_args=connect_args,
             **pool_kwargs,
@@ -237,9 +242,9 @@ def _try_create_engines(async_url: str, sync_url: str):
 
 def _create_sqlite_engines():
     """Create in-memory SQLite engines as fallback."""
-    se = create_engine("sqlite:///vaap_fallback.db", echo=settings.debug)
+    se = create_engine("sqlite:///vaap_fallback.db", echo=settings.debug, hide_parameters=True)
     # For async we use aiosqlite
-    ae = create_async_engine("sqlite+aiosqlite:///vaap_fallback.db", echo=settings.debug)
+    ae = create_async_engine("sqlite+aiosqlite:///vaap_fallback.db", echo=settings.debug, hide_parameters=True)
 
     # Fix: SQLite only auto-increments INTEGER PRIMARY KEY (not BIGINT).
     # Compile BigInteger as INTEGER on SQLite so autoincrement works.
@@ -573,6 +578,19 @@ def _run_migrations(engine):
                     if col_name not in cols:
                         conn.execute(sa_text(f"ALTER TABLE crawl_jobs ADD COLUMN {col_name} {col_type}"))
                         logger.info("migration: added crawl_jobs.%s", col_name)
+
+        # product_rankings: add score/trend columns introduced after initial local DBs
+        if insp.has_table("product_rankings"):
+            cols = {c["name"] for c in insp.get_columns("product_rankings")}
+            pr_new_cols = {
+                "score_delta": "FLOAT",
+                "trend_score": "FLOAT",
+            }
+            with engine.begin() as conn:
+                for col_name, col_type in pr_new_cols.items():
+                    if col_name not in cols:
+                        conn.execute(sa_text(f"ALTER TABLE product_rankings ADD COLUMN {col_name} {col_type}"))
+                        logger.info("migration: added product_rankings.%s", col_name)
     except Exception as e:
         logger.warning("migration_check_failed: %s", str(e))
 
@@ -637,6 +655,7 @@ def reconnect(new_database_url: str) -> dict:
         import app.models.crawl_job  # noqa: F401
         import app.models.alert_rule  # noqa: F401
         import app.models.alert_history  # noqa: F401
+        import app.models.conversation  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
         logger.info("Tables created on new database.")
     except Exception as table_err:

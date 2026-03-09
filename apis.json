@@ -1,0 +1,43 @@
+{
+    "Items": [
+        {
+            "ApiEndpoint": "https://j2wpopuxv4.execute-api.ap-northeast-1.amazonaws.com",
+            "ApiId": "j2wpopuxv4",
+            "ApiKeySelectionExpression": "$request.header.x-api-key",
+            "CorsConfiguration": {
+                "AllowCredentials": false,
+                "AllowHeaders": [
+                    "authorization",
+                    "accept",
+                    "content-type"
+                ],
+                "AllowMethods": [
+                    "POST",
+                    "PUT",
+                    "OPTIONS",
+                    "PATCH",
+                    "GET",
+                    "DELETE"
+                ],
+                "AllowOrigins": [
+                    "https://d3qlbagx7gq5sp.cloudfront.net",
+                    "http://localhost:3000"
+                ],
+                "MaxAge": 3600
+            },
+            "CreatedDate": "2026-02-22T04:26:30+00:00",
+            "Description": "VAAP API Gateway",
+            "DisableExecuteApiEndpoint": false,
+            "IpAddressType": "ipv4",
+            "Name": "vaap-production-api",
+            "ProtocolType": "HTTP",
+            "RouteSelectionExpression": "$request.method $request.path",
+            "Tags": {
+                "Project": "vaap",
+                "Environment": "production",
+                "ManagedBy": "terraform",
+                "Name": "vaap-production-api"
+            }
+        }
+    ]
+}

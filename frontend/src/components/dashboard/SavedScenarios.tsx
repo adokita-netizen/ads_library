@@ -1,45 +1,53 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
 
 // ─── Types ───
 
 interface SavedScenario {
-  id: number;
+  id: string;
   name: string;
   genre: string;
   archetype: string;
   predicted_score: number;
-  created_at: string;
+  created_at?: string;
+  saved_at?: string;
   platform: string;
   product_name: string;
 }
 
-// ─── Mock Data (TODO: Replace with API calls when endpoints are ready) ───
-
-const MOCK_SAVED_SCENARIOS: SavedScenario[] = [
-  { id: 1, name: "美容液LP向け 感情訴求型", genre: "beauty", archetype: "Before/After変身型", predicted_score: 82, created_at: "2026-02-25T10:30:00Z", platform: "instagram", product_name: "○○美容液" },
-  { id: 2, name: "ダイエットサプリ 問題解決型", genre: "health", archetype: "問題解決型", predicted_score: 75, created_at: "2026-02-24T14:00:00Z", platform: "facebook", product_name: "△△サプリ" },
-  { id: 3, name: "英会話アプリ ストーリー型", genre: "education", archetype: "ストーリーテリング型", predicted_score: 68, created_at: "2026-02-23T09:15:00Z", platform: "tiktok", product_name: "□□英会話" },
-  { id: 4, name: "EC限定セール 緊急性型", genre: "ec_d2c", archetype: "緊急性・限定型", predicted_score: 71, created_at: "2026-02-22T16:45:00Z", platform: "facebook", product_name: "EC商品" },
-  { id: 5, name: "金融サービス 権威型", genre: "finance", archetype: "権威・専門家型", predicted_score: 60, created_at: "2026-02-21T11:20:00Z", platform: "instagram", product_name: "投資サービス" },
-];
+// ─── Helpers ───
 
 // ─── Helpers ───
 
 const genreLabel = (value: string) => genreOptions.find((g) => g.value === value)?.label || value;
 
+const normalizeSavedScenario = (value: Partial<SavedScenario>): SavedScenario => ({
+  id: String(value.id || ""),
+  name: String(value.name || "Untitled Scenario"),
+  genre: String(value.genre || "all"),
+  archetype: String(value.archetype || ""),
+  predicted_score: Number(value.predicted_score || 0),
+  created_at: value.created_at,
+  saved_at: value.saved_at,
+  platform: String(value.platform || ""),
+  product_name: String(value.product_name || ""),
+});
+
 const formatDate = (dateStr: string) => {
+  if (!dateStr) return "-";
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "-";
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 };
 
 // ─── Main Component ───
 
 interface SavedScenariosProps {
-  onLoad?: (scenarioId: number) => void;
+  onLoad?: (scenarioId: string) => void;
 }
 
 export default function SavedScenarios({ onLoad }: SavedScenariosProps) {
@@ -47,18 +55,16 @@ export default function SavedScenarios({ onLoad }: SavedScenariosProps) {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [filterGenre, setFilterGenre] = useState("all");
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const fetchScenarios = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      // const data = await fetchApi<{ items: SavedScenario[] }>("/rankings/saved-scenarios");
-      // setScenarios(data.items || []);
-      await new Promise((r) => setTimeout(r, 500));
-      setScenarios(MOCK_SAVED_SCENARIOS);
+      const data = await fetchApi<{ items?: SavedScenario[]; saved_scenarios?: SavedScenario[] }>("/rankings/saved-scenarios");
+      setScenarios((data.items || data.saved_scenarios || []).map(normalizeSavedScenario));
     } catch (err) {
       console.error("保存済みシナリオの取得に失敗しました", err);
+      setScenarios([]);
     } finally {
       setLoading(false);
     }
@@ -68,13 +74,47 @@ export default function SavedScenarios({ onLoad }: SavedScenariosProps) {
     fetchScenarios();
   }, [fetchScenarios]);
 
-  const handleDelete = async (id: number) => {
+  useEffect(() => {
+    const handleChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{ scenario?: Partial<SavedScenario>; scenarioId?: string; action: "saved" | "deleted" }>;
+      const detail = customEvent.detail;
+      if (!detail) {
+        void fetchScenarios();
+        return;
+      }
+
+      const scenario = detail.scenario;
+      if (detail.action === "saved" && scenario) {
+        setScenarios((prev) => {
+          const normalized = normalizeSavedScenario(scenario);
+          const next = [normalized, ...prev.filter((item) => item.id !== normalized.id)];
+          return next;
+        });
+        return;
+      }
+
+      if (detail.action === "deleted" && detail.scenarioId) {
+        setScenarios((prev) => prev.filter((item) => item.id !== detail.scenarioId));
+      }
+    };
+
+    window.addEventListener("saved-scenarios:changed", handleChanged);
+    return () => {
+      window.removeEventListener("saved-scenarios:changed", handleChanged);
+    };
+  }, [fetchScenarios]);
+
+  const handleDelete = async (id: string) => {
+    const previous = scenarios;
+    setScenarios((prev) => prev.filter((s) => s.id !== id));
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      // await fetchApi(`/rankings/saved-scenarios/${id}`, { method: "DELETE" });
-      setScenarios((prev) => prev.filter((s) => s.id !== id));
+      await fetchApi(`/rankings/saved-scenarios/${id}`, { method: "DELETE" });
       setDeleteConfirm(null);
+      toast.success("保存済みシナリオを削除しました");
+      window.dispatchEvent(new CustomEvent("saved-scenarios:changed", { detail: { action: "deleted", scenarioId: id } }));
     } catch (err) {
+      setScenarios(previous);
+      toast.error("削除に失敗しました");
       console.error("削除に失敗しました", err);
     }
   };
@@ -121,13 +161,19 @@ export default function SavedScenarios({ onLoad }: SavedScenariosProps) {
       {/* List */}
       <div className="divide-y divide-gray-50 max-h-[400px] overflow-auto custom-scrollbar">
         {loading ? (
-          <div className="p-8 text-center">
-            <div className="w-6 h-6 border-2 border-[#4A7DFF] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-            <p className="text-[12px] text-gray-400">読み込み中...</p>
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="animate-pulse rounded-lg border border-gray-100 p-3">
+                <div className="h-3 w-1/3 rounded bg-gray-200 mb-2" />
+                <div className="h-2 w-2/3 rounded bg-gray-100 mb-2" />
+                <div className="h-2 w-1/2 rounded bg-gray-100" />
+              </div>
+            ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-[12px] text-gray-400">保存済みシナリオがありません</p>
+            <p className="text-[12px] text-gray-400 mb-1">保存済みシナリオがありません</p>
+            <p className="text-[11px] text-gray-300">Scenario Builder で保存すると、ここに即時反映されます。</p>
           </div>
         ) : (
           filtered.map((scenario) => (
@@ -148,7 +194,7 @@ export default function SavedScenarios({ onLoad }: SavedScenariosProps) {
                     <span className="px-1.5 py-0.5 bg-gray-100 rounded">{genreLabel(scenario.genre)}</span>
                     <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{scenario.archetype}</span>
                     <span className="uppercase">{scenario.platform}</span>
-                    <span>{formatDate(scenario.created_at)}</span>
+                    <span>{formatDate(scenario.created_at || scenario.saved_at || "")}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0 ml-3">

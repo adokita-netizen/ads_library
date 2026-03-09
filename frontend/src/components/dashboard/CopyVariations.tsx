@@ -39,24 +39,6 @@ const lengthOptions = [
   { value: "long", label: "長い" },
 ];
 
-// ─── Mock generator ───
-
-function generateMockVariations(original: string): Variation[] {
-  const hooks: { prefix: string; type: string; score: number }[] = [
-    { prefix: "まだ知らないの？", type: "question", score: 82 },
-    { prefix: "【驚愕】たった3日で変わった…", type: "shock", score: 76 },
-    { prefix: "97%が効果を実感。", type: "number", score: 88 },
-    { prefix: "その悩み、放置すると危険です。", type: "problem", score: 71 },
-    { prefix: "「私も同じでした」", type: "empathy", score: 65 },
-  ];
-  const base = original.length > 60 ? original.slice(0, 60) + "..." : original;
-  return hooks.map((h) => ({
-    text: `${h.prefix} ${base}`,
-    effectiveness: h.score,
-    hook_type: h.type,
-  }));
-}
-
 const hookLabel: Record<string, string> = {
   question: "質問",
   number: "数字",
@@ -93,8 +75,7 @@ export default function CopyVariations({ initialText }: CopyVariationsProps) {
       setVariations(Array.isArray(items) ? items : []);
       toast.success("バリエーションを生成しました");
     } catch {
-      setVariations(generateMockVariations(original));
-      toast("サンプルデータを表示しています", { icon: "ℹ️" });
+      toast.error("バリエーション生成に失敗しました");
     } finally {
       setLoading(false);
     }

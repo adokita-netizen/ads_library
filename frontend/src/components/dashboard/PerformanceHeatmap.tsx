@@ -29,40 +29,6 @@ interface PerformanceHeatmapProps {
   genre?: string;
 }
 
-/* ─── Mock data generator ─── */
-
-const MOCK_GENRES = [
-  "美容・コスメ",
-  "健康食品",
-  "EC・D2C",
-  "金融・保険",
-  "教育・資格",
-  "アプリ",
-  "食品・飲料",
-  "ゲーム",
-  "不動産",
-  "旅行・観光",
-];
-
-function generateMockData(): WeeklyGenreData[] {
-  const now = new Date();
-  const weeks: { week: string; week_label: string }[] = [];
-  for (let i = 7; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 7 * 86400000);
-    const label = `${d.getMonth() + 1}/${d.getDate()}`;
-    weeks.push({ week: d.toISOString().slice(0, 10), week_label: label });
-  }
-  return MOCK_GENRES.map((label, gi) => ({
-    genre: label,
-    genre_label: label,
-    weeks: weeks.map((w, wi) => ({
-      ...w,
-      avg_score: Math.round(30 + Math.random() * 55 + Math.sin(gi + wi) * 10),
-      ad_count: Math.round(5 + Math.random() * 80),
-    })),
-  }));
-}
-
 /* ─── Color helpers ─── */
 
 function scoreToColor(score: number): string {
@@ -94,9 +60,9 @@ export default function PerformanceHeatmap({ genre }: PerformanceHeatmapProps) {
         { params }
       );
       const items = res?.items || res?.genres || (Array.isArray(res) ? res : []);
-      setData(Array.isArray(items) && items.length > 0 ? items.slice(0, 10) : generateMockData());
+      setData(Array.isArray(items) && items.length > 0 ? items.slice(0, 10) : []);
     } catch {
-      setData(generateMockData());
+      setData([]);
     } finally {
       setLoading(false);
     }

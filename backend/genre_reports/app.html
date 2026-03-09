@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アプリ - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>アプリ</h1>
+<p class="summary">app | 17 ads | Avg views: 639.5294117647059</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">17</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">17</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">13</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in アプリ ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>statistic</span>
+            <span style="color:#f59e0b;font-weight:600">12%</span>
+        </div>
+        <div class="pattern-bar" style="width:11.76470588235294%;background:#f59e0b"></div>
+        <div class="pattern-item">
+            <span>benefit</span>
+            <span style="color:#f59e0b;font-weight:600">6%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.88235294117647%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>line_add</span>
+            <span style="color:#22c55e;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">6%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.88235294117647%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>download</span>
+            <span style="color:#22c55e;font-weight:600">6%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.88235294117647%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">53%</span>
+        </div>
+        <div class="pattern-bar" style="width:52.94117647058824%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>relief</span>
+            <span style="color:#8b5cf6;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>desire</span>
+            <span style="color:#8b5cf6;font-weight:600">6%</span>
+        </div>
+        <div class="pattern-bar" style="width:5.88235294117647%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">53%</span>
+        </div>
+        <div class="pattern-bar" style="width:52.94117647058824%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">71%</span>
+        </div>
+        <div class="pattern-bar" style="width:70.58823529411765%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>app_download</span>
+            <span style="color:#60a5fa;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">12%</span>
+        </div>
+        <div class="pattern-bar" style="width:11.76470588235294%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">18%</span>
+        </div>
+        <div class="pattern-bar" style="width:17.647058823529413%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" class=active>アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=5295949827295761&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="https://scontent.fitm1-1.fna.fbcdn.net/v/t39.35426-6/641369293_902030792633960_8980701071699898879_n.jpg?stp=dst-jpg_s60x60_tt6&amp;_nc_cat=110&amp;ccb=1-7&amp;_nc_sid=c53f8f&amp;_nc_ohc=IJuNk6mKCAIQ7kNvwE8KV8L&amp;_nc_oc=AdnmVY6jSV0qpA6QBEpCJX6GaWJBWtthUW6blBbDNiFe0yIJGaeEP8nEy8WOVgTJWL8&amp;_nc_zt=14&amp;_nc_ht=scontent.fitm1-1.fna&amp;_nc_gid=h2Y1e_jMyNR-fi_O7DffRA&amp;_nc_ss=8&amp;oh=00_AfszofMwM78ruAVyXJHgo9CQc2POCnZ_spBMDvO1uO9zYg&amp;oe=69A9830E" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">👉👉👉Mergulhe em histórias mysteriosas! Assista a episódios curtos e gratuitos cheios de reviravoltas. Baixe o Pop Drama já!</div>
+            <div class="ad-desc">💰🔥Assista novelas curtas online - Totalmente grátis! Imperdível!</div>
+            <div class="ad-meta"><span class="badge-views">1.7K views</span><span>Yang Lundy Cutone</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=5295949827295761&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:2, spend:1, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:40.0%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:15.555555555555555%;background:#3b82f6" title="spend: 1"></div><div class="score-seg" style="width:44.44444444444444%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (app_download)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                <div><strong>Google Play の Android アプリ</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#00A173;border-radius:2px;border:1px solid #333" title="#00A173"></span><span style="display:inline-block;width:14px;height:14px;background:#1BE399;border-radius:2px;border:1px solid #333" title="#1BE399"></span><span style="display:inline-block;width:14px;height:14px;background:#01875F;border-radius:2px;border:1px solid #333" title="#01875F"></span><span style="display:inline-block;width:14px;height:14px;background:#50B4F4;border-radius:2px;border:1px solid #333" title="#50B4F4"></span><span style="display:inline-block;width:14px;height:14px;background:#6200EE;border-radius:2px;border:1px solid #333" title="#6200EE"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/338.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=1633041781340562&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="https://scontent.fitm5-1.fna.fbcdn.net/v/t39.35426-6/641621151_914529604311927_5587953170751111393_n.jpg?stp=dst-jpg_s60x60_tt6&amp;_nc_cat=105&amp;ccb=1-7&amp;_nc_sid=c53f8f&amp;_nc_ohc=MgZqpZko4Y0Q7kNvwFQDnsg&amp;_nc_oc=AdmsRs8ds6CLgfBIzZy1WnT_SJXTdDoO5JfW_8mt8CvbHrCp5if8TBMx4OKyvJIFfJc&amp;_nc_zt=14&amp;_nc_ht=scontent.fitm5-1.fna&amp;_nc_gid=KHKZQ7yBAcSd8cGRTZHU8g&amp;_nc_ss=8&amp;oh=00_Aftn5Mdn_QcSE8-oqm0EWOTvKXSiII9WV9k7KYcR9QpnAQ&amp;oe=69A98E17" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">👉👉👉Mergulhe em histórias mysteriosas! Assista a episódios curtos e gratuitos cheios de reviravoltas. Baixe o Pop Drama já!</div>
+            <div class="ad-desc">💰🔥Assista novelas curtas online - Totalmente grátis! Imperdível!</div>
+            <div class="ad-meta"><span class="badge-views">1.6K views</span><span>Frabizzio Ruggeri Balback</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1633041781340562&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">2</strong> (longevity:1, spend:1)
+        <div class="score-bar"><div class="score-seg" style="width:64.70588235294117%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:35.29411764705882%;background:#3b82f6" title="spend: 1"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (app_download)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                <div><strong>Google Play の Android アプリ</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#00A173;border-radius:2px;border:1px solid #333" title="#00A173"></span><span style="display:inline-block;width:14px;height:14px;background:#1BE399;border-radius:2px;border:1px solid #333" title="#1BE399"></span><span style="display:inline-block;width:14px;height:14px;background:#01875F;border-radius:2px;border:1px solid #333" title="#01875F"></span><span style="display:inline-block;width:14px;height:14px;background:#50B4F4;border-radius:2px;border:1px solid #333" title="#50B4F4"></span><span style="display:inline-block;width:14px;height:14px;background:#6200EE;border-radius:2px;border:1px solid #333" title="#6200EE"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/333.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=1842541203068703&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="https://scontent.fitm1-1.fna.fbcdn.net/v/t39.35426-6/641434324_1468000718295951_4402948660833307370_n.jpg?stp=dst-jpg_s60x60_tt6&amp;_nc_cat=104&amp;ccb=1-7&amp;_nc_sid=c53f8f&amp;_nc_ohc=1-DA3LBL4kkQ7kNvwG4L2gg&amp;_nc_oc=AdlrMzZ1ftpYPUqrnCY9ltRVW3M6DgnUUN40DJyoFHlsKIRMLOJTPTSvWTMTv4SY6Nc&amp;_nc_zt=14&amp;_nc_ht=scontent.fitm1-1.fna&amp;_nc_gid=_i3WX8ENqIe7Aqwy6EB2Ag&amp;_nc_ss=8&amp;oh=00_Afu-RWqSwV-ys7vMQPxE9weMRJkBL7GfzMQ_N46mTb2XLA&amp;oe=69A99200" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">👉👉👉Mergulhe em histórias mysteriosas! Assista a episódios curtos e gratuitos cheios de reviravoltas. Baixe o Pop Drama já!</div>
+            <div class="ad-desc">💰🔥Assista novelas curtas online - Totalmente grátis! Imperdível!</div>
+            <div class="ad-meta"><span class="badge-views">1.3K views</span><span>Brian Panella Risner</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1842541203068703&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: line_add</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">4</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:35.8974358974359%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:12.820512820512823%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:51.28205128205129%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (app_download)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                <div><strong>Google Play の Android アプリ</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#00A173;border-radius:2px;border:1px solid #333" title="#00A173"></span><span style="display:inline-block;width:14px;height:14px;background:#1BE399;border-radius:2px;border:1px solid #333" title="#1BE399"></span><span style="display:inline-block;width:14px;height:14px;background:#01875F;border-radius:2px;border:1px solid #333" title="#01875F"></span><span style="display:inline-block;width:14px;height:14px;background:#50B4F4;border-radius:2px;border:1px solid #333" title="#50B4F4"></span><span style="display:inline-block;width:14px;height:14px;background:#6200EE;border-radius:2px;border:1px solid #333" title="#6200EE"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/337.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=1474370754312412&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/168.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">何気ない食事でも意外と脂質が多いんですよね</div>
+            <div class="ad-desc">ダイエット中の方はぜひお試しください！今すぐ無料でダウンロードできます！</div>
+            <div class="ad-meta"><span class="badge-views">600 views</span><span class="badge-video">VIDEO</span><span>AI Cal 02</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1474370754312412&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">15</strong> (longevity:1, spend:2, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:4.57516339869281%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:10.457516339869281%;background:#3b82f6" title="spend: 2"></div><div class="score-seg" style="width:65.359477124183%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:19.607843137254903%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://aicalcaloriecounterdietlog.onelink.me" target="_blank">https://aicalcaloriecounterdietlog.onelink.me</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/archive/render_ad/?id=2633427583704823&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/167.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">何気ない食事でも意外と脂質が多いんですよね</div>
+            <div class="ad-desc">ダイエット中の方はぜひお試しください！今すぐ無料でダウンロードできます！</div>
+            <div class="ad-meta"><span class="badge-views">600 views</span><span class="badge-video">VIDEO</span><span>AI Cal</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2633427583704823&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">16</strong> (longevity:1, spend:2, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:4.516129032258064%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:11.612903225806452%;background:#3b82f6" title="spend: 2"></div><div class="score-seg" style="width:64.51612903225806%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:19.35483870967742%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://aicalcaloriecounterdietlog.onelink.me" target="_blank">https://aicalcaloriecounterdietlog.onelink.me</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1449737283442513&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#6</span>
+            <div class="ad-title">🏆 Top Rated Language App ⭐4.9 10M+</div>
+            <div class="ad-desc">🏆 The #1 Language App ⭐4.8 10M+ 🏆</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Cam Translator</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1449737283442513&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2022807828276544&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#7</span>
+            <div class="ad-title">Parenting a teenager isn’t hard, it’s different.</div>
+            <div class="ad-desc">Staying calm is one of the most powerful tools you have when parenting a teen. It sets the tone for connection, trust, and long-term family harmony.
+
+Take back control with expert-backed emotional regulation tools designed specifically for parents navigating the ups and downs of adolescence.
+
+❤️ Here’s what you can expect:
+
+✅ Fewer power struggles and less yelling during tough moments
+✅ More patie</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Sarah Mitchell</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2022807828276544&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.wellverse.app" target="_blank">https://quiz.wellverse.app</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1545560039841844&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#8</span>
+            <div class="ad-title">Parenting a teenager isn’t hard, it’s different.</div>
+            <div class="ad-desc">Staying calm is one of the most powerful tools you have when parenting a teen. It sets the tone for connection, trust, and long-term family harmony.
+
+Take back control with expert-backed emotional regulation tools designed specifically for parents navigating the ups and downs of adolescence.
+
+❤️ Here’s what you can expect:
+
+✅ Fewer power struggles and less yelling during tough moments
+✅ More patie</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Sarah Mitchell</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1545560039841844&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.wellverse.app" target="_blank">https://quiz.wellverse.app</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2319668105186151&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#9</span>
+            <div class="ad-title">Parenting a teenager isn’t hard, it’s different.</div>
+            <div class="ad-desc">Staying calm is one of the most powerful tools you have when parenting a teen. It sets the tone for connection, trust, and long-term family harmony.
+
+Take back control with expert-backed emotional regulation tools designed specifically for parents navigating the ups and downs of adolescence.
+
+❤️ Here’s what you can expect:
+
+✅ Fewer power struggles and less yelling during tough moments
+✅ More patie</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Sarah Mitchell</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2319668105186151&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://quiz.wellverse.app" target="_blank">https://quiz.wellverse.app</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1391667329366726&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#10</span>
+            <div class="ad-title">Don’t miss the next episode — download now, free!</div>
+            <div class="ad-desc">Don’t miss the next episode — download now, free!</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Drama Trending</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1391667329366726&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1535714237525448&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#11</span>
+            <div class="ad-title">指先だけで心拍数を瞬時にチェック</div>
+            <div class="ad-desc">指をカメラに当ててください。
+瞬時に心拍数を確認できます。
+必要な機器はありません。iPhoneだけです。
+#心拍数 #スマートヘルス #iPhoneユーザー</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Health Partner IOS</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1535714237525448&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://healthpartnerpulsesugar.onelink.me" target="_blank">https://healthpartnerpulsesugar.onelink.me</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2056781201843828&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#12</span>
+            <div class="ad-title">-</div>
+            <div class="ad-desc"></div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Blood Pressure App US</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2056781201843828&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=926048350362268&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#13</span>
+            <div class="ad-title">-</div>
+            <div class="ad-desc"></div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Blood Pressure App US</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=926048350362268&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://play.google.com" target="_blank">https://play.google.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=917073887740991&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#14</span>
+            <div class="ad-title">iPulse - Check Heart Rate &amp; BP</div>
+            <div class="ad-desc">おめでとうございます！📱iPhone 14/15/16📱をお持ちの方は、このアプリをダウンロードして、心拍数、血圧、血糖値、血中酸素濃度を測定しましょう。指または手首をカメラとフラッシュに当てるだけで、簡単に健康状態をモニタリングし、安全を確保できます。</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>IPulse - Check Heart Rate &amp; BP</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=917073887740991&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: benefit</span><span class="ca-tag ca-cta">CTA: download</span><span class="ca-tag ca-emotion">desire</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://apps.apple.com" target="_blank">https://apps.apple.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=812416377810026&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#15</span>
+            <div class="ad-title">-</div>
+            <div class="ad-desc"></div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>D5s8a7678</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=812416377810026&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://itunes.apple.com" target="_blank">https://itunes.apple.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1550113602767155&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#16</span>
+            <div class="ad-title">リアルタイム位置追跡</div>
+            <div class="ad-desc">リアルタイムで大切な人を見守ろう 💯</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Track Geo Loc</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1550113602767155&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:15.384615384615385%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:7.6923076923076925%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:76.92307692307692%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://trck.pocketmoon.me" target="_blank">https://trck.pocketmoon.me</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1992200205009657&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#17</span>
+            <div class="ad-title">リアルタイム位置追跡</div>
+            <div class="ad-desc">リアルタイムで大切な人を見守ろう 💯</div>
+            <div class="ad-meta"><span class="badge-views">390 views</span><span>Phone Tracker - My Locator</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1992200205009657&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">short copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">1</strong> (longevity:0, spend:0)
+        <div class="score-bar"><div class="score-seg" style="width:66.66666666666666%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:33.33333333333333%;background:#3b82f6" title="spend: 0"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://trck.pocketmoon.me" target="_blank">https://trck.pocketmoon.me</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

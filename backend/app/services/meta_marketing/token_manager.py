@@ -26,8 +26,7 @@ class MetaTokenManager:
     """Manage Meta access tokens stored in PlatformAPIKey table."""
 
     @staticmethod
-    async def get_access_token(db: AsyncSession) -> Optional[str]:
-        """Get the Meta access token from DB, falling back to environment variable."""
+    async def _get_db_access_token(db: AsyncSession) -> Optional[str]:
         result = await db.execute(
             select(PlatformAPIKey).where(
                 PlatformAPIKey.platform == "meta",
@@ -41,11 +40,53 @@ class MetaTokenManager:
                 return decrypt_value(row.key_value)
             except (ValueError, Exception):
                 return row.key_value  # Legacy plaintext
+        return None
 
-        # Fallback to environment variable
+    @staticmethod
+    def _get_env_access_token() -> Optional[str]:
         settings = get_settings()
         token = getattr(settings, "meta_access_token", None)
         return token if token and token.strip() else None
+
+    @staticmethod
+    async def get_token_runtime_source(db: AsyncSession) -> dict:
+        """Resolve runtime token source using DB-first fallback semantics."""
+        db_token = await MetaTokenManager._get_db_access_token(db)
+        if db_token:
+            return {
+                "token": db_token,
+                "token_source": "db",
+                "runtime_source": "db",
+                "fallback_used": False,
+                "fallback_reason": None,
+                "source_priority": ["db", "env", "missing"],
+            }
+
+        env_token = MetaTokenManager._get_env_access_token()
+        if env_token:
+            return {
+                "token": env_token,
+                "token_source": "env",
+                "runtime_source": "env",
+                "fallback_used": True,
+                "fallback_reason": "db_missing",
+                "source_priority": ["db", "env", "missing"],
+            }
+
+        return {
+            "token": None,
+            "token_source": "missing",
+            "runtime_source": "missing",
+            "fallback_used": False,
+            "fallback_reason": None,
+            "source_priority": ["db", "env", "missing"],
+        }
+
+    @staticmethod
+    async def get_access_token(db: AsyncSession) -> Optional[str]:
+        """Get the Meta access token from DB, falling back to environment variable."""
+        runtime = await MetaTokenManager.get_token_runtime_source(db)
+        return runtime["token"]
 
     @staticmethod
     async def _get_meta_key(db: AsyncSession, key_name: str) -> Optional[str]:

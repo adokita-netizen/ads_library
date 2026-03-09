@@ -1,21 +1,104 @@
 """FastAPI main application."""
 
+import json
 import os
+import random
+import uuid
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing, media, data_quality
+from app.api.endpoints import ads, auth, analytics, campaigns, creative, predictions, lp_analysis, rankings, notifications, competitive_intel, meta_marketing, media, data_quality, ai_chat, rankings_notifications, integrations
 from app.api.endpoints import settings as settings_endpoints
+from app.api.graphql import router as graphql_router
+from app.api.v2 import router as v2_router
 from app.core.config import get_settings
+from app.core.gateway_auth import is_gateway_authorized, is_protected_path
+from app.core.response_compression import (
+    choose_encoding,
+    compress_payload,
+    is_compressible_content_type,
+    merge_vary_accept_encoding,
+)
+from app.core.response_case import with_dual_case_keys
+from app.core.trace import reset_current_trace_id, set_current_trace_id
 
 logger = structlog.get_logger()
 settings = get_settings()
+
+# C71: structured request log sampling policy
+REQUEST_LOG_SAMPLE_RATES = {
+    "success": 0.05,      # 2xx/3xx
+    "client_error": 0.25, # 4xx
+}
+REQUEST_SLOW_MS = 1000
+
+
+def _resolve_request_id(request: Request) -> str:
+    rid = request.headers.get("x-request-id")
+    if rid:
+        return rid
+    existing = getattr(request.state, "request_id", None)
+    if existing:
+        return str(existing)
+    generated = str(uuid.uuid4())
+    request.state.request_id = generated
+    return generated
+
+
+def _error_body(
+    code: str,
+    message: str,
+    request_id: str,
+    details: list | None = None,
+    category: str | None = None,
+) -> dict:
+    error = {
+        "code": code,
+        "message": message,
+        "request_id": request_id,
+        "details": details or [],
+    }
+    if category:
+        error["category"] = category
+    return {
+        "error": {
+            **error,
+        }
+    }
+
+
+def _classify_exception(exc: Exception) -> str:
+    name = type(exc).__name__.lower()
+    mod = getattr(type(exc), "__module__", "").lower()
+    if "validation" in name:
+        return "user"
+    if "httpx" in mod or "requests" in mod or "socket" in mod or "timeout" in name:
+        return "external"
+    return "system"
+
+
+def _request_log_reason(status_code: int, elapsed_ms: float) -> str | None:
+    """Return sampling reason or None when this request should be skipped."""
+    # Always keep server errors and slow requests
+    if status_code >= 500:
+        return "server_error"
+    if elapsed_ms >= REQUEST_SLOW_MS:
+        return "slow_request"
+
+    if 400 <= status_code < 500:
+        if random.random() < REQUEST_LOG_SAMPLE_RATES["client_error"]:
+            return "sampled_client_error"
+        return None
+
+    if random.random() < REQUEST_LOG_SAMPLE_RATES["success"]:
+        return "sampled_success"
+    return None
 
 
 @asynccontextmanager
@@ -62,6 +145,10 @@ async def lifespan(app: FastAPI):
         import app.models.meta_campaign  # noqa: F401
         import app.models.ab_test  # noqa: F401
         import app.models.optimization  # noqa: F401
+        import app.models.alert_rule  # noqa: F401
+        import app.models.alert_history  # noqa: F401
+        import app.models.conversation  # noqa: F401
+        import app.models.data_quality  # noqa: F401
         Base.metadata.create_all(bind=sync_engine)
         from app.core.database import _run_migrations
         _run_migrations(sync_engine)
@@ -91,6 +178,10 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    responses={
+        422: {"description": "Validation Error", "model": __import__('app.schemas.error', fromlist=['ErrorResponse']).ErrorResponse},
+        500: {"description": "Internal Server Error", "model": __import__('app.schemas.error', fromlist=['ErrorResponse']).ErrorResponse},
+    },
 )
 
 
@@ -107,9 +198,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": err.get("msg", ""),
             "type": err.get("type", ""),
         })
+    request_id = _resolve_request_id(request)
     return JSONResponse(
         status_code=422,
-        content={"error": {"code": "validation_error", "message": "リクエストの検証に失敗しました", "details": details}},
+        content=_error_body(
+            "validation_error",
+            "リクエストの検証に失敗しました",
+            request_id,
+            details,
+            category="user",
+        ),
     )
 
 
@@ -117,9 +215,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """Catch database errors — log full traceback, return generic message."""
     logger.error("database_error", error=str(exc), path=request.url.path)
+    request_id = _resolve_request_id(request)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "database_error", "message": "データベースエラーが発生しました", "details": []}},
+        content=_error_body(
+            "database_error",
+            "データベースエラーが発生しました",
+            request_id,
+            category="system",
+        ),
     )
 
 
@@ -128,9 +232,15 @@ async def general_exception_handler(request: Request, exc: Exception):
     """Catch-all for unhandled exceptions."""
     logger.error("unhandled_error", error=str(exc), error_type=type(exc).__name__, path=request.url.path)
     message = str(exc) if settings.debug else "内部サーバーエラーが発生しました"
+    request_id = _resolve_request_id(request)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "internal_error", "message": message, "details": []}},
+        content=_error_body(
+            "internal_error",
+            message,
+            request_id,
+            category=_classify_exception(exc),
+        ),
     )
 
 
@@ -141,13 +251,124 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.middleware("http")
 async def timing_middleware(request: Request, call_next):
     import time
-    start = time.monotonic()
-    response = await call_next(request)
-    elapsed = (time.monotonic() - start) * 1000
-    response.headers["X-Response-Time"] = f"{elapsed:.0f}ms"
-    if elapsed > 1000:
-        logger.warning("slow_request", path=request.url.path, method=request.method, elapsed_ms=round(elapsed))
-    return response
+    request.state.request_id = _resolve_request_id(request)
+    trace_token = set_current_trace_id(request.state.request_id)
+
+    try:
+        if settings.api_gateway_auth_enabled and is_protected_path(
+            request.url.path,
+            settings.api_gateway_protected_prefixes_list,
+        ):
+            if not is_gateway_authorized(request, settings.api_gateway_api_keys_list):
+                return JSONResponse(
+                    status_code=401,
+                    content=_error_body(
+                        "gateway_auth_required",
+                        "API gateway authentication required",
+                        request.state.request_id,
+                        category="user",
+                    ),
+                )
+
+        start = time.monotonic()
+        response = await call_next(request)
+        elapsed = (time.monotonic() - start) * 1000
+        response.headers["X-Request-ID"] = request.state.request_id
+        response.headers["X-Trace-ID"] = request.state.request_id
+        response.headers["X-Response-Time"] = f"{elapsed:.0f}ms"
+        # CI-092: SLO violation detection
+        from app.core.slo import check_slo_violation
+        check_slo_violation(request.url.path, elapsed, response.status_code)
+        if elapsed > REQUEST_SLOW_MS:
+            logger.warning("slow_request", path=request.url.path, method=request.method, elapsed_ms=round(elapsed))
+
+        reason = _request_log_reason(response.status_code, elapsed)
+        if reason:
+            logger.info(
+                "request_log",
+                sample_reason=reason,
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                elapsed_ms=round(elapsed, 2),
+                query_present=bool(request.url.query),
+                user_agent=(request.headers.get("user-agent") or "")[:120],
+                request_id=request.state.request_id,
+                client_ip=request.client.host if request.client else None,
+            )
+
+        content_type = (response.headers.get("content-type") or "").lower()
+        has_set_cookie = "set-cookie" in response.headers
+        is_json = "application/json" in content_type
+
+        if settings.api_dual_case_output and is_json and not has_set_cookie:
+            try:
+                body_chunks = [chunk async for chunk in response.body_iterator]
+                raw_body = b"".join(body_chunks)
+                parsed = json.loads(raw_body.decode("utf-8")) if raw_body else None
+                if isinstance(parsed, (dict, list)):
+                    transformed = with_dual_case_keys(parsed)
+                    new_headers = dict(response.headers)
+                    new_headers.pop("content-length", None)
+                    new_headers.pop("Content-Length", None)
+                    response = JSONResponse(
+                        content=transformed,
+                        status_code=response.status_code,
+                        headers=new_headers,
+                        media_type="application/json",
+                        background=response.background,
+                    )
+            except Exception:
+                # Fail-open: never block API responses due to case conversion.
+                pass
+
+        compression_content_type = (response.headers.get("content-type") or "").lower()
+        if (
+            settings.api_compression_enabled
+            and request.method != "HEAD"
+            and 200 <= response.status_code < 300
+            and "content-encoding" not in response.headers
+            and is_compressible_content_type(compression_content_type)
+        ):
+            selected_encoding = choose_encoding(
+                request.headers.get("accept-encoding", ""),
+                allow_brotli=settings.api_compression_brotli_enabled,
+                allow_gzip=settings.api_compression_gzip_enabled,
+            )
+            if selected_encoding:
+                try:
+                    body_chunks = [chunk async for chunk in response.body_iterator]
+                    raw_body = b"".join(body_chunks)
+                    if len(raw_body) >= settings.api_compression_min_size_bytes:
+                        compressed_body = compress_payload(
+                            raw_body,
+                            selected_encoding,
+                            gzip_level=settings.api_compression_gzip_level,
+                            brotli_quality=settings.api_compression_brotli_quality,
+                        )
+                        headers = dict(response.headers)
+                        headers["Content-Encoding"] = selected_encoding
+                        headers["Vary"] = merge_vary_accept_encoding(headers.get("Vary"))
+                        headers.pop("Content-Length", None)
+                        headers.pop("content-length", None)
+                        response = Response(
+                            content=compressed_body,
+                            status_code=response.status_code,
+                            headers=headers,
+                            media_type=compression_content_type.split(";", 1)[0].strip(),
+                            background=response.background,
+                        )
+                except Exception:
+                    # Fail-open: never block API responses due to compression errors.
+                    pass
+
+        if request.url.path.startswith(settings.api_v1_prefix):
+            response.headers["Deprecation"] = "true"
+            response.headers["Sunset"] = "Mon, 30 Jun 2026 23:59:59 GMT"
+            response.headers["Link"] = f'</api/docs>; rel="successor-version"'
+        return response
+    finally:
+        reset_current_trace_id(trace_token)
 
 
 # CORS middleware — configure via CORS_ORIGINS env var (default "*" for development)
@@ -172,6 +393,7 @@ if settings.enable_metrics:
 
 # Include API routers
 API_PREFIX = settings.api_v1_prefix
+API_V2_PREFIX = settings.api_v2_prefix
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(ads.router, prefix=API_PREFIX)
 app.include_router(campaigns.router, prefix=API_PREFIX)
@@ -186,6 +408,11 @@ app.include_router(meta_marketing.router, prefix=API_PREFIX)
 app.include_router(settings_endpoints.router, prefix=API_PREFIX)
 app.include_router(media.router, prefix=API_PREFIX)
 app.include_router(data_quality.router, prefix=API_PREFIX)
+app.include_router(ai_chat.router, prefix=API_PREFIX)
+app.include_router(rankings_notifications.router, prefix=API_PREFIX)
+app.include_router(integrations.router, prefix=API_PREFIX)
+app.include_router(graphql_router, prefix=API_PREFIX)
+app.include_router(v2_router, prefix=API_V2_PREFIX)
 
 
 @app.get("/")
@@ -194,6 +421,7 @@ async def root():
         "name": "Video Ad Analysis AI Platform",
         "version": "1.0.0",
         "docs": "/api/docs",
+        "api_versions": [settings.api_v1_prefix, settings.api_v2_prefix],
     }
 
 

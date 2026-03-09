@@ -1,0 +1,16 @@
+backend/media_cache/
+backend/data/
+backend/.pytest_cache/
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/vaap_local.db*
+.git/
+.github/
+.agent-tasks/
+terraform/
+frontend/
+test-results/
+*.png
+*.json

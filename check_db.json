@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"dry_run\": true, \"steps\": [{\"name\": \"delete_foreign_ads\", \"found\": 0}, {\"name\": \"deduplicate\", \"groups\": 0, \"to_delete\": 0}, {\"name\": \"fix_creative_type\", \"unknown_count\": 0}, {\"name\": \"flag_remaining_foreign\", \"skipped\": true}], \"final_count\": 58, \"creative_type_distribution\": {\"image\": 58}}"}

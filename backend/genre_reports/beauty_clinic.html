@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美容クリニック - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>美容クリニック</h1>
+<p class="summary">beauty_clinic | 3 ads | Avg views: 342.6K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in 美容クリニック ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>learn_more</span>
+            <span style="color:#22c55e;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>trust</span>
+            <span style="color:#8b5cf6;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">67%</span>
+        </div>
+        <div class="pattern-bar" style="width:66.66666666666666%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>official_site</span>
+            <span style="color:#60a5fa;font-weight:600">67%</span>
+        </div>
+        <div class="pattern-bar" style="width:66.66666666666666%;background:#60a5fa"></div>
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#60a5fa"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Features</h4>
+        
+        <div class="pattern-item">
+            <span>testimonials</span>
+            <span style="color:#22c55e;font-weight:600">67%</span>
+        </div>
+        <div class="pattern-bar" style="width:66.66666666666666%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>price</span>
+            <span style="color:#22c55e;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>video</span>
+            <span style="color:#22c55e;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#22c55e"></div>
+        <div class="pattern-item">
+            <span>countdown</span>
+            <span style="color:#22c55e;font-weight:600">33%</span>
+        </div>
+        <div class="pattern-bar" style="width:33.33333333333333%;background:#22c55e"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" >ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" class=active>美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=570213948295185" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/thumbnails/12.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">無料託児所付き美容サロン</div>
+            <div class="ad-desc">無料託児所付き美容サロン
+ヘアカットや産後ダイエット、マツエクなど！
+無料送迎車あります
+#託児所付き美容室 #託児所付きエステ #学芸大学美容室
+SALON-CAP.COM
+無料託児無料送迎付きトータルビューティサロン
+Learn More</div>
+            <div class="ad-meta"><span class="badge-views">1.0M views</span><span class="badge-hit">HIT 89</span><span>CAP</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=570213948295185" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">trust</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">89</strong> (longevity:40, spend:20, active_bonus:20, creative:6, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:44.9438202247191%;background:#22c55e" title="longevity: 40"></div><div class="score-seg" style="width:22.47191011235955%;background:#3b82f6" title="spend: 20"></div><div class="score-seg" style="width:22.47191011235955%;background:#f59e0b" title="active_bonus: 20"></div><div class="score-seg" style="width:6.741573033707865%;background:#8b5cf6" title="creative: 6"></div><div class="score-seg" style="width:3.3707865168539324%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="https://salon-cap.com/child.html" target="_blank">https://salon-cap.com/child.html</a>
+            <div class="lp-detail">
+                <div><strong>è¨åæãµã¼ãã¹|å­¦è¸å¤§å­¦ã®ç¾å®¹é¢ãã¨ã¹ãããã¤ã«ãã¢ã¤ã©ãã·ã¥ãµã­ã³ï¼£ï¼¡ï¼°</strong></div>
+                <div>è¨åæãµã¼ãã¹|å­¦è¸å¤§å­¦é§åï¼æ±äº¬é½ç®é»åºï¼ã«ããã¨ã¹ãã»ãã¤ã«ã»ã¢ã¤ã©ãã·ã¥ä½µè¨­ã®ç¾å®¹å®¤ã§ããè±å¯ãªã¡ãã¥ã¼ã§ç·åçã«ç¾ããµãã¼ããã</div>
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-yes">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-yes">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/12.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a href="https://www.facebook.com/ads/library/?id=1271580705073364" target="_blank"><img class="ad-creative" src="file:///C:/Users/ishit/ads_library/backend/media_cache/images/56.jpg" alt="" loading="lazy" onerror="this.outerHTML='<div class=ad-creative-placeholder>Image unavailable</div>'"></a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">Yukiikoです💪✨</div>
+            <div class="ad-desc">二の腕痩せ専門家【二の腕デザイン®︎】　代表
+Yukiikoです💪✨
+大事なこと言います。
+二の腕は
+皮下脂肪が沢山あることや
+筋肉量が増えていることや
+皮のたるみや
+色々な原因が組み合わさって
+悩みになっています。
+脂肪は揉むだけでは変わりません😵
+エステサロンの二の腕施術が
+ソフトタッチで撫でるだけ、では
+残念ですが全く変わらないのです。
+💖正しい変え方💖
+二の腕（上半身）やせのための食事✨
+専門的なプロ（二の腕デザイナー®︎）による施術
+簡単なストレッチ（本当に簡単な）
+NINOサプリ💛
+以上、やり方はお近くの二の腕デザイン®︎サロンで
+徹底的に教えます🥰
+@ninoudeyukiko
+#二の腕やせ#二の腕エステ 
+#二の腕やせ #二の腕痩せ #二の腕ダイエット #二の腕エステ #二の腕ダイエット専門
+この動画の再生で何らかのエラーが発生しました。
+詳しくはこちら
+INSTAGRAM</div>
+            <div class="ad-meta"><span class="badge-views">1.5K views</span><span class="badge-video">VIDEO</span><span>植田 有紀子</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/library/?id=1271580705073364" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: learn_more</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">20</strong> (longevity:2, spend:3, active_bonus:2, creative:10, trend:3)
+        <div class="score-bar"><div class="score-seg" style="width:9.0%;background:#22c55e" title="longevity: 2"></div><div class="score-seg" style="width:16.0%;background:#3b82f6" title="spend: 3"></div><div class="score-seg" style="width:10.0%;background:#f59e0b" title="active_bonus: 2"></div><div class="score-seg" style="width:50.0%;background:#8b5cf6" title="creative: 10"></div><div class="score-seg" style="width:15.0%;background:#ef4444" title="trend: 3"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (official_site)</h4>
+            <a class="lp-url" href="http://instagram.com/ninoudeyukiko" target="_blank">http://instagram.com/ninoudeyukiko</a>
+            <div class="lp-detail">
+                <div><strong>Instagram</strong></div>
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-yes">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-yes">Urgency</span></div>
+            <div style="margin-top:6px;display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:var(--muted)">Colors:</span> <span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border-radius:2px;border:1px solid #333" title="#FFFFFF"></span><span style="display:inline-block;width:14px;height:14px;background:#F1F4F7;border-radius:2px;border:1px solid #333" title="#F1F4F7"></span><span style="display:inline-block;width:14px;height:14px;background:#0A1317;border-radius:2px;border:1px solid #333" title="#0A1317"></span><span style="display:inline-block;width:14px;height:14px;background:#0064E0;border-radius:2px;border:1px solid #333" title="#0064E0"></span><span style="display:inline-block;width:14px;height:14px;background:#5D6C7B;border-radius:2px;border:1px solid #333" title="#5D6C7B"></span></div>
+            <img class="lp-screenshot" src="file:///C:/Users/ishit/ads_library/backend/media_cache/lp_screenshots/56.png" alt="LP" loading="lazy">
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1238741318460836&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">✅Clinically Certified🧑‍⚕️FDA-APPROVED 🏅Full Refund Gaurante💯</div>
+            <div class="ad-desc">My dear, we all know—a mirror doesn&#x27;t lie, but it has never seen the light in your eyes.
+You&#x27;ve tried counting the new fine lines around your eyes,
+and gently touching your slightly sagging skin after a sleepless night.
+You may have secretly compared your current photos to your twenties,
+and then smiled as you dimmed your phone screen.
+We understand.
+Because behind every fine line is evidence of y</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Irving Sanchez</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1238741318460836&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://www.getvynzo.us" target="_blank">https://www.getvynzo.us</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

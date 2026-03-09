@@ -19,7 +19,7 @@ from typing import Optional
 import structlog
 
 from app.services.crawling.base_crawler import BaseCrawler, CrawledAd
-from app.utils.text import japanese_text_ratio
+from app.utils.text import ad_market_is_japanese, japanese_text_ratio
 
 logger = structlog.get_logger()
 
@@ -28,6 +28,60 @@ META_GRAPH_API_VERSION = "v25.0"
 META_AD_LIBRARY_API = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/ads_archive"
 
 _DOMAIN_ONLY_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}(/.*)?$")
+
+
+def _classify_meta_failure(error: object = None, *, status_code: Optional[int] = None) -> str:
+    text = str(error or "").lower()
+    if status_code == 401 or "token expired" in text or "oauth" in text or "access token" in text:
+        return "token_expired"
+    if status_code == 429 or "rate limit" in text or "too many requests" in text:
+        return "rate_limited"
+    if status_code == 403 or "client challenge" in text or "challenge" in text:
+        return "client_challenge"
+    if "execution context was destroyed" in text:
+        return "execution_context_destroyed"
+    if "target page, context or browser has been closed" in text:
+        return "browser_closed"
+    if "timeout" in text:
+        return "timeout"
+    if status_code and status_code >= 500:
+        return "api_server_error"
+    if "detail_enrich_no_card_data" in text:
+        return "detail_card_not_found"
+    if "empty" in text:
+        return "empty_result"
+    return "unknown"
+
+
+def _mark_meta_recovery(ad: CrawledAd, reason: str, *, source: Optional[str] = None) -> None:
+    meta = _ensure_meta_sources(ad.metadata or {})
+    ad.metadata = meta
+    meta["meta_recovery_reason"] = reason
+    if source:
+        meta["meta_recovery_source"] = source
+
+
+def _set_meta_success_timestamp(ad: CrawledAd, when: Optional[datetime] = None) -> None:
+    meta = _ensure_meta_sources(ad.metadata or {})
+    ad.metadata = meta
+    meta["last_meta_success_at"] = (when or datetime.utcnow()).isoformat()
+
+
+def _new_search_diagnostics() -> dict:
+    return {
+        "api_attempted": False,
+        "api_status": "not_attempted",
+        "api_failure_reason": None,
+        "api_result_count": 0,
+        "browser_attempted": False,
+        "browser_status": "not_attempted",
+        "browser_failure_reason": None,
+        "browser_result_count": 0,
+        "httpx_attempted": False,
+        "httpx_status": "not_attempted",
+        "httpx_failure_reason": None,
+        "httpx_result_count": 0,
+    }
 
 
 def _normalize_external_url(raw: Optional[str]) -> Optional[str]:
@@ -70,6 +124,71 @@ def _pick_destination_url(*candidates: Optional[str]) -> Optional[str]:
         if normalized:
             return normalized
     return None
+
+
+def _ensure_meta_sources(meta: dict) -> dict:
+    meta.setdefault("metric_source", "missing")
+    meta.setdefault("creative_source", "missing")
+    meta.setdefault("lp_source", "missing")
+    meta.setdefault("meta_quality_state", "missing")
+    return meta
+
+
+def _refresh_meta_quality_state(ad: "CrawledAd") -> None:
+    meta = _ensure_meta_sources(ad.metadata or {})
+    ad.metadata = meta
+    metric_source = str(meta.get("metric_source") or "missing")
+    if metric_source == "api":
+        meta["meta_quality_state"] = "real"
+    elif metric_source == "estimated":
+        meta["meta_quality_state"] = "estimated"
+    elif metric_source == "stale":
+        meta["meta_quality_state"] = "stale"
+    else:
+        has_creative = bool(ad.thumbnail_url or ad.image_urls or ad.video_url or ad.snapshot_url)
+        has_lp = bool(ad.destination_url)
+        meta["meta_quality_state"] = "partial" if (has_creative or has_lp) else "missing"
+
+
+def _detail_page_candidates(ad: "CrawledAd", access_token: Optional[str]) -> list[str]:
+    candidates: list[str] = []
+    ad_id = str(ad.external_id or "").strip()
+    snapshot_url = str(ad.snapshot_url or "").strip()
+    if ad_id.isdigit() and access_token:
+        candidates.append(
+            f"https://www.facebook.com/ads/archive/render_ad/?id={ad_id}&access_token={access_token}"
+        )
+    if snapshot_url:
+        candidates.append(snapshot_url)
+    if ad_id.isdigit():
+        candidates.append(f"{META_AD_LIBRARY_URL}?id={ad_id}")
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for url in candidates:
+        if url and url not in seen:
+            deduped.append(url)
+            seen.add(url)
+    return deduped
+
+
+async def _safe_page_evaluate(page, script: str, arg=None, *, fallback=None):
+    """Evaluate JS on a Playwright page with retry for transient nav/context failures."""
+    attempts = 2
+    for idx in range(attempts):
+        try:
+            if arg is None:
+                return await page.evaluate(script)
+            return await page.evaluate(script, arg)
+        except Exception as exc:
+            message = str(exc)
+            if idx >= attempts - 1:
+                logger.warning("meta_page_evaluate_failed", error=message[:200])
+                return fallback
+            if "Execution context was destroyed" not in message and "Target page, context or browser has been closed" not in message:
+                logger.warning("meta_page_evaluate_non_retryable", error=message[:200])
+                return fallback
+            await page.wait_for_timeout(1500)
+    return fallback
 
 
 def _parse_metric_range(text: str) -> tuple[Optional[int], Optional[int]]:
@@ -418,7 +537,8 @@ def _estimate_ad_metrics(ad: CrawledAd) -> None:
     """
     from datetime import datetime, timezone
 
-    meta = ad.metadata or {}
+    meta = _ensure_meta_sources(ad.metadata or {})
+    ad.metadata = meta
 
     # Calculate days running
     days_running = 0
@@ -472,6 +592,7 @@ def _estimate_ad_metrics(ad: CrawledAd) -> None:
     ad.metadata["estimated_days_running"] = days_running
     ad.metadata["estimated_daily_impressions"] = int(base_daily_impressions * multiplier)
     ad.metadata["estimated_cpm_jpy"] = cpm_jpy
+    ad.metadata["metric_source"] = "estimated"
 
     logger.info(
         "metrics_estimated",
@@ -480,6 +601,7 @@ def _estimate_ad_metrics(ad: CrawledAd) -> None:
         impressions=estimated_impressions,
         spend=estimated_spend,
     )
+    _refresh_meta_quality_state(ad)
 
 
 class MetaAdLibraryCrawler(BaseCrawler):
@@ -492,6 +614,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
         self._base_delay = rate_limit_delay
         self._consecutive_429s = 0
         self._max_adaptive_delay = 120.0  # cap at 2 minutes
+        self._last_search_diagnostics = _new_search_diagnostics()
 
     async def search_ads(
         self,
@@ -513,9 +636,12 @@ class MetaAdLibraryCrawler(BaseCrawler):
         4. (Post-crawl) Enrich ads missing metrics by visiting individual pages.
         """
         results: list[CrawledAd] = []
+        api_failed = False
+        self._last_search_diagnostics = _new_search_diagnostics()
 
         if self.access_token:
             results = await self._search_via_api(query, category, limit, country, ad_type)
+            api_failed = not bool(results)
 
         # If API returned nothing (error or empty), try browser fallback
         if not results:
@@ -546,12 +672,37 @@ class MetaAdLibraryCrawler(BaseCrawler):
         if results and country == "JP":
             for crawled_ad in results:
                 if "japanese_ratio" not in crawled_ad.metadata:
-                    text = (crawled_ad.title or "") + " " + (crawled_ad.description or "")
+                    text = " ".join(
+                        filter(
+                            None,
+                            [
+                                crawled_ad.title,
+                                crawled_ad.description,
+                                crawled_ad.advertiser_name,
+                                crawled_ad.brand_name,
+                            ],
+                        )
+                    )
                     ratio = japanese_text_ratio(text)
                     crawled_ad.metadata["japanese_ratio"] = round(ratio, 3)
 
-            jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) > 0.05]
-            non_jp_ads = [a for a in results if a.metadata.get("japanese_ratio", 0) <= 0.05]
+            jp_ads = [
+                a for a in results
+                if ad_market_is_japanese(
+                    a.title,
+                    a.description,
+                    a.advertiser_name,
+                    a.brand_name,
+                    urls=[
+                        a.destination_url,
+                        a.advertiser_url,
+                        a.metadata.get("destination_url"),
+                        a.metadata.get("display_url"),
+                    ],
+                    metadata=a.metadata,
+                )
+            ]
+            non_jp_ads = [a for a in results if a not in jp_ads]
             results = jp_ads + non_jp_ads[:max(0, limit - len(jp_ads))]
 
             logger.info(
@@ -565,6 +716,29 @@ class MetaAdLibraryCrawler(BaseCrawler):
         # Post-crawl: enrich ads missing metrics/thumbnails
         if results and enrich_metrics:
             results = await self.enrich_ads_with_page_metrics(results)
+
+        if results:
+            for ad in results:
+                meta = _ensure_meta_sources(ad.metadata or {})
+                ad.metadata = meta
+                diag = self._last_search_diagnostics
+                meta["meta_api_status"] = diag.get("api_status")
+                meta["meta_api_failure_reason"] = diag.get("api_failure_reason")
+                meta["meta_browser_status"] = diag.get("browser_status")
+                meta["meta_browser_failure_reason"] = diag.get("browser_failure_reason")
+                meta["meta_httpx_status"] = diag.get("httpx_status")
+                meta["meta_httpx_failure_reason"] = diag.get("httpx_failure_reason")
+                if api_failed and meta.get("source") == "browser_scraping":
+                    meta["token_source"] = "db_or_env"
+                    if diag.get("api_failure_reason") and not meta.get("meta_recovery_reason"):
+                        meta["meta_recovery_reason"] = diag["api_failure_reason"]
+                        meta["meta_recovery_source"] = "browser_fallback"
+                elif meta.get("source") == "httpx_scraping" and not meta.get("meta_recovery_reason"):
+                    fallback_reason = diag.get("browser_failure_reason") or diag.get("api_failure_reason")
+                    if fallback_reason:
+                        meta["meta_recovery_reason"] = fallback_reason
+                        meta["meta_recovery_source"] = "httpx_fallback"
+                _refresh_meta_quality_state(ad)
 
         logger.info("meta_ads_search", query=query, results_count=len(results))
         return results
@@ -582,6 +756,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
         """Search using official Meta Ad Library API."""
         client = await self._get_client()
         results: list[CrawledAd] = []
+        diag = self._last_search_diagnostics
+        diag["api_attempted"] = True
+        diag["api_status"] = "running"
 
         params = {
             "access_token": self.access_token,
@@ -620,6 +797,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     error_body=error_body,
                 )
                 if response.status_code == 429:
+                    diag["api_status"] = "failed"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=429)
                     # CI-054: Adaptive rate limiting on 429
                     self._consecutive_429s += 1
                     retry_after = int(response.headers.get("Retry-After", "30"))
@@ -639,11 +818,15 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     await asyncio.sleep(adaptive_delay)
                     return []  # trigger browser fallback
                 if response.status_code == 401:
+                    diag["api_status"] = "failed"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=401)
                     # Token expired — log critical and stop retrying
                     logger.critical("meta_api_token_expired",
                                     msg="Meta API token expired or invalid. Manual renewal required.")
                     return []
                 if response.status_code == 500:
+                    diag["api_status"] = "failed"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=500)
                     return []  # trigger browser fallback
                 response.raise_for_status()
             data = response.json()
@@ -655,11 +838,14 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
             if "error" in data:
                 logger.warning("meta_api_error", error=data["error"])
+                diag["api_status"] = "failed"
+                diag["api_failure_reason"] = _classify_meta_failure(data["error"])
                 return []
 
             for ad_data in data.get("data", []):
                 crawled_ad = self._parse_api_ad(ad_data)
                 if crawled_ad:
+                    _set_meta_success_timestamp(crawled_ad)
                     results.append(crawled_ad)
                     if len(results) >= limit:
                         break
@@ -670,6 +856,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 await asyncio.sleep(self.rate_limit_delay)
                 response = await client.get(next_url)
                 if response.status_code == 429:
+                    diag["api_status"] = "partial"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=429)
                     self._consecutive_429s += 1
                     retry_after = int(response.headers.get("Retry-After", "30"))
                     adaptive_delay = min(
@@ -687,22 +875,36 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     await asyncio.sleep(adaptive_delay)
                     break
                 if response.status_code == 401:
+                    diag["api_status"] = "partial"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=401)
                     logger.critical("meta_api_token_expired_during_pagination")
                     break
                 if response.status_code != 200:
+                    diag["api_status"] = "partial"
+                    diag["api_failure_reason"] = _classify_meta_failure(status_code=response.status_code)
                     break
                 data = response.json()
 
                 for ad_data in data.get("data", []):
                     crawled_ad = self._parse_api_ad(ad_data)
                     if crawled_ad:
+                        _set_meta_success_timestamp(crawled_ad)
                         results.append(crawled_ad)
                         if len(results) >= limit:
                             break
 
                 next_url = data.get("paging", {}).get("next")
+            if results:
+                diag["api_result_count"] = len(results)
+                if diag["api_status"] == "running":
+                    diag["api_status"] = "success"
+            else:
+                diag["api_status"] = "empty"
+                diag["api_failure_reason"] = diag.get("api_failure_reason") or "empty_result"
 
         except Exception as e:
+            diag["api_status"] = "failed"
+            diag["api_failure_reason"] = _classify_meta_failure(e)
             logger.error("meta_api_search_failed", error=str(e))
 
         return results
@@ -724,6 +926,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
             return []
 
         results: list[CrawledAd] = []
+        diag = self._last_search_diagnostics
+        diag["browser_attempted"] = True
+        diag["browser_status"] = "running"
 
         params = urllib.parse.urlencode({
             "active_status": "all",
@@ -749,19 +954,29 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 ),
             )
             page = await context.new_page()
-            await page.goto(url, wait_until="load", timeout=90000)
+            try:
+                await page.goto(url, wait_until="load", timeout=90000)
+            except Exception:
+                await page.goto(url, wait_until="domcontentloaded", timeout=90000)
 
             # Wait for initial ad cards to render
             await page.wait_for_timeout(5000)
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
 
             # Scroll down to load more ads (Facebook lazy-loads)
             scroll_rounds = max(1, limit // 5)
             for _ in range(min(scroll_rounds, 30)):
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                await _safe_page_evaluate(page, "window.scrollTo(0, document.body.scrollHeight)", fallback=None)
                 await page.wait_for_timeout(2000)
 
             # Extract ad data from the rendered page
-            ads_data = await page.evaluate(_BROWSER_EXTRACT_JS)
+            ads_data = await _safe_page_evaluate(page, _BROWSER_EXTRACT_JS, fallback=[])
+            if not ads_data:
+                await page.reload(wait_until="domcontentloaded", timeout=90000)
+                await page.wait_for_timeout(4000)
+                await page.keyboard.press("Escape")
+                ads_data = await _safe_page_evaluate(page, _BROWSER_EXTRACT_JS, fallback=[])
 
             seen_ids = set()
             for ad in ads_data:
@@ -818,6 +1033,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     first_seen_at=first_seen,
                     metadata={
                         "source": "browser_scraping",
+                        "metric_source": "missing",
+                        "creative_source": "browser",
+                        "lp_source": "browser" if destination_url else "missing",
                         "publisher_platforms": platforms,
                         "destination_url": destination_url,
                         "display_url": display_url,
@@ -825,6 +1043,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                         "destination_type": "LP" if destination_url else None,
                     },
                 ))
+                _mark_meta_recovery(results[-1], diag.get("api_failure_reason") or "browser_fallback", source="browser_search")
 
             # Sort results: prioritize Japanese-language ads
             for crawled_ad in results:
@@ -844,8 +1063,14 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 japanese_ads=len(jp_ads),
                 non_japanese_ads=len(non_jp_ads),
             )
+            diag["browser_result_count"] = len(results)
+            diag["browser_status"] = "success" if results else "empty"
+            if not results:
+                diag["browser_failure_reason"] = "empty_result"
 
         except Exception as e:
+            diag["browser_status"] = "failed"
+            diag["browser_failure_reason"] = _classify_meta_failure(e)
             logger.error("meta_browser_scraping_failed", error=str(e))
         finally:
             if page:
@@ -879,6 +1104,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
         client = await self._get_client()
         results: list[CrawledAd] = []
+        diag = self._last_search_diagnostics
+        diag["httpx_attempted"] = True
+        diag["httpx_status"] = "running"
 
         try:
             params = {
@@ -900,9 +1128,20 @@ class MetaAdLibraryCrawler(BaseCrawler):
             for card in ad_cards[:limit]:
                 crawled_ad = self._parse_scraped_card(card)
                 if crawled_ad:
+                    _mark_meta_recovery(
+                        crawled_ad,
+                        diag.get("browser_failure_reason") or diag.get("api_failure_reason") or "httpx_fallback",
+                        source="httpx_search",
+                    )
                     results.append(crawled_ad)
+            diag["httpx_result_count"] = len(results)
+            diag["httpx_status"] = "success" if results else "empty"
+            if not results:
+                diag["httpx_failure_reason"] = "empty_result"
 
         except Exception as e:
+            diag["httpx_status"] = "failed"
+            diag["httpx_failure_reason"] = _classify_meta_failure(e)
             logger.error("meta_scraping_failed", error=str(e))
 
         return results
@@ -1029,6 +1268,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
             metadata = {
                 "source": "api",
+                "metric_source": "api" if (impressions_midpoint is not None or spend_midpoint is not None) else "missing",
+                "creative_source": "api" if thumbnail_url else "missing",
+                "lp_source": "api" if destination_url else "missing",
                 "page_id": ad_data.get("page_id"),
                 "publisher_platforms": platforms,
                 "estimated_audience_size": ad_data.get("estimated_audience_size"),
@@ -1052,7 +1294,7 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 metadata["needs_text_enrichment"] = True
                 metadata["original_ad_creative_bodies"] = original_bodies
 
-            return CrawledAd(
+            ad = CrawledAd(
                 external_id=ad_id,
                 platform=platform,
                 title=titles[0] if titles else None,
@@ -1069,6 +1311,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 last_seen_at=last_seen,
                 metadata=metadata,
             )
+            _set_meta_success_timestamp(ad)
+            _refresh_meta_quality_state(ad)
+            return ad
         except Exception as e:
             logger.error("meta_api_parse_failed", error=str(e))
             return None
@@ -1107,6 +1352,9 @@ class MetaAdLibraryCrawler(BaseCrawler):
                 destination_url=destination_url,
                 metadata={
                     "source": "httpx_scraping",
+                    "metric_source": "missing",
+                    "creative_source": "missing",
+                    "lp_source": "httpx" if destination_url else "missing",
                     "destination_url": destination_url,
                     "destination_type": "LP" if destination_url else None,
                 },
@@ -1212,7 +1460,6 @@ class MetaAdLibraryCrawler(BaseCrawler):
                     if not ad_id or not ad_id.isdigit():
                         return
 
-                    page_url = f"{META_AD_LIBRARY_URL}?id={ad_id}"
                     context = None
                     page = None
                     try:
@@ -1225,13 +1472,53 @@ class MetaAdLibraryCrawler(BaseCrawler):
                             ),
                         )
                         page = await context.new_page()
-                        await page.goto(page_url, wait_until="load", timeout=60000)
-                        await page.wait_for_timeout(3000)
-
-                        # Extract creative images and card data from the target card
-                        card_data = await page.evaluate(
-                            _AD_DETAIL_EXTRACT_JS, ad_id,
-                        )
+                        card_data = {}
+                        used_page_url = None
+                        for page_url in _detail_page_candidates(ad, self.access_token):
+                            try:
+                                await page.goto(page_url, wait_until="domcontentloaded", timeout=60000)
+                                await page.wait_for_timeout(2500)
+                                try:
+                                    await page.keyboard.press("Escape")
+                                except Exception:
+                                    pass
+                                try:
+                                    await page.wait_for_load_state("networkidle", timeout=10000)
+                                except Exception:
+                                    pass
+                                card_data = await _safe_page_evaluate(page, _AD_DETAIL_EXTRACT_JS, ad_id, fallback={})
+                                if card_data:
+                                    used_page_url = page_url
+                                    break
+                            except Exception as nav_err:
+                                failure_reason = _classify_meta_failure(nav_err)
+                                logger.info(
+                                    "meta_detail_candidate_failed",
+                                    ad_id=ad_id,
+                                    page_url=page_url,
+                                    error=str(nav_err)[:160],
+                                    failure_reason=failure_reason,
+                                )
+                                if failure_reason == "execution_context_destroyed":
+                                    try:
+                                        await page.reload(wait_until="domcontentloaded", timeout=60000)
+                                        await page.wait_for_timeout(2000)
+                                        card_data = await _safe_page_evaluate(page, _AD_DETAIL_EXTRACT_JS, ad_id, fallback={})
+                                        if card_data:
+                                            used_page_url = page_url
+                                            ad.metadata["detail_retry_recovered"] = True
+                                            break
+                                    except Exception as retry_err:
+                                        logger.info(
+                                            "meta_detail_candidate_retry_failed",
+                                            ad_id=ad_id,
+                                            page_url=page_url,
+                                            error=str(retry_err)[:160],
+                                            failure_reason=_classify_meta_failure(retry_err),
+                                        )
+                                continue
+                        if not card_data:
+                            raise RuntimeError("detail_enrich_no_card_data")
 
                         # Extract creative images (better thumbnail)
                         creative_images = card_data.get("creative_images", [])
@@ -1247,6 +1534,8 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
                             if not ad.thumbnail_url or "s200x200" in (ad.thumbnail_url or "") or "favicons" in (ad.thumbnail_url or ""):
                                 ad.thumbnail_url = creative_images[0]
+                                ad.metadata["creative_source"] = "playwright_render_ad"
+                                ad.metadata["detail_page_url"] = used_page_url
                                 logger.info(
                                     "creative_image_extracted",
                                     ad_id=ad_id,
@@ -1257,14 +1546,28 @@ class MetaAdLibraryCrawler(BaseCrawler):
 
                         # Save card-level metadata
                         ad.metadata["page_enriched"] = True
+                        if ad.destination_url:
+                            ad.metadata["lp_source"] = ad.metadata.get("lp_source") or "api"
                         if card_data.get("platforms"):
                             ad.metadata["detected_platforms"] = card_data["platforms"]
+                        if used_page_url:
+                            ad.metadata["detail_page_url"] = used_page_url
+                        _set_meta_success_timestamp(ad)
+                        ad.metadata["detail_enrich_status"] = "success"
+                        _refresh_meta_quality_state(ad)
 
                     except Exception as e:
+                        failure_reason = _classify_meta_failure(e)
+                        ad.metadata["creative_source"] = ad.metadata.get("creative_source") or "missing"
+                        ad.metadata["detail_enrich_status"] = "failed"
+                        ad.metadata["detail_enrich_failure_reason"] = failure_reason
+                        ad.metadata["meta_recovery_reason"] = failure_reason
+                        ad.metadata["meta_recovery_source"] = "detail_enrich"
                         logger.warning(
                             "ad_page_enrich_failed",
                             ad_id=ad_id,
                             error=str(e)[:100],
+                            failure_reason=failure_reason,
                         )
                     finally:
                         if page:

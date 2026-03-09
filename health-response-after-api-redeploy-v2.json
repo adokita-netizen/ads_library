@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"status\":\"healthy\",\"in_memory_mode\":false,\"inMemoryMode\":false,\"database\":\"ok\",\"runtime\":\"lambda\"}", "headers": {"content-length": "78", "content-type": "application/json", "x-request-id": "a461354d-a661-4e81-a4f1-9929b9c772f1", "x-response-time": "14ms"}, "isBase64Encoded": false}

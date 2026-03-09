@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_optional_user
 from app.utils.db import escape_like as _escape_like
 from app.core.database import get_async_session
 from app.models.ad import Ad, AdPlatformEnum, AdCategoryEnum, AdStatusEnum
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/dashboard")
 async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get dashboard overview statistics."""

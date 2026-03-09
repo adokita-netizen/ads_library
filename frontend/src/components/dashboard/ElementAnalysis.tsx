@@ -18,50 +18,6 @@ interface ElementCategory {
   items: ElementItem[];
 }
 
-// ─── Mock Data (TODO: Replace with API calls when endpoints are ready) ───
-
-const MOCK_ELEMENTS: ElementCategory[] = [
-  {
-    label: "フックタイプ",
-    items: [
-      { name: "質問型", count: 120, hit_rate: 72, overall_rate: 45, is_high_performer: true },
-      { name: "衝撃型", count: 87, hit_rate: 65, overall_rate: 42, is_high_performer: true },
-      { name: "ベネフィット型", count: 145, hit_rate: 38, overall_rate: 40, is_high_performer: false },
-      { name: "ストーリー型", count: 70, hit_rate: 55, overall_rate: 35, is_high_performer: true },
-      { name: "数字型", count: 55, hit_rate: 68, overall_rate: 30, is_high_performer: true },
-    ],
-  },
-  {
-    label: "CTAタイプ",
-    items: [
-      { name: "限定オファー", count: 127, hit_rate: 70, overall_rate: 48, is_high_performer: true },
-      { name: "無料お試し", count: 96, hit_rate: 62, overall_rate: 40, is_high_performer: true },
-      { name: "保証付き", count: 63, hit_rate: 58, overall_rate: 35, is_high_performer: true },
-      { name: "緊急性", count: 105, hit_rate: 32, overall_rate: 42, is_high_performer: false },
-      { name: "詳細はこちら", count: 88, hit_rate: 25, overall_rate: 38, is_high_performer: false },
-    ],
-  },
-  {
-    label: "オファータイプ",
-    items: [
-      { name: "割引（%OFF）", count: 155, hit_rate: 55, overall_rate: 50, is_high_performer: true },
-      { name: "無料トライアル", count: 85, hit_rate: 67, overall_rate: 35, is_high_performer: true },
-      { name: "限定品", count: 56, hit_rate: 60, overall_rate: 28, is_high_performer: true },
-      { name: "セット販売", count: 95, hit_rate: 35, overall_rate: 42, is_high_performer: false },
-      { name: "送料無料", count: 72, hit_rate: 48, overall_rate: 32, is_high_performer: false },
-    ],
-  },
-  {
-    label: "感情タイプ",
-    items: [
-      { name: "不安・恐怖", count: 98, hit_rate: 68, overall_rate: 40, is_high_performer: true },
-      { name: "希望・期待", count: 112, hit_rate: 52, overall_rate: 45, is_high_performer: true },
-      { name: "怒り・不満", count: 45, hit_rate: 55, overall_rate: 25, is_high_performer: true },
-      { name: "共感", count: 130, hit_rate: 45, overall_rate: 48, is_high_performer: false },
-      { name: "驚き", count: 67, hit_rate: 70, overall_rate: 30, is_high_performer: true },
-    ],
-  },
-];
 
 // ─── Main Component ───
 
@@ -78,15 +34,13 @@ export default function ElementAnalysis({ onElementFilter, genre }: ElementAnaly
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      // const data = await fetchApi<{ categories: ElementCategory[] }>("/rankings/element-analysis", {
-      //   params: { genre: genre || undefined },
-      // });
-      // setElements(data.categories || []);
-      await new Promise((r) => setTimeout(r, 500));
-      setElements(MOCK_ELEMENTS);
-    } catch (err) {
-      console.error("要素分析データの取得に失敗しました", err);
+      const data = await fetchApi<{ categories?: ElementCategory[] }>("/rankings/element-analysis", {
+        params: { genre: genre || undefined },
+      });
+      setElements(data.categories || []);
+    } catch {
+      // element-analysis endpoint may not be implemented yet
+      setElements([]);
     } finally {
       setLoading(false);
     }

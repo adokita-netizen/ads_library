@@ -25,6 +25,39 @@ class MetaTokenStatus(BaseModel):
     error: Optional[str] = None
 
 
+class MetaTokenHealthResponse(BaseModel):
+    """Settings API contract for Meta token runtime health."""
+    has_token: bool
+    token_source: str = "missing"
+    source_priority: list[str] = ["db", "env", "missing"]
+    runtime_source: str = "missing"
+    fallback_used: bool = False
+    fallback_reason: Optional[str] = None
+    is_valid: bool = False
+    app_id: Optional[str] = None
+    type: Optional[str] = None
+    expires_at: Optional[int] = None
+    days_remaining: Optional[int] = None
+    is_expiring: bool = False
+    scopes: list[str] = []
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    last_validation_error: Optional[str] = None
+    message: Optional[str] = None
+
+
+class MetaTokenExchangeResponse(BaseModel):
+    """Settings API contract for short-lived to long-lived token exchange."""
+    status: str
+    message: str
+    token_type: Optional[str] = None
+    token_source: str = "db"
+    saved_to: str = "db"
+    source_priority: list[str] = ["db", "env", "missing"]
+    exchanged: bool = True
+    expires_in_seconds: Optional[int] = None
+
+
 class MetaAdAccountResponse(BaseModel):
     """Response for a single Meta ad account."""
     id: int

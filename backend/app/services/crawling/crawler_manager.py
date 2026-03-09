@@ -119,6 +119,7 @@ class CrawlerManager:
         category: Optional[str] = None,
         limit_per_platform: int = 20,
         country: str = "JP",
+        **kwargs,
     ) -> dict[str, list[CrawledAd]]:
         """Search across all registered platforms concurrently."""
         target_platforms = platforms or list(self._crawlers.keys())
@@ -132,6 +133,7 @@ class CrawlerManager:
                     category=category,
                     limit=limit_per_platform,
                     country=country,
+                    **kwargs,
                 )
 
         gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -141,6 +143,18 @@ class CrawlerManager:
                 logger.error("platform_search_failed", platform=platform, error=str(result))
                 results[platform] = []
             else:
+                if result is None:
+                    logger.warning("platform_search_returned_none", platform=platform)
+                    results[platform] = []
+                    continue
+                if not isinstance(result, list):
+                    logger.warning(
+                        "platform_search_invalid_result_type",
+                        platform=platform,
+                        result_type=type(result).__name__,
+                    )
+                    results[platform] = []
+                    continue
                 # Keep downstream "top N" aligned to freshest ads.
                 results[platform] = sorted(result, key=_latest_sort_key, reverse=True)
 

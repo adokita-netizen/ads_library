@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
+import { normalizeMediaReasons } from "@/lib/media";
+import { bulkDownloadCreatives, getDownloadFailureMessage, type MediaStatus } from "@/lib/media";
 import { platformLabels, platformColors, genreOptions } from "@/lib/constants";
 import { formatNumber, formatYen } from "@/lib/format";
 import HitAdCardView from "./HitAdCardView";
@@ -11,6 +13,7 @@ import CreativeCompareView from "../analysis/CreativeCompareView";
 import HitPatternPanel from "./HitPatternPanel";
 import CopyAnalysisPanel from "./CopyAnalysisPanel";
 import CreativeGalleryView from "./CreativeGalleryView";
+import CreativeLibraryRegressionDashboard from "./CreativeLibraryRegressionDashboard";
 import CrawlPanel from "./CrawlPanel";
 import FreshAdsSection from "./FreshAdsSection";
 import AlertsPanel from "./AlertsPanel";
@@ -18,9 +21,10 @@ import ProRankingView from "./ProRankingView";
 import AdvancedFilterPanel, { type AdvancedFilters, defaultFilters, getActiveFilterCount } from "./AdvancedFilterPanel";
 import BulkActionsBar from "./BulkActionsBar";
 import SectionTabContent from "./SectionTabContent";
-import { DarkModeToggle } from "../common/ThemeProvider";
+import ThemeToggle from "../common/ThemeToggle";
 import HitAdFilterControls, { type FilterState, DEFAULT_FILTERS } from "./HitAdFilterControls";
 import HitAdSummaryCards, { genreLabel } from "./HitAdSummaryCards";
+import { NumericProvenanceBadge, type NumericProvenanceState } from "../common/NumericProvenance";
 
 // B11-17: Main tab type for analytics navigation
 type MainTab = "overview" | "trends" | "market" | "advertisers" | "formulas" | "compare" | "collections" | "ai" | "scenario" | "deep-analysis" | "lp" | "competitors" | "reports" | "calendar" | "team" | "brief" | "analytics" | "genre";
@@ -82,6 +86,17 @@ interface HitAd {
   data_quality?: string;
   language?: string;
   is_duplicate?: boolean;
+  media_status?: MediaStatus;
+  media_cache_status?: string;
+  metric_source?: string;
+  creative_source?: string;
+  lp_source?: string;
+  metric_status?: NumericProvenanceState;
+  creative_status?: NumericProvenanceState;
+  freshness_status?: "fresh" | "missing" | "stale" | string;
+  last_meta_success_at?: string;
+  meta_quality_state?: NumericProvenanceState;
+  meta_recovery_reason?: string;
 }
 
 // B18: Data quality assessment helper
@@ -179,6 +194,50 @@ interface GenreComparisonData {
   items?: GenreComparisonItem[];
 }
 
+interface BulkDownloadSummary {
+  fileCount: number;
+  skippedCount: number;
+  zipFilename: string;
+  totalSizeBytes: number;
+}
+
+type RecoveryFilter = "all" | "needs_recovery" | "snapshot_only" | "download_unavailable" | "lp_unresolved";
+
+function getRecoveryState(ad: HitAd): {
+  needsRecovery: boolean;
+  snapshotOnly: boolean;
+  downloadUnavailable: boolean;
+  lpUnresolved: boolean;
+} {
+  const mediaStatus = ad.media_status || {};
+  const reasons = normalizeMediaReasons(mediaStatus.missing_reasons);
+  const snapshotOnly =
+    reasons.includes("snapshot_only") ||
+    (mediaStatus.viewable !== false && mediaStatus.downloadable !== true && Boolean(ad.snapshot_url) && !ad.video_url && !ad.image_url);
+  const downloadUnavailable = mediaStatus.downloadable === false || reasons.includes("download_unavailable") || reasons.includes("missing_creative");
+  const lpUnresolved =
+    mediaStatus.has_lp === false ||
+    reasons.includes("lp_missing") ||
+    reasons.includes("lp_unresolved");
+  return {
+    needsRecovery: snapshotOnly || downloadUnavailable || lpUnresolved,
+    snapshotOnly,
+    downloadUnavailable,
+    lpUnresolved,
+  };
+}
+
+function getSpendState(ad: HitAd): NumericProvenanceState {
+  if (ad.estimation_method === "audience_based") return "real";
+  if ((ad.spend_increase || 0) > 0 || (ad.cumulative_spend || 0) > 0) return "estimated";
+  return "missing";
+}
+
+function getViewState(ad: HitAd): NumericProvenanceState {
+  if ((ad.view_increase || 0) > 0 || (ad.cumulative_views || 0) > 0) return "real";
+  return "missing";
+}
+
 interface HitAdAnalysisViewProps {
   onAdSelect: (adId: number) => void;
 }
@@ -194,6 +253,9 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
   const [viewMode, setViewMode] = useState<"pro" | "table" | "card" | "advertiser" | "gallery">("pro");
   const [sectionTab, setSectionTab] = useState<MainTab>("overview");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkDownloadSummary, setBulkDownloadSummary] = useState<BulkDownloadSummary | null>(null);
+  const [recoveryFilter, setRecoveryFilter] = useState<RecoveryFilter>("all");
   const [showCompare, setShowCompare] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [detailAd, setDetailAd] = useState<HitAd | null>(null);
@@ -408,6 +470,10 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     const realDataPct = hitAds.length > 0 ? Math.round((realDataCount / hitAds.length) * 100) : 0;
     return { adsWithDays, avgDaysRunning, stillRunningCount, realDataCount, estimatedCount, realDataPct };
   }, [hitAds]);
+  const missingNumericCount = useMemo(
+    () => hitAds.filter((ad) => getSpendState(ad) === "missing" && getViewState(ad) === "missing").length,
+    [hitAds],
+  );
 
   // B3-2: Filtered & sorted ads (B10: added emotion + date range)
   const filteredAds = useMemo(() => {
@@ -441,6 +507,11 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
       }
       // B18: Duplicate filter
       if (filters.hideDuplicates && ad.is_duplicate) return false;
+      const recoveryState = getRecoveryState(ad);
+      if (recoveryFilter === "needs_recovery" && !recoveryState.needsRecovery) return false;
+      if (recoveryFilter === "snapshot_only" && !recoveryState.snapshotOnly) return false;
+      if (recoveryFilter === "download_unavailable" && !recoveryState.downloadUnavailable) return false;
+      if (recoveryFilter === "lp_unresolved" && !recoveryState.lpUnresolved) return false;
       return true;
     });
     switch (filters.sortBy) {
@@ -450,9 +521,26 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
       case "recent": result.sort((a, b) => new Date(b.published_date || 0).getTime() - new Date(a.published_date || 0).getTime()); break;
     }
     return result;
-  }, [hitAds, filters]);
+  }, [hitAds, filters, recoveryFilter]);
 
-  const activeFilterCount = (filters.scoreMin > 0 ? 1 : 0) + (filters.scoreMax < 100 ? 1 : 0) + (filters.daysMin > 0 ? 1 : 0) + (filters.daysMax < 9999 ? 1 : 0) + (filters.runningStatus !== "all" ? 1 : 0) + (filters.sortBy !== "score" ? 1 : 0) + (filters.searchText ? 1 : 0) + (filters.creativeType !== "all" ? 1 : 0) + (filters.hookType !== "all" ? 1 : 0) + (filters.emotion !== "all" ? 1 : 0) + (filters.platform !== "all" ? 1 : 0) + (filters.dateFrom ? 1 : 0) + (filters.dateTo ? 1 : 0) + (!filters.japaneseOnly ? 1 : 0) + (!filters.hideDuplicates ? 1 : 0);
+  const activeFilterCount = (filters.scoreMin > 0 ? 1 : 0) + (filters.scoreMax < 100 ? 1 : 0) + (filters.daysMin > 0 ? 1 : 0) + (filters.daysMax < 9999 ? 1 : 0) + (filters.runningStatus !== "all" ? 1 : 0) + (filters.sortBy !== "score" ? 1 : 0) + (filters.searchText ? 1 : 0) + (filters.creativeType !== "all" ? 1 : 0) + (filters.hookType !== "all" ? 1 : 0) + (filters.emotion !== "all" ? 1 : 0) + (filters.platform !== "all" ? 1 : 0) + (filters.dateFrom ? 1 : 0) + (filters.dateTo ? 1 : 0) + (!filters.japaneseOnly ? 1 : 0) + (!filters.hideDuplicates ? 1 : 0) + (recoveryFilter !== "all" ? 1 : 0);
+
+  const recoveryCounts = useMemo(() => {
+    const initial = {
+      needsRecovery: 0,
+      snapshotOnly: 0,
+      downloadUnavailable: 0,
+      lpUnresolved: 0,
+    };
+    return hitAds.reduce((acc, ad) => {
+      const state = getRecoveryState(ad);
+      if (state.needsRecovery) acc.needsRecovery += 1;
+      if (state.snapshotOnly) acc.snapshotOnly += 1;
+      if (state.downloadUnavailable) acc.downloadUnavailable += 1;
+      if (state.lpUnresolved) acc.lpUnresolved += 1;
+      return acc;
+    }, initial);
+  }, [hitAds]);
 
   // B3-3: Score distribution buckets
   const scoreBuckets = useMemo(() => {
@@ -574,16 +662,24 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
     if (change === null || change === undefined) return <span className="text-gray-300">-</span>;
     if (change > 0) return <span className="text-emerald-600 text-[11px] font-semibold">↑{change}</span>;
     if (change < 0) return <span className="text-red-500 text-[11px] font-semibold">↓{Math.abs(change)}</span>;
-    return <span className="text-gray-400 text-[11px]">→</span>;
+    return <span className="text-gray-400 dark:text-gray-500 text-[11px]">→</span>;
   };
+
+  useEffect(() => {
+    if (!detailAd) return;
+    const latest = hitAds.find((ad) => ad.ad_id === detailAd.ad_id);
+    if (latest && latest !== detailAd) {
+      setDetailAd(latest);
+    }
+  }, [detailAd, hitAds]);
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3 border-b border-gray-200 bg-white gap-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 gap-2">
         <div className="flex items-center gap-3">
-          <h2 className="text-[15px] font-bold text-gray-900 whitespace-nowrap">ヒット広告分析</h2>
-          <p className="text-[11px] text-gray-400 hidden sm:block">高成長・高スコアの広告をリアルタイムで分析</p>
+          <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">ヒット広告分析</h2>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 hidden sm:block">高成長・高スコアの広告をリアルタイムで分析</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Compare button — B12: navigate to compare tab */}
@@ -601,18 +697,36 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
           {/* B10-2: Bulk download */}
           {selectedIds.length >= 1 && (
             <button
-              onClick={() => {
-                selectedIds.forEach((id) => {
-                  window.open(`/api/v1/media/download/${id}`, "_blank", "noopener,noreferrer");
-                });
-                toast.success(`${selectedIds.length}件のダウンロードを開始`);
+              onClick={async () => {
+                if (bulkDownloading) return;
+                setBulkDownloading(true);
+                try {
+                  const result = await bulkDownloadCreatives(selectedIds);
+                  const skipped = result.skipped_ids?.length || 0;
+                  setBulkDownloadSummary({
+                    fileCount: result.file_count,
+                    skippedCount: skipped,
+                    zipFilename: result.zip_filename,
+                    totalSizeBytes: result.total_size_bytes,
+                  });
+                  toast.success(skipped > 0 ? `${result.file_count}件をDL、${skipped}件をスキップしました` : `${result.file_count}件をZIPでダウンロード`);
+                } catch (error) {
+                  toast.error(getDownloadFailureMessage(error));
+                } finally {
+                  setBulkDownloading(false);
+                }
               }}
-              className="h-8 px-3 rounded-lg text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+              disabled={bulkDownloading}
+              className="h-8 px-3 rounded-lg text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              {selectedIds.length}件DL
+              {bulkDownloading ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-600/30 border-t-emerald-600" />
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+              )}
+              {bulkDownloading ? "ZIP作成中..." : `${selectedIds.length}件ZIP`}
             </button>
           )}
 
@@ -620,31 +734,31 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
           <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode("pro")}
-              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "pro" ? "bg-white shadow-sm text-gray-900 font-medium" : "text-gray-500"}`}
+              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "pro" ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
             >
               PRO
             </button>
             <button
               onClick={() => setViewMode("table")}
-              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "table" ? "bg-white shadow-sm text-gray-900 font-medium" : "text-gray-500"}`}
+              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "table" ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
             >
               テーブル
             </button>
             <button
               onClick={() => setViewMode("card")}
-              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "card" ? "bg-white shadow-sm text-gray-900 font-medium" : "text-gray-500"}`}
+              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "card" ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
             >
               カード
             </button>
             <button
               onClick={() => setViewMode("advertiser")}
-              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "advertiser" ? "bg-white shadow-sm text-gray-900 font-medium" : "text-gray-500"}`}
+              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "advertiser" ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
             >
               広告主別
             </button>
             <button
               onClick={() => setViewMode("gallery")}
-              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "gallery" ? "bg-white shadow-sm text-gray-900 font-medium" : "text-gray-500"}`}
+              className={`px-2 py-1 rounded text-[11px] transition-colors ${viewMode === "gallery" ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
             >
               ギャラリー
             </button>
@@ -683,7 +797,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
           </button>
 
           {/* B29: Dark mode toggle */}
-          <DarkModeToggle />
+          <ThemeToggle compact />
 
           {/* B13: Alerts bell */}
           <AlertsPanel onAdSelect={(adId) => {
@@ -696,7 +810,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
           <div className="relative">
             <button
               onClick={() => setShowExport((v) => !v)}
-              className="h-8 px-3 rounded-lg text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+              className="h-8 px-3 rounded-lg text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1.5"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -704,22 +818,22 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               エクスポート
             </button>
             {showExport && (
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 min-w-[140px]">
+              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20 min-w-[140px]">
                 <button
                   onClick={() => { handleExport("csv"); setShowExport(false); }}
-                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors"
                 >
                   CSV エクスポート
                 </button>
                 <button
                   onClick={() => { handleExport("json"); setShowExport(false); }}
-                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors"
                 >
                   JSON エクスポート
                 </button>
                 <button
                   onClick={() => { handleExport("report"); setShowExport(false); }}
-                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors"
                 >
                   レポート出力
                 </button>
@@ -731,6 +845,29 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
       {/* Content */}
       <div className="flex-1 overflow-auto custom-scrollbar px-5 py-4 space-y-4">
+        {bulkDownloadSummary && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-semibold text-emerald-800">一括ダウンロード結果</p>
+                <p className="mt-0.5 text-[11px] text-emerald-700">
+                  {bulkDownloadSummary.fileCount}件をZIP化
+                  {bulkDownloadSummary.skippedCount > 0 ? ` / ${bulkDownloadSummary.skippedCount}件スキップ` : ""}
+                </p>
+                <p className="mt-0.5 text-[10px] text-emerald-700">
+                  {bulkDownloadSummary.zipFilename} / {(bulkDownloadSummary.totalSizeBytes / 1024 / 1024).toFixed(1)} MB
+                </p>
+              </div>
+              <button
+                onClick={() => setBulkDownloadSummary(null)}
+                className="rounded-md px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* B11: Section tabs */}
         <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 w-fit max-w-full overflow-x-auto scrollbar-none">
           {([
@@ -757,7 +894,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               key={tab.key}
               onClick={() => setSectionTab(tab.key)}
               className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
-                sectionTab === tab.key ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+                sectionTab === tab.key ? "bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-300"
               }`}
             >
               {tab.label}
@@ -823,14 +960,14 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
         {!loading && (hitAds.length > 0 || scoreDistribution) && (
           <div className="card px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] text-gray-400 font-medium">スコア分布</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">スコア分布</p>
               {scoreDistribution && (
                 <div className="flex items-center gap-3">
                   {scoreDistribution.mean != null && (
-                    <span className="text-[9px] text-gray-500">平均: <span className="font-medium text-gray-700">{Math.round(scoreDistribution.mean)}</span></span>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 dark:text-gray-500">平均: <span className="font-medium text-gray-700 dark:text-gray-300">{Math.round(scoreDistribution.mean)}</span></span>
                   )}
                   {scoreDistribution.median != null && (
-                    <span className="text-[9px] text-gray-500">中央値: <span className="font-medium text-gray-700">{scoreDistribution.median}</span></span>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 dark:text-gray-500">中央値: <span className="font-medium text-gray-700 dark:text-gray-300">{scoreDistribution.median}</span></span>
                   )}
                   {scoreDistribution.hit_count != null && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">HIT {scoreDistribution.hit_count}</span>
@@ -852,7 +989,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-[8px] text-gray-400 mt-1">
+            <div className="flex justify-between text-[8px] text-gray-400 dark:text-gray-500 mt-1">
               <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
             </div>
             {apiBuckets && (
@@ -863,15 +1000,87 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
         {/* Filter Bar (B3-2) */}
         {!loading && !isEmpty && hitAds.length > 0 && (
-          <HitAdFilterControls
-            filters={filters}
-            setFilters={setFilters}
-            showFilters={showFilters}
-            setShowFilters={setShowFilters}
-            activeFilterCount={activeFilterCount}
-            filteredCount={filteredAds.length}
-            totalCount={hitAds.length}
-          />
+          <div className="space-y-2">
+            <CreativeLibraryRegressionDashboard onAdSelect={handleAdClick} />
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[12px] font-semibold text-amber-800">復旧待ちキュー</p>
+                  <p className="text-[10px] text-amber-700">DL不可 / スナップショットのみ / LP未解決 を一覧から直接絞り込めます。</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setRecoveryFilter("all")}
+                    className={`rounded px-2.5 py-1 text-[10px] font-medium ${recoveryFilter === "all" ? "bg-amber-700 text-white" : "bg-white text-amber-700"}`}
+                  >
+                    全て
+                  </button>
+                  <button
+                    onClick={() => setRecoveryFilter("needs_recovery")}
+                    className={`rounded px-2.5 py-1 text-[10px] font-medium ${recoveryFilter === "needs_recovery" ? "bg-amber-700 text-white" : "bg-white text-amber-700"}`}
+                  >
+                    復旧待ち {recoveryCounts.needsRecovery}
+                  </button>
+                  <button
+                    onClick={() => setRecoveryFilter("snapshot_only")}
+                    className={`rounded px-2.5 py-1 text-[10px] font-medium ${recoveryFilter === "snapshot_only" ? "bg-blue-700 text-white" : "bg-white text-blue-700"}`}
+                  >
+                    snapshot only {recoveryCounts.snapshotOnly}
+                  </button>
+                  <button
+                    onClick={() => setRecoveryFilter("download_unavailable")}
+                    className={`rounded px-2.5 py-1 text-[10px] font-medium ${recoveryFilter === "download_unavailable" ? "bg-rose-700 text-white" : "bg-white text-rose-700"}`}
+                  >
+                    DL不可 {recoveryCounts.downloadUnavailable}
+                  </button>
+                  <button
+                    onClick={() => setRecoveryFilter("lp_unresolved")}
+                    className={`rounded px-2.5 py-1 text-[10px] font-medium ${recoveryFilter === "lp_unresolved" ? "bg-gray-700 text-white" : "bg-white text-gray-700"}`}
+                  >
+                    LP未解決 {recoveryCounts.lpUnresolved}
+                  </button>
+                </div>
+              </div>
+            </div>
+            {(estimatedCount > 0 || missingNumericCount > 0) && (
+              <div className={`rounded-lg border px-4 py-3 ${realDataCount === 0 ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={`text-[12px] font-semibold ${realDataCount === 0 ? "text-rose-800" : "text-amber-800"}`}>
+                    {realDataCount === 0 ? "実データ未取得" : "数値 provenance"}
+                  </p>
+                  <NumericProvenanceBadge state="real" />
+                  <span className="text-[10px] text-gray-600">{realDataCount}件</span>
+                  <NumericProvenanceBadge state="estimated" />
+                  <span className="text-[10px] text-gray-600">{estimatedCount}件</span>
+                  {missingNumericCount > 0 && (
+                    <>
+                      <NumericProvenanceBadge state="missing" />
+                      <span className="text-[10px] text-gray-600">{missingNumericCount}件</span>
+                    </>
+                  )}
+                </div>
+                <p className={`mt-1 text-[10px] ${realDataCount === 0 ? "text-rose-700" : "text-amber-700"}`}>
+                  {realDataCount === 0
+                    ? "estimated_only / 実データ未取得。消化額は推定表示です。"
+                    : estimatedCount > 0
+                      ? "推定値を含みます。実測バッジのない spend は比較時に注意してください。"
+                      : "一部数値は backfill 中です。"}
+                  {missingNumericCount > 0 ? " missing_numeric_count > 0 / backfill待ち。" : ""}
+                </p>
+              </div>
+            )}
+
+            <HitAdFilterControls
+              filters={filters}
+              setFilters={setFilters}
+              showFilters={showFilters}
+              setShowFilters={setShowFilters}
+              activeFilterCount={activeFilterCount}
+              filteredCount={filteredAds.length}
+              totalCount={hitAds.length}
+            />
+          </div>
         )}
 
         {/* Winning Pattern Analysis */}
@@ -881,24 +1090,24 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               <svg className="w-4 h-4 text-[#4A7DFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
               </svg>
-              <h3 className="text-[13px] font-bold text-gray-900">勝ちパターン分析</h3>
-              <span className="text-[10px] text-gray-400">ヒット広告{hitOnly.length}件の共通傾向</span>
+              <h3 className="text-[13px] font-bold text-gray-900 dark:text-gray-100">勝ちパターン分析</h3>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">ヒット広告{hitOnly.length}件の共通傾向</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Genre breakdown */}
               <div>
-                <p className="text-[10px] text-gray-400 font-medium mb-2">ジャンル分布</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-2">ジャンル分布</p>
                 <div className="space-y-1.5">
                   {sortedGenres.slice(0, 4).map(([genre, count]) => {
                     const pct = Math.round((count / hitOnly.length) * 100);
                     return (
                       <div key={genre} className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-600 w-16 truncate" title={genreLabel(genre)}>{genreLabel(genre)}</span>
+                        <span className="text-[10px] text-gray-600 dark:text-gray-300 w-16 truncate" title={genreLabel(genre)}>{genreLabel(genre)}</span>
                         <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-[#4A7DFF]" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-[10px] text-gray-500 w-8 text-right">{pct}%</span>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 w-8 text-right">{pct}%</span>
                       </div>
                     );
                   })}
@@ -907,7 +1116,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
               {/* Platform breakdown */}
               <div>
-                <p className="text-[10px] text-gray-400 font-medium mb-2">媒体分布</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-2">媒体分布</p>
                 <div className="space-y-1.5">
                   {sortedPlatforms.slice(0, 4).map(([plat, count]) => {
                     const pct = Math.round((count / hitOnly.length) * 100);
@@ -919,7 +1128,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                         <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-[10px] text-gray-500 w-8 text-right">{pct}%</span>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 w-8 text-right">{pct}%</span>
                       </div>
                     );
                   })}
@@ -928,22 +1137,22 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
               {/* Key metrics */}
               <div>
-                <p className="text-[10px] text-gray-400 font-medium mb-2">ヒット広告の平均値</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-2">ヒット広告の平均値</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between py-1 border-b border-gray-50">
-                    <span className="text-[10px] text-gray-500">消化額増加/週</span>
-                    <span className="text-[11px] font-semibold text-gray-900">{formatYen(avgSpendIncrease)}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">消化額増加/週</span>
+                    <span className="text-[11px] font-semibold text-gray-900 dark:text-gray-100">{formatYen(avgSpendIncrease)}</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-gray-50">
-                    <span className="text-[10px] text-gray-500">再生数増加/週</span>
-                    <span className="text-[11px] font-semibold text-gray-900">{formatNumber(avgViewIncrease)}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">再生数増加/週</span>
+                    <span className="text-[11px] font-semibold text-gray-900 dark:text-gray-100">{formatNumber(avgViewIncrease)}</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-gray-50">
-                    <span className="text-[10px] text-gray-500">平均ヒットスコア</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">平均ヒットスコア</span>
                     <span className="text-[11px] font-semibold text-[#4A7DFF]">{avgHitScore}/100</span>
                   </div>
                   <div className="flex items-center justify-between py-1">
-                    <span className="text-[10px] text-gray-500">トップジャンル</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">トップジャンル</span>
                     <span className="badge-blue text-[9px]">{sortedGenres[0] ? genreLabel(sortedGenres[0][0]) : "-"}</span>
                   </div>
                 </div>
@@ -966,20 +1175,20 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 <svg className="w-4 h-4 text-[#4A7DFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                 </svg>
-                <h3 className="text-[13px] font-bold text-gray-900">ジャンル比較</h3>
-                <span className="text-[10px] text-gray-400">{sorted.length}ジャンルの広告数・平均スコア比較</span>
+                <h3 className="text-[13px] font-bold text-gray-900 dark:text-gray-100">ジャンル比較</h3>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500">{sorted.length}ジャンルの広告数・平均スコア比較</span>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Ad count bar chart */}
                 <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-2">広告数</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-2">広告数</p>
                   <div className="space-y-1.5">
                     {sorted.map((g, i) => {
                       const count = Number(g.ad_count || g.total_ads || 0);
                       const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
                       return (
                         <div key={String(g.genre) || i} className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
+                          <span className="text-[10px] text-gray-600 dark:text-gray-300 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
                             {genreLabel(g.genre as string)}
                           </span>
                           <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden relative">
@@ -987,7 +1196,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                               className="h-full rounded bg-[#4A7DFF] transition-all"
                               style={{ width: `${pct}%` }}
                             />
-                            <span className="absolute inset-y-0 right-1.5 flex items-center text-[9px] font-medium text-gray-600">
+                            <span className="absolute inset-y-0 right-1.5 flex items-center text-[9px] font-medium text-gray-600 dark:text-gray-300">
                               {count}
                             </span>
                           </div>
@@ -998,7 +1207,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                 </div>
                 {/* Average score bar chart */}
                 <div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-2">平均スコア</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-2">平均スコア</p>
                   <div className="space-y-1.5">
                     {sorted.map((g, i) => {
                       const score = Math.round(Number(g.avg_score || g.avg_hit_score || 0));
@@ -1007,7 +1216,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                       const hitRate = rawHitRate != null ? Math.round(rawHitRate <= 1 ? rawHitRate * 100 : rawHitRate) : null;
                       return (
                         <div key={String(g.genre) || i} className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
+                          <span className="text-[10px] text-gray-600 dark:text-gray-300 w-20 truncate shrink-0" title={genreLabel(g.genre as string)}>
                             {genreLabel(g.genre as string)}
                           </span>
                           <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden relative">
@@ -1018,10 +1227,10 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                 backgroundColor: score >= 70 ? "#ef4444" : score >= 45 ? "#f59e0b" : "#4A7DFF",
                               }}
                             />
-                            <span className="absolute inset-y-0 right-1.5 flex items-center text-[9px] font-medium text-gray-600">
+                            <span className="absolute inset-y-0 right-1.5 flex items-center text-[9px] font-medium text-gray-600 dark:text-gray-300">
                               {score}
                               {hitRate != null && (
-                                <span className="ml-1 text-[8px] text-gray-400">({hitRate}%HIT)</span>
+                                <span className="ml-1 text-[8px] text-gray-400 dark:text-gray-500">({hitRate}%HIT)</span>
                               )}
                             </span>
                           </div>
@@ -1077,7 +1286,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
               ))}
             </div>
             {/* Skeleton table rows */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
               <div className="overflow-x-auto">
                 <table className="data-table">
                   <thead>
@@ -1123,8 +1332,8 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
             <svg className="w-14 h-14 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
             </svg>
-            <p className="text-[14px] font-medium text-gray-600 mb-1">ランキングデータがありません</p>
-            <p className="text-[12px] text-gray-400 mb-2 max-w-sm">
+            <p className="text-[14px] font-medium text-gray-600 dark:text-gray-300 mb-1">ランキングデータがありません</p>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-2 max-w-sm">
               広告データをクロールしてから、ランキングを計算するとヒット広告が自動で検出されます。
             </p>
             <p className="text-[10px] text-gray-300 mb-5">ランキング計算には通常1-2分かかります</p>
@@ -1154,12 +1363,12 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
 
         {/* B8: Hit Ads — Gallery View */}
         {!loading && !isEmpty && filteredAds.length > 0 && viewMode === "gallery" && (
-          <CreativeGalleryView ads={filteredAds} onAdSelect={handleAdClick} />
+          <CreativeGalleryView ads={filteredAds} onAdSelect={handleAdClick} onRecoveryRequest={handleAdClick} />
         )}
 
         {/* Hit Ads — Table View */}
         {!loading && !isEmpty && filteredAds.length > 0 && viewMode === "table" && (
-          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
@@ -1226,7 +1435,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                         {/* Rank */}
                         <td>
                           <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${
-                            ad.rank <= 3 ? "bg-[#4A7DFF] text-white" : "bg-gray-100 text-gray-500"
+                            ad.rank <= 3 ? "bg-[#4A7DFF] text-white" : "bg-gray-100 text-gray-500 dark:text-gray-400 dark:text-gray-500"
                           }`}>
                             {ad.rank}
                           </span>
@@ -1270,7 +1479,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                         {/* Product Name + HIT badge + description */}
                         <td>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[13px] font-medium text-gray-900 truncate max-w-[200px]">
+                            <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]">
                               {ad.product_name}
                             </span>
                             {ad.hit_level === "mega_hit" ? (
@@ -1284,7 +1493,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                             ) : null}
                           </div>
                           {ad.description && (
-                            <p className="text-[10px] text-gray-400 truncate max-w-[240px] mt-0.5" title={ad.description}>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[240px] mt-0.5" title={ad.description}>
                               {ad.description}
                             </p>
                           )}
@@ -1322,7 +1531,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                   }}
                                 />
                               </div>
-                              <span className="text-[11px] font-semibold text-gray-700 w-7 text-right">{ad.hit_score || 0}</span>
+                              <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 w-7 text-right">{ad.hit_score || 0}</span>
                             </div>
                             {/* Score breakdown popover */}
                             {scoreDetailAdId === ad.ad_id && (
@@ -1340,23 +1549,23 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                     {scoreDetail.signals && Object.entries(scoreDetail.signals).map(([key, sig]: [string, any]) => (
                                       <div key={key} className="mb-1.5">
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[9px] w-16 text-gray-500">{signalLabels[key] || key}</span>
+                                          <span className="text-[9px] w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{signalLabels[key] || key}</span>
                                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                             <div
                                               className="h-full rounded-full"
                                               style={{ width: `${sig.max > 0 ? (sig.score / sig.max) * 100 : 0}%`, backgroundColor: signalColors[key] || "#6b7280" }}
                                             />
                                           </div>
-                                          <span className="text-[9px] text-gray-600 w-10 text-right">{sig.score}/{sig.max}</span>
+                                          <span className="text-[9px] text-gray-600 dark:text-gray-300 w-10 text-right">{sig.score}/{sig.max}</span>
                                         </div>
                                         {sig.detail && (
-                                          <p className="text-[8px] text-gray-400 ml-[72px] mt-0.5">{sig.detail}</p>
+                                          <p className="text-[8px] text-gray-400 dark:text-gray-500 ml-[72px] mt-0.5">{sig.detail}</p>
                                         )}
                                       </div>
                                     ))}
                                   </>
                                 ) : (
-                                  <p className="text-[11px] text-gray-400">データなし</p>
+                                  <p className="text-[11px] text-gray-400 dark:text-gray-500">データなし</p>
                                 )}
                               </div>
                             )}
@@ -1383,7 +1592,7 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                   <div className="h-full bg-pink-400 rounded-sm" style={{ width: `${(sb.trend / 10) * 100}%` }} title={`トレンド: ${sb.trend}/10`} />
                                 )}
                               </div>
-                              <p className="text-[8px] text-gray-400 mt-0.5">{ad.hit_score}/100</p>
+                              <p className="text-[8px] text-gray-400 dark:text-gray-500 mt-0.5">{ad.hit_score}/100</p>
                             </div>
                           ) : (
                             <span className="text-[10px] text-gray-300">-</span>
@@ -1391,41 +1600,50 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                         </td>
                         {/* Trend Score */}
                         <td className="text-right">
-                          <span className="text-[12px] font-medium text-gray-700">{ad.trend_score || 0}</span>
+                          <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">{ad.trend_score || 0}</span>
                         </td>
                         {/* Spend Increase */}
                         <td className="text-right">
-                          <span className="text-[13px] font-semibold text-gray-900">{formatYen(ad.spend_increase || 0)}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">{formatYen(ad.spend_increase || 0)}</span>
+                            <NumericProvenanceBadge state={getSpendState(ad)} />
+                          </div>
                         </td>
                         {/* Cumulative Spend */}
                         <td className="text-right">
-                          <span className="text-[12px] text-gray-500">{formatYen(ad.cumulative_spend || 0)}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[12px] text-gray-500 dark:text-gray-400 dark:text-gray-500">{formatYen(ad.cumulative_spend || 0)}</span>
+                            <NumericProvenanceBadge state={getSpendState(ad)} />
+                          </div>
                         </td>
                         {/* View Increase */}
                         <td className="text-right">
-                          <span className="text-[13px] font-medium text-gray-700">{formatNumber(ad.view_increase || 0)}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300">{formatNumber(ad.view_increase || 0)}</span>
+                            <NumericProvenanceBadge state={getViewState(ad)} />
+                          </div>
                         </td>
                         {/* Cumulative Views */}
                         <td className="text-right">
-                          <span className="text-[12px] text-gray-500">{formatNumber(ad.cumulative_views || 0)}</span>
+                          <span className="text-[12px] text-gray-500 dark:text-gray-400 dark:text-gray-500">{formatNumber(ad.cumulative_views || 0)}</span>
                         </td>
                         {/* Like Count */}
                         <td className="text-right">
-                          <span className="text-[12px] text-gray-600">{formatNumber(ad.like_count || 0)}</span>
+                          <span className="text-[12px] text-gray-600 dark:text-gray-300">{formatNumber(ad.like_count || 0)}</span>
                         </td>
                         {/* Published Date */}
                         <td>
-                          <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500 whitespace-nowrap">
                             {ad.published_date ? new Date(ad.published_date).toLocaleDateString("ja-JP") : "-"}
                           </span>
                         </td>
                         {/* Days Running */}
                         <td>
                           <div className="flex items-center gap-1">
-                            <span className="text-[12px] font-medium text-gray-700">
+                            <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
                               {ad.days_running || "-"}
                               {ad.days_running != null && (
-                                <span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">日</span>
                               )}
                             </span>
                             {ad.is_still_running && (
@@ -1478,11 +1696,11 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                           <td colSpan={19} className="p-0">
                             <div className="px-4 py-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-between">
-                                <p className="text-[12px] font-bold text-gray-900">
+                                <p className="text-[12px] font-bold text-gray-900 dark:text-gray-100">
                                   {advertiserDetail?.advertiser_name || ad.advertiser_name} の広告分析
                                 </p>
                                 <button
-                                  className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                                  className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 dark:text-gray-300 transition-colors"
                                   onClick={(e) => { e.stopPropagation(); setSelectedAdvertiser(null); setAdvertiserDetail(null); setAdvertiserExpandAdId(null); }}
                                 >
                                   閉じる
@@ -1501,33 +1719,33 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                   <div className="flex items-center gap-4">
                                     {advertiserDetail.total_ads != null && (
                                       <div className="text-center">
-                                        <p className="text-[16px] font-bold text-gray-900">{advertiserDetail.total_ads}</p>
-                                        <p className="text-[9px] text-gray-400">広告数</p>
+                                        <p className="text-[16px] font-bold text-gray-900 dark:text-gray-100">{advertiserDetail.total_ads}</p>
+                                        <p className="text-[9px] text-gray-400 dark:text-gray-500">広告数</p>
                                       </div>
                                     )}
                                     {advertiserDetail.active_count != null && (
                                       <div className="text-center">
                                         <p className="text-[16px] font-bold text-emerald-600">{advertiserDetail.active_count}</p>
-                                        <p className="text-[9px] text-gray-400">アクティブ</p>
+                                        <p className="text-[9px] text-gray-400 dark:text-gray-500">アクティブ</p>
                                       </div>
                                     )}
                                     {advertiserDetail.avg_score != null && (
                                       <div className="text-center">
                                         <p className="text-[16px] font-bold text-[#4A7DFF]">{Math.round(advertiserDetail.avg_score)}</p>
-                                        <p className="text-[9px] text-gray-400">平均スコア</p>
+                                        <p className="text-[9px] text-gray-400 dark:text-gray-500">平均スコア</p>
                                       </div>
                                     )}
                                     {advertiserDetail.total_spend != null && (
                                       <div className="text-center">
-                                        <p className="text-[16px] font-bold text-gray-900">{formatYen(advertiserDetail.total_spend)}</p>
-                                        <p className="text-[9px] text-gray-400">推定消化額</p>
+                                        <p className="text-[16px] font-bold text-gray-900 dark:text-gray-100">{formatYen(advertiserDetail.total_spend)}</p>
+                                        <p className="text-[9px] text-gray-400 dark:text-gray-500">推定消化額</p>
                                       </div>
                                     )}
                                   </div>
                                   {/* Hit ads list */}
                                   {advertiserDetail.hit_ads && advertiserDetail.hit_ads.length > 0 && (
                                     <div>
-                                      <p className="text-[10px] text-gray-500 font-medium mb-1">ヒット広告</p>
+                                      <p className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium mb-1">ヒット広告</p>
                                       <div className="flex flex-wrap gap-1.5">
                                         {advertiserDetail.hit_ads.slice(0, 8).map((ha: { ad_id: number; product_name?: string; title?: string; hit_score?: number }) => (
                                           <button
@@ -1545,12 +1763,12 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
                                   {/* Non-hit ads list */}
                                   {advertiserDetail.non_hit_ads && advertiserDetail.non_hit_ads.length > 0 && (
                                     <div>
-                                      <p className="text-[10px] text-gray-500 font-medium mb-1">その他の広告</p>
+                                      <p className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium mb-1">その他の広告</p>
                                       <div className="flex flex-wrap gap-1.5">
                                         {advertiserDetail.non_hit_ads.slice(0, 6).map((na: { ad_id: number; product_name?: string; title?: string; hit_score?: number }) => (
                                           <button
                                             key={na.ad_id}
-                                            className="text-[9px] px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors truncate max-w-[160px]"
+                                            className="text-[9px] px-2 py-1 rounded bg-gray-100 text-gray-600 dark:text-gray-300 hover:bg-gray-200 transition-colors truncate max-w-[160px]"
                                             onClick={(e) => { e.stopPropagation(); onAdSelect(na.ad_id); }}
                                             title={na.product_name || na.title}
                                           >
@@ -1581,17 +1799,17 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
             {advertiserStats.map((adv) => (
               <div key={adv.name} className="card px-4 py-3 cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => { const first = adv.ads[0]; if (first) handleAdClick(first.ad_id); }}>
-                <p className="text-[13px] font-bold text-gray-900 truncate">{adv.name}</p>
+                <p className="text-[13px] font-bold text-gray-900 dark:text-gray-100 truncate">{adv.name}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[22px] font-bold text-[#4A7DFF]">{adv.avgScore}</span>
-                  <span className="text-[10px] text-gray-400">avg score</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">avg score</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <span className="text-[10px] text-gray-500">{adv.ads.length}件</span>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">{adv.ads.length}件</span>
                   {adv.megaHits > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">大HIT {adv.megaHits}</span>}
                   {adv.hits > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">HIT {adv.hits}</span>}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">週間消化額増加 {formatYen(adv.totalSpend)}</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">週間消化額増加 {formatYen(adv.totalSpend)}</p>
               </div>
             ))}
           </div>
@@ -1603,8 +1821,8 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
             <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
-            <p className="text-[13px] text-gray-500 mb-1">条件に一致する広告がありません</p>
-            <p className="text-[11px] text-gray-400 mb-4">フィルター条件を変更するか、全ジャンルを表示してください</p>
+            <p className="text-[13px] text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-1">条件に一致する広告がありません</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-4">フィルター条件を変更するか、全ジャンルを表示してください</p>
             <div className="flex items-center gap-2 flex-wrap justify-center">
               <button onClick={() => setSelectedGenre("all")} className="btn-secondary text-[12px] px-3 py-1.5">
                 全ジャンルを表示
@@ -1657,6 +1875,9 @@ export default function HitAdAnalysisView({ onAdSelect }: HitAdAnalysisViewProps
         <AdDetailModal
           ad={detailAd}
           onClose={() => setDetailAd(null)}
+          onRecoveryQueued={() => {
+            void fetchData();
+          }}
           onAdSelect={(adId) => {
             setDetailAd(null);
             onAdSelect(adId);

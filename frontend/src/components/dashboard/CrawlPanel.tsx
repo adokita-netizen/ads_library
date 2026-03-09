@@ -9,6 +9,8 @@ import { fetchApi } from "@/lib/api";
 interface CrawlJob {
   job_id?: string;
   id?: string;
+  job_type?: string;
+  job_source?: string;
   query?: string;
   keyword?: string;
   status: string;
@@ -28,6 +30,29 @@ interface QuickCrawlResponse {
   total_ads_found?: number;
 }
 
+interface CrawlDiagnostics {
+  summary?: {
+    total_jobs?: number;
+    success_rate?: number;
+    zero_save_completed?: number;
+    zero_save_rate_among_completed?: number;
+    learned_attempts?: number;
+    learned_success_rate?: number;
+    platform_expansion_attempts?: number;
+    platform_expansion_success_rate?: number;
+    learning_entries?: number;
+    job_types?: Record<string, number>;
+    job_sources?: Record<string, number>;
+  };
+  zero_save_causes?: Record<string, number>;
+  platforms?: Array<{
+    platform?: string;
+    zero_save_rate?: number;
+    failure_rate?: number;
+    completed?: number;
+  }>;
+}
+
 interface CrawlPanelProps {
   onCrawlComplete?: () => void;
 }
@@ -41,6 +66,7 @@ export default function CrawlPanel({ onCrawlComplete }: CrawlPanelProps) {
   const [crawlResult, setCrawlResult] = useState<QuickCrawlResponse | null>(null);
   const [recentJobs, setRecentJobs] = useState<CrawlJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<CrawlDiagnostics | null>(null);
 
   // Fetch recent crawl jobs
   const fetchJobs = useCallback(async () => {
@@ -51,9 +77,14 @@ export default function CrawlPanel({ onCrawlComplete }: CrawlPanelProps) {
       );
       const jobs = Array.isArray(data) ? data : (data.jobs || data.items || []);
       setRecentJobs(jobs.slice(0, 5));
+      const diag = await fetchApi<CrawlDiagnostics>("/rankings/crawl-status/diagnostics", {
+        params: { hours: 24, limit: 200 },
+      });
+      setDiagnostics(diag);
     } catch {
       // Silently fail -- endpoint may not exist yet
       setRecentJobs([]);
+      setDiagnostics(null);
     } finally {
       setJobsLoading(false);
     }
@@ -122,6 +153,59 @@ export default function CrawlPanel({ onCrawlComplete }: CrawlPanelProps) {
     } catch {
       return dateStr;
     }
+  };
+
+  const jobTypeLabel = (jobType?: string): { text: string; className: string } | null => {
+    switch (jobType) {
+      case "quick_crawl":
+        return { text: "Quick", className: "bg-indigo-50 text-indigo-700 border border-indigo-200" };
+      case "inline":
+        return { text: "Inline", className: "bg-orange-50 text-orange-700 border border-orange-200" };
+      case "manual":
+        return { text: "手動", className: "bg-sky-50 text-sky-700 border border-sky-200" };
+      case "scheduled":
+        return { text: "定期", className: "bg-slate-100 text-slate-700 border border-slate-200" };
+      default:
+        return null;
+    }
+  };
+
+  const jobSourceLabel = (jobSource?: string): string | null => {
+    switch (jobSource) {
+      case "rankings_quick_crawl":
+        return "rankings";
+      case "live_ingestion_inline":
+        return "live";
+      case "ads_inline_fallback":
+        return "manual";
+      case "crawl_ads_task":
+        return "worker";
+      default:
+        return null;
+    }
+  };
+
+  const summarizeError = (raw?: string | null): { text: string; className: string } | null => {
+    const message = String(raw || "").trim();
+    if (!message) return null;
+
+    const normalized = message.toLowerCase();
+    if (normalized.includes("timeout")) {
+      return { text: "timeout", className: "bg-rose-50 text-rose-700 border border-rose-200" };
+    }
+    if (normalized.includes("401") || normalized.includes("auth") || normalized.includes("token")) {
+      return { text: "auth", className: "bg-amber-50 text-amber-700 border border-amber-200" };
+    }
+    if (normalized.includes("429") || normalized.includes("rate")) {
+      return { text: "rate_limit", className: "bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200" };
+    }
+    if (normalized.includes("browser") || normalized.includes("chromium") || normalized.includes("playwright")) {
+      return { text: "browser", className: "bg-violet-50 text-violet-700 border border-violet-200" };
+    }
+    if (normalized.includes("network") || normalized.includes("connect") || normalized.includes("dns")) {
+      return { text: "network", className: "bg-cyan-50 text-cyan-700 border border-cyan-200" };
+    }
+    return { text: "error", className: "bg-gray-100 text-gray-700 border border-gray-200" };
   };
 
   return (
@@ -218,14 +302,37 @@ export default function CrawlPanel({ onCrawlComplete }: CrawlPanelProps) {
             <div className="space-y-1">
               {recentJobs.map((job, i) => {
                 const sl = statusLabel(job.status);
+                const jt = jobTypeLabel(job.job_type);
+                const sourceLabel = jobSourceLabel(job.job_source);
+                const errorSummary = summarizeError(job.error_message);
                 return (
                   <div key={job.job_id || job.id || i} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-b-0">
-                    <span className="text-[11px] text-gray-700 font-medium truncate max-w-[160px]">
-                      {job.query || job.keyword || "-"}
-                    </span>
+                    <div className="min-w-0 flex items-center gap-1.5">
+                      <span className="text-[11px] text-gray-700 font-medium truncate max-w-[140px]">
+                        {job.query || job.keyword || "-"}
+                      </span>
+                      {jt && (
+                        <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-semibold ${jt.className}`}>
+                          {jt.text}
+                        </span>
+                      )}
+                      {sourceLabel && (
+                        <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">
+                          {sourceLabel}
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${sl.className}`}>
                       {sl.text}
                     </span>
+                    {job.status === "failed" && errorSummary && (
+                      <span
+                        className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium ${errorSummary.className}`}
+                        title={job.error_message || undefined}
+                      >
+                        {errorSummary.text}
+                      </span>
+                    )}
                     {(job.total_ads_found != null || job.ads_found != null) && (
                       <span className="text-[10px] text-gray-500">
                         {job.total_ads_found ?? job.ads_found}件
@@ -238,6 +345,47 @@ export default function CrawlPanel({ onCrawlComplete }: CrawlPanelProps) {
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {diagnostics?.summary && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-[10px] font-semibold text-amber-800">クロール健全性 (24h)</p>
+          <p className="text-[11px] text-amber-700 mt-0.5">
+            成功率 {(Number(diagnostics.summary.success_rate || 0) * 100).toFixed(1)}% / 保存0件率{" "}
+            {(Number(diagnostics.summary.zero_save_rate_among_completed || 0) * 100).toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-amber-700 mt-0.5">
+            学習クエリ: {Number(diagnostics.summary.learned_attempts || 0)}回 / 成功率{" "}
+            {(Number(diagnostics.summary.learned_success_rate || 0) * 100).toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-amber-700 mt-0.5">
+            媒体拡張: {Number(diagnostics.summary.platform_expansion_attempts || 0)}回 / 成功率{" "}
+            {(Number(diagnostics.summary.platform_expansion_success_rate || 0) * 100).toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-amber-700 mt-0.5">
+            学習辞書エントリ: {Number(diagnostics.summary.learning_entries || 0)} 件
+          </p>
+          {diagnostics.summary.job_types && Object.keys(diagnostics.summary.job_types).length > 0 && (
+            <p className="text-[10px] text-amber-700 mt-0.5">
+              経路内訳: {Object.entries(diagnostics.summary.job_types)
+                .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+                .map(([key, count]) => `${jobTypeLabel(key)?.text || key}:${count}`)
+                .join(" / ")}
+            </p>
+          )}
+          {diagnostics.zero_save_causes && Object.keys(diagnostics.zero_save_causes).length > 0 && (
+            <p className="text-[10px] text-amber-700 mt-0.5">
+              主因: {Object.entries(diagnostics.zero_save_causes).sort((a, b) => b[1] - a[1])[0][0]}
+            </p>
+          )}
+          {diagnostics.platforms && diagnostics.platforms.length > 0 && (
+            <p className="text-[10px] text-amber-700 mt-0.5">
+              要注意媒体: {diagnostics.platforms
+                .filter((p) => Number(p.completed || 0) > 0)
+                .sort((a, b) => Number(b.zero_save_rate || 0) - Number(a.zero_save_rate || 0))[0]?.platform || "n/a"}
+            </p>
           )}
         </div>
       )}

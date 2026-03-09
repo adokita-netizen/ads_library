@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ゲーム・エンタメ - Hit Ad Creatives & LP Report</title>
+<style>
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">&larr; All Genres</a>
+<h1>ゲーム・エンタメ</h1>
+<p class="summary">gaming_entertainment | 31 ads | Avg views: 26.0K</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">31</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">With Creative</div></div>
+    <div class="stat-card"><div class="stat-value">31</div><div class="stat-label">LP URL</div></div>
+    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">LP Analyzed</div></div>
+    <div class="stat-card"><div class="stat-value">18</div><div class="stat-label">Hit Scored</div></div>
+</div>
+
+<h2>Creative Patterns (this genre)</h2>
+<p class="summary">Common hooks, CTAs, emotions, and LP features found in ゲーム・エンタメ ads</p>
+<div class="pattern-grid">
+    <div class="pattern-card">
+        <h4>Hook Type</h4>
+        
+        <div class="pattern-item">
+            <span>statistic</span>
+            <span style="color:#f59e0b;font-weight:600">32%</span>
+        </div>
+        <div class="pattern-bar" style="width:32.25806451612903%;background:#f59e0b"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>CTA Type</h4>
+        
+        <div class="pattern-item">
+            <span>free_trial</span>
+            <span style="color:#22c55e;font-weight:600">35%</span>
+        </div>
+        <div class="pattern-bar" style="width:35.483870967741936%;background:#22c55e"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Emotion</h4>
+        
+        <div class="pattern-item">
+            <span>fear</span>
+            <span style="color:#8b5cf6;font-weight:600">32%</span>
+        </div>
+        <div class="pattern-bar" style="width:32.25806451612903%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>neutral</span>
+            <span style="color:#8b5cf6;font-weight:600">23%</span>
+        </div>
+        <div class="pattern-bar" style="width:22.58064516129032%;background:#8b5cf6"></div>
+        <div class="pattern-item">
+            <span>relief</span>
+            <span style="color:#8b5cf6;font-weight:600">3%</span>
+        </div>
+        <div class="pattern-bar" style="width:3.225806451612903%;background:#8b5cf6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>Ad Features</h4>
+        
+        <div class="pattern-item">
+            <span>before_after</span>
+            <span style="color:#3b82f6;font-weight:600">35%</span>
+        </div>
+        <div class="pattern-bar" style="width:35.483870967741936%;background:#3b82f6"></div>
+        <div class="pattern-item">
+            <span>emoji</span>
+            <span style="color:#3b82f6;font-weight:600">32%</span>
+        </div>
+        <div class="pattern-bar" style="width:32.25806451612903%;background:#3b82f6"></div>
+    </div>
+    <div class="pattern-card">
+        <h4>LP Destination</h4>
+        
+        <div class="pattern-item">
+            <span>LP</span>
+            <span style="color:#60a5fa;font-weight:600">100%</span>
+        </div>
+        <div class="pattern-bar" style="width:100.0%;background:#60a5fa"></div>
+    </div></div>
+
+<div class="genre-nav"><a href="short_drama.html" >ショートドラマ (310)</a> <a href="hair_removal.html" >脱毛 (185)</a> <a href="hair_growth_aga.html" >育毛・AGA (84)</a> <a href="skincare.html" >スキンケア (75)</a> <a href="fitness.html" >フィットネス (58)</a> <a href="education_school.html" >教育・スクール (40)</a> <a href="health_food.html" >健康食品 (31)</a> <a href="gaming_entertainment.html" class=active>ゲーム・エンタメ (31)</a> <a href="ec_shopping.html" >EC通販 (29)</a> <a href="app.html" >アプリ (17)</a> <a href="other.html" >その他 (14)</a> <a href="finance_investment.html" >金融・投資 (14)</a> <a href="medical_weight_loss.html" >医療痩身 (10)</a> <a href="jobs_recruitment.html" >転職・求人 (7)</a> <a href="yoga_pilates.html" >ヨガ・ピラティス (5)</a> <a href="diet_supplement.html" >ダイエットサプリ (4)</a> <a href="beauty_clinic.html" >美容クリニック (3)</a> <a href="protein_supplement.html" >プロテイン (3)</a> <a href="manga_webtoon.html" >マンガ・ウェブトゥーン (2)</a></div>
+
+<h2>All Ads (by views)</h2>
+<div class="ad-grid">
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1385168589799802&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#1</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">🔥 Pre-register today and claim your free SSR hero!
+🎁 Limited-time reward – grab it before it’s gone!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>City of Hunt-Ⅱ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1385168589799802&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1141636471468377&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#2</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">🔥 Pre-register today and claim your free SSR hero!
+🎁 Limited-time reward – grab it before it’s gone!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>City of Hunt-Ⅱ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1141636471468377&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=841647918281971&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#3</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">🔥 Pre-register today and claim your free SSR hero!
+🎁 Limited-time reward – grab it before it’s gone!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>City of Hunt-Ⅱ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=841647918281971&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=3948285362128975&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#4</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-9</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=3948285362128975&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1919898671906775&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#5</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-9</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1919898671906775&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1740583249950424&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#6</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-10</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1740583249950424&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/hYTW7qun2" target="_blank">https://landing.killingloop.com/fb/hYTW7qun2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1155494279474488&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#7</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-9</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1155494279474488&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1137392935126528&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#8</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-10</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1137392935126528&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/hYTW7qun2" target="_blank">https://landing.killingloop.com/fb/hYTW7qun2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=828409883108729&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#9</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-9</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=828409883108729&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/a40SBxmW1" target="_blank">https://landing.killingloop.com/fb/a40SBxmW1</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=816091311134734&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#10</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-10</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=816091311134734&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/hYTW7qun2" target="_blank">https://landing.killingloop.com/fb/hYTW7qun2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=775147654941445&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#11</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-10</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=775147654941445&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/hYTW7qun2" target="_blank">https://landing.killingloop.com/fb/hYTW7qun2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=734084536369861&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#12</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">⚡ Prepare to dominate the battlefield! 🏆
+🌍 Face players from all over the world!
+🎴 Pre-register now and prove your skills!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>Pnun-10</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=734084536369861&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/fb/hYTW7qun2" target="_blank">https://landing.killingloop.com/fb/hYTW7qun2</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1360187978905219&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#13</span>
+            <div class="ad-title">🚀 2025’s #1 mobile game is coming soon!</div>
+            <div class="ad-desc">🔥 Pre-register today and claim your free SSR hero!
+🎁 Limited-time reward – grab it before it’s gone!</div>
+            <div class="ad-meta"><span class="badge-views">53.8K views</span><span>City of Hunt-Ⅱ</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1360187978905219&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+        
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://landing.killingloop.com/a40SBxmW1/fb" target="_blank">https://landing.killingloop.com/a40SBxmW1/fb</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=887803030466239&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#14</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">14.0K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=887803030466239&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:5)
+        <div class="score-bar"><div class="score-seg" style="width:7.4074074074074066%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:92.59259259259258%;background:#3b82f6" title="spend: 5"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=877446928203472&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#15</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">14.0K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=877446928203472&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:5)
+        <div class="score-bar"><div class="score-seg" style="width:7.4074074074074066%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:92.59259259259258%;background:#3b82f6" title="spend: 5"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=861331070107340&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#16</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">11.7K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=861331070107340&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:1, spend:5)
+        <div class="score-bar"><div class="score-seg" style="width:12.962962962962962%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:87.03703703703704%;background:#3b82f6" title="spend: 5"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=858392746965001&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#17</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">11.7K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=858392746965001&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:5)
+        <div class="score-bar"><div class="score-seg" style="width:7.8431372549019605%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:92.15686274509804%;background:#3b82f6" title="spend: 5"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=789377347557621&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#18</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">11.3K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=789377347557621&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:4)
+        <div class="score-bar"><div class="score-seg" style="width:8.16326530612245%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:91.83673469387755%;background:#3b82f6" title="spend: 4"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=768835925663032&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#19</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">11.3K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=768835925663032&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:4)
+        <div class="score-bar"><div class="score-seg" style="width:8.16326530612245%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:91.83673469387755%;background:#3b82f6" title="spend: 4"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=799510936483219&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#20</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">10.9K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=799510936483219&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">5</strong> (longevity:0, spend:4)
+        <div class="score-bar"><div class="score-seg" style="width:8.333333333333332%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:91.66666666666666%;background:#3b82f6" title="spend: 4"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=880455981262118&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#21</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">6.2K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=880455981262118&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:13.793103448275861%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:86.20689655172414%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=758657276825051&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#22</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">6.2K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=758657276825051&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:21.874999999999996%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:78.125%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=880433718209700&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#23</span>
+            <div class="ad-title">ここをクリックして無料でお読みください！</div>
+            <div class="ad-desc">事故の後、恋人の柏原諒助（かしわら りょうすけ）が記憶喪失になった。
+
+朗報：それは嘘。 
+
+凶報：諒助の仕組んだドッキリだった。
+
+「茜、俺たちのことは全部忘れた。忘れられるってことは、それだけどうでもいいってことだろ？
+
+分かった？」
+
+諒助はベッドにもたれかかり、端正な顔立ちには苛立ちが滲んでいた。まるで、西園寺茜（さいおんじ あかね）がまだしつこく縋りついてくるのではないかと、心配しているかのようだ。
+
+部屋に吹き込む風が、茜の青白い頬を刺し、神経の全てを逆撫でする。
+
+「分かったわ」
+
+茜の返事は驚くほど平静だった。
+
+なぜなら、諒助が芝居をしていることを、彼女は知っていたからだ。
+
+十五分前。
+
+茜が目を覚ますと、医者から諒助が重傷で記憶喪失だと告げられた。
+
+彼女は虚弱な体を引きずり、彼の病室へ駆けつけた。
+
+しかし、病室のドアの外で、重傷のはずの諒助が、窓辺にだらんと寄りか</div>
+            <div class="ad-meta"><span class="badge-views">5.8K views</span><span>女の子が読みたい小説を大特集</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=880433718209700&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-hook">Hook: statistic</span><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">fear</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag ca-feature">B/A</span><span class="ca-tag ca-feature">Emoji</span><span class="ca-tag">long copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:0, spend:2)
+        <div class="score-bar"><div class="score-seg" style="width:14.814814814814817%;background:#22c55e" title="longevity: 0"></div><div class="score-seg" style="width:85.18518518518519%;background:#3b82f6" title="spend: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://sonwer.com" target="_blank">https://sonwer.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2286774781732765&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#24</span>
+            <div class="ad-title">Des graphismes hallucinants</div>
+            <div class="ad-desc">Commandez votre Meta Quest 3 et découvrez le Monde à l’envers en plus vrai que nature. Livraison et retour gratuits inclus.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2286774781732765&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1409701747836868&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#25</span>
+            <div class="ad-title">Des graphismes hallucinants</div>
+            <div class="ad-desc">Commandez votre Meta Quest 3 et découvrez le Monde à l’envers en plus vrai que nature. Livraison et retour gratuits inclus.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1409701747836868&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=905542299033887&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#26</span>
+            <div class="ad-title">Stream on a whole new scale</div>
+            <div class="ad-desc">Epic shows deserve an epic experience. Get Meta Quest 3 and watch your favorites on the big screen.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=905542299033887&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com/quest-3" target="_blank">https://meta.com/quest-3</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=25927418910275349&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#27</span>
+            <div class="ad-title">Harness new power</div>
+            <div class="ad-desc">Get Meta Quest 3 and enjoy powerful performance and smooth gameplay as you control minds. Shipping and returns are free.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=25927418910275349&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-cta">CTA: free_trial</span><span class="ca-tag ca-emotion">relief</span><span class="ca-tag ca-feature">Offer: free</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=1460131565678627&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#28</span>
+            <div class="ad-title">Play Stranger Things VR</div>
+            <div class="ad-desc">Get Meta Quest 3 and experience Stranger Things like never before. Try mixed reality today.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=1460131565678627&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag ca-feature">B/A</span><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=857204744032551&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#29</span>
+            <div class="ad-title">Die neue Art des Streamens</div>
+            <div class="ad-desc">Epische Serien verdienen ein episches Erlebnis. Hol dir die Meta Quest 3 und schau deine Favoriten auf dem großen Bildschirm.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=857204744032551&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com/quest-3" target="_blank">https://meta.com/quest-3</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=947912814581146&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#30</span>
+            <div class="ad-title">Jouez à Stranger Things VR</div>
+            <div class="ad-desc">Commandez votre Quest 3 et découvrez Stranger Things sous un tout nouvel angle. Essayez la réalité mixte dès aujourd’hui.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=947912814581146&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div>
+
+    <div class="ad-card">
+        <a class="ad-creative-placeholder" href="https://www.facebook.com/ads/archive/render_ad/?id=2065287650985633&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on Facebook Ad Library</a>
+        <div class="ad-body">
+            <span class="ad-rank">#31</span>
+            <div class="ad-title">Gestochen scharfe Grafik</div>
+            <div class="ad-desc">Mit der hochauflösenden Meta Quest 3 siehst du in der Schattenwelt jedes schaurige Detail. Kostenloser Versand &amp; Rückversand.</div>
+            <div class="ad-meta"><span class="badge-views">429 views</span><span>Meta Quest</span></div>
+            <a class="fb-link" href="https://www.facebook.com/ads/archive/render_ad/?id=2065287650985633&amp;access_token=EAA8ZCe0AvMp0BQw2JoFwsCZCcDJP7FzRyP77xkJgKjoR79FVFaDnelSiwgDkNeBiR2jtKvrwYSwsKnMZBcY8jwZBHtNWGewadNe8TmUK6jjkdfPfXzbU0rpnzg7SdZAB06cq4f4ZBOSk3ZBUzc1urY5cPQk6hNHCsl89yJu10JSidQ6WmZBODAUj3vcBhHcgBvxXDwgVzssZCjxid8jrnhuvE0PP7cnNPE8IXVndKi0hs2wC8ZAxRXvSd5" target="_blank">View on FB Ad Library &rarr;</a>
+        </div>
+        
+    <div class="creative-analysis">
+        <h4>Creative Pattern</h4>
+        <div class="ca-tags"><span class="ca-tag">medium copy</span></div>
+    </div>
+        
+    <div style="padding:0 12px 8px;font-size:10px;color:var(--muted)">
+        Score: <strong style="color:var(--green)">3</strong> (longevity:1, spend:0, active_bonus:2)
+        <div class="score-bar"><div class="score-seg" style="width:24.137931034482758%;background:#22c55e" title="longevity: 1"></div><div class="score-seg" style="width:6.896551724137931%;background:#3b82f6" title="spend: 0"></div><div class="score-seg" style="width:68.96551724137932%;background:#f59e0b" title="active_bonus: 2"></div></div>
+    </div>
+        
+        <div class="lp-section">
+            <h4>LP Destination (LP)</h4>
+            <a class="lp-url" href="https://meta.com" target="_blank">https://meta.com</a>
+            <div class="lp-detail">
+                
+                
+                
+            </div>
+            <div class="lp-tags"><span class="lp-tag lp-tag-no">Form</span><span class="lp-tag lp-tag-no">Price</span><span class="lp-tag lp-tag-no">Reviews</span><span class="lp-tag lp-tag-no">Video</span><span class="lp-tag lp-tag-no">Urgency</span></div>
+            
+            
+        </div>
+    </div></div>
+
+</body>
+</html>

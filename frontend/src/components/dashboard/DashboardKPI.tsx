@@ -52,16 +52,8 @@ export default function DashboardKPI() {
       const res = await fetchApi<KPIData>("/rankings/dashboard-kpi");
       setData(res);
     } catch {
-      // TODO: API未実装時はモックデータを使用
-      setData({
-        total_ads: 12847,
-        new_7d: 342,
-        hit_ads: 1523,
-        hit_percentage: 11.9,
-        active_ads: 8934,
-        avg_score: 54.2,
-        total_spend: 2340000000,
-      });
+      // API unavailable - show null state
+      setData(null);
     } finally {
       setLoading(false);
     }

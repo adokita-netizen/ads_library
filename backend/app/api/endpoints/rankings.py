@@ -32,6 +32,26 @@ from app.services.ranking.ranking_service import (
 
 # Path to collections JSON file (C12: Collections API)
 _COLLECTIONS_FILE = Path(__file__).resolve().parent.parent.parent.parent / "data" / "collections.json"
+_SHORT_TTL_CACHE: dict[str, tuple[float, object]] = {}
+
+
+def _short_cache_get(key: str):
+    cached = _SHORT_TTL_CACHE.get(key)
+    if not cached:
+        return None
+    expires_at, payload = cached
+    if expires_at <= datetime.now(timezone.utc).timestamp():
+        _SHORT_TTL_CACHE.pop(key, None)
+        return None
+    return payload
+
+
+def _short_cache_set(key: str, payload, ttl_seconds: int = 30):
+    _SHORT_TTL_CACHE[key] = (
+        datetime.now(timezone.utc).timestamp() + max(1, int(ttl_seconds)),
+        payload,
+    )
+    return payload
 
 
 def _dt_gte(dt: datetime | None, cutoff: datetime) -> bool:
@@ -71,6 +91,7 @@ _SAVED_SEARCHES_FILE = Path(__file__).resolve().parent.parent.parent.parent / "d
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/rankings", tags=["Rankings & Search"])
+_db_session_scope = sync_session_scope
 
 # Meta platform groups "facebook" and "instagram" under a single umbrella.
 META_PLATFORMS = ["facebook", "instagram"]
@@ -338,6 +359,138 @@ def _resolve_genre_label(ad: Ad) -> str:
     return "(uncategorized)"
 
 
+_META_REAL_SOURCES = {
+    "api",
+    "meta_api",
+    "ads_archive",
+    "db",
+}
+_META_ESTIMATED_SOURCES = {
+    "estimated",
+    "estimate",
+    "estimated_cpm",
+    "estimated_audience",
+    "inference",
+    "heuristic",
+    "httpx",
+    "playwright",
+    "playwright_render_ad",
+    "render_ad",
+    "browser",
+    "browser_fallback",
+    "snapshot",
+}
+_META_STALE_AFTER = timedelta(days=7)
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    """Best-effort ISO datetime parser that tolerates trailing Z."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _source_quality_state(source: object) -> str:
+    """Map a source enum/string to the common real/estimated/missing contract."""
+    normalized = str(source or "").strip().lower()
+    if not normalized or normalized == "missing":
+        return "missing"
+    if normalized in _META_REAL_SOURCES:
+        return "real"
+    if normalized in _META_ESTIMATED_SOURCES:
+        return "estimated"
+    return "estimated"
+
+
+def _build_meta_freshness_contract(ad: Ad) -> dict:
+    """Build the Meta freshness/provenance contract shared by list/detail/search."""
+    meta = ad.ad_metadata or {}
+    metric_source = meta.get("metric_source") or "missing"
+    creative_source = meta.get("creative_source") or "missing"
+    lp_source = meta.get("lp_source") or "missing"
+    last_meta_success_at = meta.get("last_meta_success_at")
+    parsed_last_success = _parse_iso_datetime(last_meta_success_at)
+    freshness_status = "missing"
+    if parsed_last_success:
+        freshness_status = (
+            "stale"
+            if _dt_lt(parsed_last_success, datetime.now(timezone.utc) - _META_STALE_AFTER)
+            else "fresh"
+        )
+
+    metric_status = _source_quality_state(metric_source)
+    creative_status = _source_quality_state(creative_source)
+    lp_status = _source_quality_state(lp_source)
+
+    explicit_quality_state = str(meta.get("meta_quality_state") or "").strip().lower()
+    if explicit_quality_state in {"real", "estimated", "missing", "stale"}:
+        meta_quality_state = explicit_quality_state
+    elif freshness_status == "stale":
+        meta_quality_state = "stale"
+    elif metric_status == creative_status == lp_status == "missing":
+        meta_quality_state = "missing"
+    elif "real" in {metric_status, creative_status, lp_status}:
+        meta_quality_state = "real"
+    else:
+        meta_quality_state = "estimated"
+
+    return {
+        "metric_source": str(metric_source),
+        "creative_source": str(creative_source),
+        "lp_source": str(lp_source),
+        "metric_status": metric_status,
+        "creative_status": creative_status,
+        "lp_status": lp_status,
+        "freshness_status": freshness_status,
+        "last_meta_success_at": last_meta_success_at,
+        "meta_quality_state": meta_quality_state,
+        "meta_recovery_reason": meta.get("meta_recovery_reason"),
+    }
+
+
+def get_meta_freshness(ad_id: int) -> dict:
+    """Return Meta freshness/provenance fields for a single ad."""
+    with _db_session_scope() as session:
+        ad = session.query(Ad).filter(Ad.id == ad_id).first()
+        if not ad:
+            raise KeyError(f"Ad not found: {ad_id}")
+        return {
+            "ad_id": ad.id,
+            **_build_meta_freshness_contract(ad),
+        }
+
+
+@router.get("/meta-freshness-contract")
+async def get_meta_freshness_contract() -> dict:
+    """Expose the freshness/provenance vocabulary used by rankings payloads."""
+    source_vocab = sorted({"missing", "stale", *_META_REAL_SOURCES, *_META_ESTIMATED_SOURCES})
+    return {
+        "metric_source_vocab": source_vocab,
+        "creative_source_vocab": source_vocab,
+        "lp_source_vocab": source_vocab,
+        "quality_state_vocab": ["real", "estimated", "missing", "stale"],
+        "freshness_status_vocab": ["fresh", "stale", "missing"],
+        "required_fields": [
+            "metric_source",
+            "creative_source",
+            "lp_source",
+            "metric_status",
+            "creative_status",
+            "lp_status",
+            "freshness_status",
+            "last_meta_success_at",
+            "meta_quality_state",
+            "meta_recovery_reason",
+        ],
+    }
+
+
 def _sanitize_csv(value: str | None) -> str:
     """Sanitize value for CSV to prevent formula injection."""
     if not value:
@@ -568,6 +721,7 @@ def get_product_rankings(
                 "media_status": ad_info.get("media_status", "uncached"),
                 "download_urls": ad_info.get("download_urls", {}),
                 "data_quality": ad_info.get("data_quality", {}),
+                **(_build_meta_freshness_contract(ads_map[r.ad_id]) if r.ad_id in ads_map else {}),
             })
 
         data = {
@@ -706,6 +860,7 @@ def _fallback_ad_list(session, genre, platform, page, page_size, period):
             "media_status": _resolve_media_status(ad),
             "download_urls": _build_download_urls(ad),
             "data_quality": _build_data_quality(ad),
+            **_build_meta_freshness_contract(ad),
         })
 
     return {
@@ -813,6 +968,7 @@ def get_hit_ads(
                 "media_status": _resolve_media_status(ad) if ad else "uncached",
                 "download_urls": _build_download_urls(ad) if ad else {},
                 "data_quality": _build_data_quality(ad) if ad else {},
+                **(_build_meta_freshness_contract(ad) if ad else {}),
             })
 
         return {
@@ -3856,6 +4012,7 @@ def _build_ad_detail(ad: Ad) -> dict:
         "bookmarked": meta.get("bookmarked", False),
         "bookmark_note": meta.get("bookmark_note", ""),
         "bookmark_tags": meta.get("bookmark_tags", []),
+        **_build_meta_freshness_contract(ad),
     }
 
 
@@ -14931,6 +15088,7 @@ def search_ads_simple(
 
         items = []
         for ad in page_ads:
+            hit_score, _, _, _ = compute_hit_score(ad)
             items.append({
                 "ad_id": ad.id,
                 "product_name": _derive_product_name(ad),
@@ -14940,7 +15098,8 @@ def search_ads_simple(
                 "thumbnail": _resolve_thumbnail_url(ad),
                 "image_url": _resolve_thumbnail_url(ad),
                 "fine_genre": _resolve_fine_genre(ad),
-                "hit_score": compute_hit_score(ad),
+                "hit_score": hit_score,
+                **_build_meta_freshness_contract(ad),
             })
 
         return {"items": items, "total": total}

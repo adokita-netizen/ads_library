@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAAP - Hit Ad Creatives & LP Report by Genre</title>
+<style>
+
+:root { --primary: #4A7DFF; --bg: #0f1117; --card: #1a1d27; --text: #e4e4e7; --muted: #71717a; --border: #27272a; --green: #22c55e; --red: #ef4444; --purple: #8b5cf6; --amber: #f59e0b; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1400px; margin: 0 auto; }
+h1 { color: var(--primary); margin-bottom: 4px; font-size: 24px; }
+h2 { color: var(--text); margin: 24px 0 12px; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.summary { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+.genre-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.genre-nav a { padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 11px; white-space: nowrap; }
+.genre-nav a:hover, .genre-nav a.active { border-color: var(--primary); color: var(--primary); }
+
+/* Pattern cards */
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.pattern-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.pattern-card h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pattern-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+.pattern-bar { height: 4px; border-radius: 2px; background: var(--primary); margin-top: 2px; }
+
+/* Ad cards */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ad-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: border-color 0.2s; }
+.ad-card:hover { border-color: var(--primary); }
+.ad-creative { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; cursor: pointer; }
+.ad-creative-placeholder { width: 100%; aspect-ratio: 16/9; background: #1e2030; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ad-creative-placeholder:hover { background: #252836; }
+.ad-body { padding: 12px; }
+.ad-rank { display: inline-block; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
+.ad-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-meta { font-size: 10px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ad-meta span { background: #27272a; padding: 2px 6px; border-radius: 3px; }
+.badge-hit { background: #22c55e22 !important; color: var(--green) !important; font-weight: 600; }
+.badge-video { background: #8b5cf622 !important; color: var(--purple) !important; }
+.badge-views { background: #3b82f622 !important; color: #60a5fa !important; }
+
+/* Creative analysis */
+.creative-analysis { border-top: 1px solid var(--border); padding: 10px 12px; }
+.creative-analysis h4 { font-size: 11px; color: var(--amber); margin-bottom: 6px; }
+.ca-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ca-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #27272a; }
+.ca-hook { background: #f59e0b22; color: var(--amber); }
+.ca-cta { background: #22c55e22; color: var(--green); }
+.ca-emotion { background: #8b5cf622; color: var(--purple); }
+.ca-feature { background: #3b82f622; color: #60a5fa; }
+
+/* Score breakdown */
+.score-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.score-seg { height: 100%; }
+
+/* LP section */
+.lp-section { border-top: 1px solid var(--border); padding: 10px 12px; }
+.lp-section h4 { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+.lp-url { font-size: 11px; color: #60a5fa; word-break: break-all; text-decoration: none; display: block; margin-bottom: 4px; }
+.lp-url:hover { text-decoration: underline; }
+.lp-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.lp-detail strong { color: var(--text); }
+.lp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lp-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.lp-tag-yes { background: #22c55e22; color: var(--green); }
+.lp-tag-no { background: #27272a; color: #404040; }
+.lp-screenshot { width: 100%; max-height: 200px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.back-link { display: inline-block; margin-bottom: 12px; color: var(--primary); text-decoration: none; font-size: 12px; }
+.fb-link { display: inline-block; font-size: 10px; color: #60a5fa; text-decoration: none; margin-top: 4px; }
+.fb-link:hover { text-decoration: underline; }
+
+table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 12px; }
+th { background: #1e2030; color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; }
+tr:hover { background: #22252f; }
+</style>
+</head>
+<body>
+<h1>VAAP - Hit Ad Creatives & LP Report</h1>
+<p class="summary">Generated: 2026-03-01 14:07 | 922 ads across 19 genres</p>
+<p class="summary">Click a genre to browse hit ad creatives, LP destinations, creative patterns, and LP analysis.</p>
+
+<div class="stats">
+    <div class="stat-card"><div class="stat-value">922</div><div class="stat-label">Total Ads</div></div>
+    <div class="stat-card"><div class="stat-value">19</div><div class="stat-label">Genres</div></div>
+</div>
+
+<table>
+<thead>
+<tr>
+    <th>Genre</th><th>Slug</th><th style="text-align:right">Ads</th>
+    <th style="text-align:right">Avg Views</th><th style="text-align:right">Creative</th>
+    <th style="text-align:right">LP</th><th>Top Hook</th><th>Top CTA</th>
+</tr>
+</thead>
+<tbody>
+        <tr onclick="window.location='short_drama.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">ショートドラマ</td>
+            <td style="color:var(--muted)">short_drama</td>
+            <td style="text-align:right">310</td>
+            <td style="text-align:right">2.5K</td>
+            <td style="text-align:right">15%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>purchase</td>
+        </tr>
+        <tr onclick="window.location='hair_removal.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">脱毛</td>
+            <td style="color:var(--muted)">hair_removal</td>
+            <td style="text-align:right">185</td>
+            <td style="text-align:right">15.9K</td>
+            <td style="text-align:right">1%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>consultation</td>
+        </tr>
+        <tr onclick="window.location='hair_growth_aga.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">育毛・AGA</td>
+            <td style="color:var(--muted)">hair_growth_aga</td>
+            <td style="text-align:right">84</td>
+            <td style="text-align:right">10.2K</td>
+            <td style="text-align:right">6%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>line_add</td>
+        </tr>
+        <tr onclick="window.location='skincare.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">スキンケア</td>
+            <td style="color:var(--muted)">skincare</td>
+            <td style="text-align:right">75</td>
+            <td style="text-align:right">48.5K</td>
+            <td style="text-align:right">60%</td>
+            <td style="text-align:right">100%</td>
+            <td>social_proof</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='fitness.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">フィットネス</td>
+            <td style="color:var(--muted)">fitness</td>
+            <td style="text-align:right">58</td>
+            <td style="text-align:right">42.2K</td>
+            <td style="text-align:right">14%</td>
+            <td style="text-align:right">100%</td>
+            <td>benefit</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='education_school.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">教育・スクール</td>
+            <td style="color:var(--muted)">education_school</td>
+            <td style="text-align:right">40</td>
+            <td style="text-align:right">2.0K</td>
+            <td style="text-align:right">2%</td>
+            <td style="text-align:right">100%</td>
+            <td>benefit</td>
+            <td>free_trial</td>
+        </tr>
+        <tr onclick="window.location='health_food.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">健康食品</td>
+            <td style="color:var(--muted)">health_food</td>
+            <td style="text-align:right">31</td>
+            <td style="text-align:right">46.7K</td>
+            <td style="text-align:right">61%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='gaming_entertainment.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">ゲーム・エンタメ</td>
+            <td style="color:var(--muted)">gaming_entertainment</td>
+            <td style="text-align:right">31</td>
+            <td style="text-align:right">26.0K</td>
+            <td style="text-align:right">0%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>free_trial</td>
+        </tr>
+        <tr onclick="window.location='ec_shopping.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">EC通販</td>
+            <td style="color:var(--muted)">ec_shopping</td>
+            <td style="text-align:right">29</td>
+            <td style="text-align:right">37.0K</td>
+            <td style="text-align:right">34%</td>
+            <td style="text-align:right">97%</td>
+            <td>statistic</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='app.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">アプリ</td>
+            <td style="color:var(--muted)">app</td>
+            <td style="text-align:right">17</td>
+            <td style="text-align:right">639.5294117647059</td>
+            <td style="text-align:right">29%</td>
+            <td style="text-align:right">100%</td>
+            <td>statistic</td>
+            <td>line_add</td>
+        </tr>
+        <tr onclick="window.location='other.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">その他</td>
+            <td style="color:var(--muted)">other</td>
+            <td style="text-align:right">14</td>
+            <td style="text-align:right">23.2K</td>
+            <td style="text-align:right">14%</td>
+            <td style="text-align:right">36%</td>
+            <td>-</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='finance_investment.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">金融・投資</td>
+            <td style="color:var(--muted)">finance_investment</td>
+            <td style="text-align:right">14</td>
+            <td style="text-align:right">15.7K</td>
+            <td style="text-align:right">7%</td>
+            <td style="text-align:right">86%</td>
+            <td>statistic</td>
+            <td>download</td>
+        </tr>
+        <tr onclick="window.location='medical_weight_loss.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">医療痩身</td>
+            <td style="color:var(--muted)">medical_weight_loss</td>
+            <td style="text-align:right">10</td>
+            <td style="text-align:right">169.1K</td>
+            <td style="text-align:right">90%</td>
+            <td style="text-align:right">100%</td>
+            <td>pain_point</td>
+            <td>line_add</td>
+        </tr>
+        <tr onclick="window.location='jobs_recruitment.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">転職・求人</td>
+            <td style="color:var(--muted)">jobs_recruitment</td>
+            <td style="text-align:right">7</td>
+            <td style="text-align:right">4.6K</td>
+            <td style="text-align:right">0%</td>
+            <td style="text-align:right">100%</td>
+            <td>question</td>
+            <td>-</td>
+        </tr>
+        <tr onclick="window.location='yoga_pilates.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">ヨガ・ピラティス</td>
+            <td style="color:var(--muted)">yoga_pilates</td>
+            <td style="text-align:right">5</td>
+            <td style="text-align:right">28.7K</td>
+            <td style="text-align:right">40%</td>
+            <td style="text-align:right">100%</td>
+            <td>benefit</td>
+            <td>free_trial</td>
+        </tr>
+        <tr onclick="window.location='diet_supplement.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">ダイエットサプリ</td>
+            <td style="color:var(--muted)">diet_supplement</td>
+            <td style="text-align:right">4</td>
+            <td style="text-align:right">203.6K</td>
+            <td style="text-align:right">100%</td>
+            <td style="text-align:right">100%</td>
+            <td>urgency</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='beauty_clinic.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">美容クリニック</td>
+            <td style="color:var(--muted)">beauty_clinic</td>
+            <td style="text-align:right">3</td>
+            <td style="text-align:right">342.6K</td>
+            <td style="text-align:right">67%</td>
+            <td style="text-align:right">100%</td>
+            <td>-</td>
+            <td>free_trial</td>
+        </tr>
+        <tr onclick="window.location='protein_supplement.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">プロテイン</td>
+            <td style="color:var(--muted)">protein_supplement</td>
+            <td style="text-align:right">3</td>
+            <td style="text-align:right">93.7K</td>
+            <td style="text-align:right">33%</td>
+            <td style="text-align:right">100%</td>
+            <td>social_proof</td>
+            <td>learn_more</td>
+        </tr>
+        <tr onclick="window.location='manga_webtoon.html'" style="cursor:pointer">
+            <td style="font-weight:600;color:var(--primary)">マンガ・ウェブトゥーン</td>
+            <td style="color:var(--muted)">manga_webtoon</td>
+            <td style="text-align:right">2</td>
+            <td style="text-align:right">10.1K</td>
+            <td style="text-align:right">50%</td>
+            <td style="text-align:right">100%</td>
+            <td>question</td>
+            <td>free_trial</td>
+        </tr></tbody>
+</table>
+</body>
+</html>

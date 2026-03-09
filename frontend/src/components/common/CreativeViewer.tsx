@@ -39,6 +39,7 @@ export function CreativeViewer({
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [extracting, setExtracting] = useState(false);
   const [extractedUrl, setExtractedUrl] = useState<string | null>(null);
+  const [videoFallbackToRaw, setVideoFallbackToRaw] = useState(false);
 
   // B36: Build fallback chain with S3 proxy priority
   const s3ProxyUrl = useMemo(() => {
@@ -58,6 +59,10 @@ export function CreativeViewer({
     setFallbackIndex(0);
   }, [imageUrl, thumbnailUrl, imageS3Key, adId]);
 
+  useEffect(() => {
+    setVideoFallbackToRaw(false);
+  }, [videoUrl, adId, creativeType]);
+
   const currentSrc = fallbackSources[fallbackIndex] || null;
   const imgFailed = fallbackIndex >= fallbackSources.length;
 
@@ -75,11 +80,14 @@ export function CreativeViewer({
 
   const badge = extractionStatus ? STATUS_BADGE[extractionStatus] : null;
 
-  const isVideo = videoUrl || creativeType === "video";
+  const proxyVideoUrl = adId ? `/api/v1/media/video/${adId}` : null;
+  const proxyPosterUrl = adId ? `/api/v1/media/thumbnail/${adId}` : null;
+  const isVideo = Boolean(videoUrl || (creativeType === "video" && proxyVideoUrl));
 
   // 1. Video
-  if (isVideo && videoUrl) {
-    const videoSrc = adId ? `/api/v1/media/video/${adId}` : videoUrl;
+  if (isVideo) {
+    const videoSrc = (videoFallbackToRaw ? videoUrl : (proxyVideoUrl || videoUrl)) || "";
+    const posterSrc = proxyPosterUrl || thumbnailUrl || imageUrl || undefined;
     return (
       <div className="rounded-lg overflow-hidden bg-gray-100 relative">
         <video
@@ -87,9 +95,14 @@ export function CreativeViewer({
           controls
           playsInline
           preload="metadata"
-          poster={thumbnailUrl || undefined}
+          poster={posterSrc}
           crossOrigin="anonymous"
           className="w-full max-h-[400px] object-contain"
+          onError={() => {
+            if (!videoFallbackToRaw && videoUrl && videoSrc !== videoUrl) {
+              setVideoFallbackToRaw(true);
+            }
+          }}
         />
         {badge && (
           <span className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold text-white ${badge.color}`}>

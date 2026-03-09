@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { fetchApi } from "@/lib/api";
 
 // ─── Types ───
 
@@ -18,9 +19,6 @@ interface TimelineAd {
 
 type ZoomLevel = "week" | "month" | "quarter";
 
-// ─── Mock Data ───
-// TODO: Replace with real API data from /api/v1/rankings/pro-ranking?sort_by=score&page_size=50
-
 const GENRE_COLORS: Record<string, string> = {
   "美容": "#ec4899",
   "健康": "#22c55e",
@@ -32,38 +30,12 @@ const GENRE_COLORS: Record<string, string> = {
   "その他": "#6b7280",
 };
 
-function generateMockTimelineData(): TimelineAd[] {
-  const genres = ["美容", "健康", "ダイエット", "金融", "教育", "ビジネス"];
-  const names = [
-    "セラムV3", "スキンケアX", "サプリA", "ダイエットZ", "投資ナビ",
-    "英語マスター", "保険プラン", "美白クリーム", "プロテインB", "学習ツール",
-    "FXスタート", "ヘアケアS", "脂肪燃焼Y", "ビタミンC+", "コーチングK",
-    "転職NEXT", "アンチエイジング", "筋トレアプリ", "資産運用R", "スキルアップP",
-  ];
-  const advertisers = ["株式会社ABC", "DEFコーポレーション", "GHI株式会社", "JKLカンパニー", "MNO商事"];
-
-  return names.map((name, i) => {
-    const daysAgo = Math.floor(Math.random() * 90) + 10;
-    const duration = Math.floor(Math.random() * 60) + 5;
-    const firstSeen = new Date();
-    firstSeen.setDate(firstSeen.getDate() - daysAgo);
-    const lastSeen = new Date(firstSeen);
-    lastSeen.setDate(lastSeen.getDate() + duration);
-    const isActive = lastSeen >= new Date();
-
-    return {
-      ad_id: 1000 + i,
-      product_name: name,
-      advertiser_name: advertisers[i % advertisers.length],
-      genre: genres[i % genres.length],
-      score: Math.floor(Math.random() * 80) + 20,
-      cumulative_views: Math.floor(Math.random() * 500000) + 10000,
-      first_seen: firstSeen.toISOString().split("T")[0],
-      last_seen: isActive ? new Date().toISOString().split("T")[0] : lastSeen.toISOString().split("T")[0],
-      is_active: isActive,
-    };
-  });
-}
+// Map API category values to display labels
+const GENRE_MAP: Record<string, string> = {
+  beauty: "美容", health: "健康", diet: "ダイエット",
+  finance: "金融", education: "教育", real_estate: "不動産",
+  business: "ビジネス", other: "その他",
+};
 
 // ─── Component ───
 
@@ -75,8 +47,42 @@ export default function AdTimeline() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [hoveredAd, setHoveredAd] = useState<TimelineAd | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [allAds, setAllAds] = useState<TimelineAd[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const allAds = useMemo(() => generateMockTimelineData(), []);
+  const fetchTimeline = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchApi<{ products?: Array<Record<string, unknown>> }>("/rankings/pro-ranking", {
+        params: { sort_by: "score", page_size: 20 },
+      });
+      const products = res.products || [];
+      const mapped: TimelineAd[] = products.map((p: Record<string, unknown>) => {
+        const firstSeen = (p.first_seen_at as string) || (p.created_at as string) || new Date().toISOString();
+        const lastSeen = (p.last_seen_at as string) || new Date().toISOString();
+        const genreKey = (p.category as string) || (p.genre as string) || "other";
+        return {
+          ad_id: (p.id as number) || 0,
+          product_name: (p.title as string) || (p.product_name as string) || "不明",
+          advertiser_name: (p.advertiser_name as string) || "不明",
+          genre: GENRE_MAP[genreKey] || genreKey,
+          score: (p.hit_score as number) || (p.score as number) || 0,
+          cumulative_views: (p.cumulative_views as number) || (p.view_count as number) || 0,
+          first_seen: firstSeen.split("T")[0],
+          last_seen: lastSeen.split("T")[0],
+          is_active: (p.is_still_running as boolean) ?? new Date(lastSeen) >= new Date(Date.now() - 7 * 86400000),
+        };
+      });
+      setAllAds(mapped);
+    } catch (err) {
+      console.error("タイムラインデータ取得失敗", err);
+      setAllAds([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchTimeline(); }, [fetchTimeline]);
 
   const filteredAds = useMemo(() => {
     return allAds.filter((ad) => {
@@ -240,7 +246,12 @@ export default function AdTimeline() {
 
         {/* Ad bars */}
         <div className="space-y-1">
-          {filteredAds.length === 0 ? (
+          {loading ? (
+            <div className="py-8 text-center">
+              <div className="w-6 h-6 border-2 border-[#4A7DFF] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-[11px] text-gray-400">読み込み中...</p>
+            </div>
+          ) : filteredAds.length === 0 ? (
             <div className="py-8 text-center text-[11px] text-gray-400">
               条件に一致する広告がありません
             </div>

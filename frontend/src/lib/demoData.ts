@@ -229,7 +229,7 @@ export const DEMO_TRENDS: DemoTrends = {
 
 // ─── Demo mode helpers ───
 
-const DEMO_MODE_KEY = "vaap_demo_mode";
+const DEMO_MODE_KEY = "vaap-demo-mode";
 
 export function isDemoMode(): boolean {
   if (typeof window === "undefined") return false;

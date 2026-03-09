@@ -22,15 +22,6 @@ interface NotificationBellProps {
   onAdSelect?: (adId: number) => void;
 }
 
-/* ─── Mock data ─── */
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: 1, type: "hit_alert", title: "新しいヒット広告を検出", description: "「美容液A」がヒットラインを超えました", ad_id: 101, is_read: false, created_at: new Date(Date.now() - 5 * 60_000).toISOString() },
-  { id: 2, type: "crawl_complete", title: "クロール完了", description: "Meta広告ライブラリの巡回が完了しました（32件取得）", ad_id: null, is_read: false, created_at: new Date(Date.now() - 30 * 60_000).toISOString() },
-  { id: 3, type: "ranking_update", title: "ランキング更新", description: "「健康食品」ジャンルのランキングが更新されました", ad_id: null, is_read: true, created_at: new Date(Date.now() - 2 * 3600_000).toISOString() },
-  { id: 4, type: "system", title: "システムメンテナンス", description: "明日02:00-04:00にメンテナンスを実施します", ad_id: null, is_read: true, created_at: new Date(Date.now() - 24 * 3600_000).toISOString() },
-];
-
 /* ─── Helpers ─── */
 
 function timeAgo(ts: string): string {
@@ -103,9 +94,9 @@ export default function NotificationBell({ onViewAll, onAdSelect }: Notification
       setNotifications(items);
       setUnreadCount(items.filter((n) => !n.is_read).length);
     } catch {
-      // API not available -- use mock data
-      setNotifications(MOCK_NOTIFICATIONS);
-      setUnreadCount(MOCK_NOTIFICATIONS.filter((n) => !n.is_read).length);
+      // API unavailable - show empty state
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }

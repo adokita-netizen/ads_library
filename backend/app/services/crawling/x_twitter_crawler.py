@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlencode
 
 import structlog
 from bs4 import BeautifulSoup
@@ -46,8 +47,13 @@ class XTwitterAdCrawler(BaseCrawler):
 
         if self.bearer_token:
             results = await self._search_via_api(query, category, limit, region)
+            if not results:
+                results = await self._search_via_scraping(query, limit, region)
         else:
             results = await self._search_via_scraping(query, limit, region)
+
+        if not results:
+            results = await self._search_via_playwright(query=query, limit=limit, region=region)
 
         logger.info("x_twitter_ads_search", query=query, results_count=len(results))
         return results
@@ -251,3 +257,71 @@ class XTwitterAdCrawler(BaseCrawler):
     async def get_advertiser_ads(self, advertiser_name: str, limit: int = 50) -> list[CrawledAd]:
         """Get all ads from a specific X advertiser."""
         return await self.search_ads(query=advertiser_name, limit=limit)
+
+    async def _search_via_playwright(self, query: str, limit: int, region: str) -> list[CrawledAd]:
+        """Playwright fallback for X transparency page rendering."""
+        try:
+            from playwright.async_api import async_playwright
+        except Exception:
+            logger.warning("x_twitter_playwright_not_installed")
+            return []
+
+        results: list[CrawledAd] = []
+        target_url = f"{X_ADS_TRANSPARENCY_URL}?{urlencode({'q': query, 'country': region})}"
+        browser = None
+        pw = None
+        try:
+            pw = await async_playwright().start()
+            browser = await pw.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2500)
+            cards = await page.evaluate(
+                """(maxCount) => {
+                    const nodes = Array.from(document.querySelectorAll('[data-ad-id], .ad-card, .transparency-ad, .tweet-ad')).slice(0, maxCount);
+                    return nodes.map((el) => {
+                      const pick = (s) => {
+                        const n = el.querySelector(s);
+                        return n && n.textContent ? n.textContent.trim() : null;
+                      };
+                      const img = el.querySelector('img');
+                      const vid = el.querySelector('video source');
+                      const link = el.querySelector('a[href]:not([href*=\"x.com\"]):not([href*=\"twitter.com\"])');
+                      return {
+                        ad_id: el.getAttribute('data-ad-id') || null,
+                        title: pick('h3, .ad-title, .tweet-text'),
+                        description: pick('p, .ad-body, .tweet-content'),
+                        advertiser_name: pick('.advertiser-name, .screen-name, .username'),
+                        video_url: vid ? vid.getAttribute('src') : null,
+                        thumbnail_url: img ? (img.getAttribute('src') || img.getAttribute('data-src')) : null,
+                        destination_url: link ? link.getAttribute('href') : null
+                      };
+                    });
+                }""",
+                limit,
+            )
+            for idx, card in enumerate(cards or []):
+                results.append(
+                    CrawledAd(
+                        external_id=str(card.get("ad_id") or f"x_pw_{idx}_{hash(query) & 0xffff:x}"),
+                        platform="x_twitter",
+                        title=card.get("title"),
+                        description=card.get("description"),
+                        advertiser_name=card.get("advertiser_name"),
+                        video_url=card.get("video_url"),
+                        thumbnail_url=card.get("thumbnail_url"),
+                        destination_url=card.get("destination_url"),
+                        metadata={"source": "x_playwright_fallback"},
+                    )
+                )
+        except Exception as e:
+            logger.error("x_twitter_playwright_fallback_failed", query=query, error=str(e))
+        finally:
+            try:
+                if browser:
+                    await browser.close()
+                if pw:
+                    await pw.stop()
+            except Exception:
+                pass
+        return results

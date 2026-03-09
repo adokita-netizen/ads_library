@@ -7,7 +7,7 @@ Supports: score_threshold, score_change, new_hit, data_quality.
 from datetime import datetime, timedelta, timezone
 
 import structlog
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.ad import Ad
@@ -15,6 +15,7 @@ from app.models.alert_history import AlertHistory
 from app.models.alert_rule import AlertRule
 
 logger = structlog.get_logger()
+_RECENT_SCORE_CHANGE_HOURS = 36
 
 
 class AlertEngine:
@@ -68,38 +69,44 @@ class AlertEngine:
         if not rule.threshold:
             return 0
 
-        op = rule.operator or "gt"
-        if op == "gt":
-            cond = "::float > :threshold"
-        elif op == "lt":
-            cond = "::float < :threshold"
-        else:
-            cond = "::float = :threshold"
+        op = (rule.operator or "gt").lower()
+        cooldown_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        alerted_ids = {
+            r[0]
+            for r in self.session.query(AlertHistory.ad_id)
+            .filter(
+                AlertHistory.rule_id == rule.id,
+                AlertHistory.ad_id.isnot(None),
+                AlertHistory.triggered_at > cooldown_cutoff,
+            )
+            .all()
+        }
 
-        query = f"""
-            SELECT a.id, a.advertiser_name,
-                   (a.ad_metadata->>'latest_hit_score')::float as score
-            FROM ads a
-            WHERE a.ad_metadata->>'latest_hit_score' IS NOT NULL
-              AND (a.ad_metadata->>'latest_hit_score'){cond}
-              AND a.id NOT IN (
-                  SELECT ah.ad_id FROM alert_history ah
-                  WHERE ah.rule_id = :rule_id
-                    AND ah.ad_id IS NOT NULL
-                    AND ah.triggered_at > NOW() - INTERVAL '24 hours'
-              )
-        """
-
-        if rule.genre_filter:
-            query += " AND a.ad_metadata->>'fine_genre_en' = :genre"
-
-        query += " LIMIT 10"
-
-        params = {"threshold": rule.threshold, "rule_id": rule.id}
-        if rule.genre_filter:
-            params["genre"] = rule.genre_filter
-
-        rows = self.session.execute(text(query), params).fetchall()
+        rows = []
+        for ad in self.session.query(Ad).all():
+            meta = ad.ad_metadata if isinstance(ad.ad_metadata, dict) else {}
+            if rule.genre_filter and meta.get("fine_genre_en") != rule.genre_filter:
+                continue
+            raw_score = meta.get("latest_hit_score")
+            if raw_score is None:
+                continue
+            try:
+                score = float(raw_score)
+            except (TypeError, ValueError):
+                continue
+            if op == "gt":
+                matched = score > float(rule.threshold)
+            elif op == "lt":
+                matched = score < float(rule.threshold)
+            else:
+                matched = score == float(rule.threshold)
+            if not matched:
+                continue
+            if ad.id in alerted_ids:
+                continue
+            rows.append((ad.id, ad.advertiser_name, score))
+            if len(rows) >= 10:
+                break
 
         count = 0
         for r in rows:
@@ -114,18 +121,26 @@ class AlertEngine:
 
     def _eval_new_hit(self, rule: AlertRule) -> int:
         """Detect newly identified HIT ads (not previously alerted)."""
-        rows = self.session.execute(text("""
-            SELECT a.id, a.advertiser_name,
-                   (a.ad_metadata->>'latest_hit_score')::float as score
-            FROM ads a
-            WHERE (a.ad_metadata->>'is_hit')::boolean = true
-              AND a.id NOT IN (
-                  SELECT ah.ad_id FROM alert_history ah
-                  WHERE ah.rule_id = :rule_id
-                    AND ah.ad_id IS NOT NULL
-              )
-            LIMIT 10
-        """), {"rule_id": rule.id}).fetchall()
+        alerted_ids = {
+            r[0]
+            for r in self.session.query(AlertHistory.ad_id)
+            .filter(AlertHistory.rule_id == rule.id, AlertHistory.ad_id.isnot(None))
+            .all()
+        }
+        rows = []
+        for ad in self.session.query(Ad).all():
+            meta = ad.ad_metadata if isinstance(ad.ad_metadata, dict) else {}
+            if not bool(meta.get("is_hit")):
+                continue
+            if ad.id in alerted_ids:
+                continue
+            try:
+                score = float(meta.get("latest_hit_score", 0) or 0)
+            except (TypeError, ValueError):
+                score = 0.0
+            rows.append((ad.id, ad.advertiser_name, score))
+            if len(rows) >= 10:
+                break
 
         count = 0
         for r in rows:
@@ -146,9 +161,11 @@ class AlertEngine:
         if total == 0:
             return 0
 
-        null_meta = self.session.execute(text(
-            "SELECT COUNT(*) FROM ads WHERE ad_metadata IS NULL"
-        )).scalar()
+        null_meta = (
+            self.session.query(func.count(Ad.id))
+            .filter(Ad.ad_metadata.is_(None))
+            .scalar()
+        )
 
         null_pct = null_meta / total * 100
         if null_pct > threshold_pct:
@@ -163,10 +180,79 @@ class AlertEngine:
         return 0
 
     def _eval_score_change(self, rule: AlertRule) -> int:
-        """Detect ads with significant score changes (placeholder)."""
-        # Would compare current vs previous day's scores
-        # Requires score history tracking
-        return 0
+        """Detect ads with significant score changes using metadata score_delta."""
+        if rule.threshold is None:
+            return 0
+
+        op = (rule.operator or "change_gt").lower()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=_RECENT_SCORE_CHANGE_HOURS)
+        alerted_ids = {
+            r[0]
+            for r in self.session.query(AlertHistory.ad_id)
+            .filter(
+                AlertHistory.rule_id == rule.id,
+                AlertHistory.ad_id.isnot(None),
+                AlertHistory.triggered_at > cutoff,
+            )
+            .all()
+        }
+
+        rows = []
+        for ad in self.session.query(Ad).all():
+            meta = ad.ad_metadata if isinstance(ad.ad_metadata, dict) else {}
+            if rule.genre_filter and meta.get("fine_genre_en") != rule.genre_filter:
+                continue
+            score_updated_at = meta.get("score_updated_at")
+            if score_updated_at:
+                try:
+                    updated_at = datetime.fromisoformat(str(score_updated_at).replace("Z", "+00:00"))
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
+                    if updated_at < cutoff:
+                        continue
+                except ValueError:
+                    continue
+            score_delta_raw = meta.get("score_delta", meta.get("hit_score_diff"))
+            previous_score_raw = meta.get("previous_hit_score")
+            latest_score_raw = meta.get("latest_hit_score")
+            if score_delta_raw is None or latest_score_raw is None:
+                continue
+            try:
+                score_delta = float(score_delta_raw)
+                previous_score = float(previous_score_raw) if previous_score_raw is not None else None
+                latest_score = float(latest_score_raw)
+            except (TypeError, ValueError):
+                continue
+            if ad.id in alerted_ids:
+                continue
+            if op == "change_gt":
+                matched = abs(score_delta) > float(rule.threshold)
+            elif op == "gt":
+                matched = score_delta > float(rule.threshold)
+            elif op == "lt":
+                matched = score_delta < float(rule.threshold)
+            else:
+                matched = abs(score_delta) == float(rule.threshold)
+            if not matched:
+                continue
+            rows.append((ad.id, ad.advertiser_name, previous_score, latest_score, score_delta))
+            if len(rows) >= 10:
+                break
+
+        count = 0
+        for ad_id, advertiser, previous_score, latest_score, score_delta in rows:
+            severity = "warning" if abs(score_delta) < 20 else "critical"
+            self._create_alert(
+                rule,
+                ad_id=ad_id,
+                title=f"Hit score changed: {advertiser or 'Unknown'} ({score_delta:+.1f})",
+                message=f"Ad #{ad_id} hit_score changed from {previous_score or 0:.1f} to {latest_score:.1f}",
+                old_val=previous_score,
+                new_val=latest_score,
+                severity=severity,
+            )
+            count += 1
+        return count
 
     def _create_alert(
         self, rule: AlertRule, ad_id: int | None,
@@ -216,6 +302,15 @@ def seed_default_rules(session: Session):
             condition_type="data_quality",
             threshold=10.0,
             cooldown_minutes=1440,  # 1 day
+            notification_channel="in_app",
+        ),
+        AlertRule(
+            name="スコア急変アラート",
+            description="score_delta の絶対値が15以上の広告を通知",
+            condition_type="score_change",
+            operator="change_gt",
+            threshold=15.0,
+            cooldown_minutes=180,
             notification_channel="in_app",
         ),
     ]

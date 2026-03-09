@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import toast from "react-hot-toast";
 import { fetchApi } from "@/lib/api";
 import { genreOptions } from "@/lib/constants";
@@ -46,9 +46,50 @@ interface PerformancePrediction {
   suggestions: string[];
 }
 
-// ─── Mock Data (TODO: Replace with API calls when endpoints are ready) ───
+interface SavedScenarioRecord {
+  id: string;
+  name: string;
+  genre: string;
+  archetype: string;
+  saved_at?: string;
+  updated_at?: string;
+  platform?: string;
+  product_name?: string;
+  scenario?: unknown;
+}
 
-const MOCK_ARCHETYPES: Archetype[] = [
+interface GenerateScenarioApiResponse {
+  scenario?: {
+    title_options?: string[];
+    sections?: Array<{
+      section?: string;
+      type?: string;
+      text?: string;
+      duration?: string;
+      label?: string;
+      color?: string;
+    }>;
+    power_words_used?: string[];
+    power_words?: string[];
+    predicted_score?: number;
+  };
+}
+
+interface ScenarioVariationsApiResponse {
+  variations?: Array<{
+    variation_id?: number;
+    title?: string;
+    hook_text?: string;
+    cta_text?: string;
+    structure?: string[];
+    predicted_score?: number;
+  }>;
+  items?: ScenarioVariation[];
+}
+
+// ─── Fallback Data (used when API is unavailable) ───
+
+const FALLBACK_ARCHETYPES: Archetype[] = [
   { id: "before_after", name: "Before/After変身型", icon: "🔄", hit_rate: 72, description: "使用前後の変化を劇的に見せるパターン", example_count: 156 },
   { id: "problem_solution", name: "問題解決型", icon: "💡", hit_rate: 65, description: "悩みを提示し解決策を提案するパターン", example_count: 203 },
   { id: "testimonial", name: "体験談・口コミ型", icon: "💬", hit_rate: 58, description: "実際のユーザー体験を中心に展開するパターン", example_count: 89 },
@@ -57,48 +98,6 @@ const MOCK_ARCHETYPES: Archetype[] = [
   { id: "storytelling", name: "ストーリーテリング型", icon: "📖", hit_rate: 68, description: "物語形式で感情に訴えかけるパターン", example_count: 112 },
   { id: "comparison", name: "比較型", icon: "⚖️", hit_rate: 52, description: "他製品との比較で優位性を示すパターン", example_count: 78 },
   { id: "educational", name: "教育・啓蒙型", icon: "🎓", hit_rate: 48, description: "知識提供を通じて製品価値を伝えるパターン", example_count: 45 },
-];
-
-const MOCK_GENERATED: GeneratedScenario = {
-  title_options: [
-    "【衝撃】たった30日で驚きの変化！",
-    "まだ知らないの？話題の〇〇が凄い",
-    "〇〇で悩んでいた私が見つけた答え",
-  ],
-  sections: [
-    { time_range: "0:00-0:03", label: "Hook", text: "「え、これ本当？」と思わず二度見する驚きの変化をご覧ください", color: "bg-red-500" },
-    { time_range: "0:03-0:08", label: "問題提起", text: "毎朝鏡を見るたびにため息...。年齢とともに増える悩み、あなたも心当たりありませんか？", color: "bg-orange-500" },
-    { time_range: "0:08-0:15", label: "解決策", text: "そんな悩みに応えるために開発されたのが〇〇。独自成分△△が直接アプローチします", color: "bg-blue-500" },
-    { time_range: "0:15-0:22", label: "証拠", text: "実際に使った93%のユーザーが「満足」と回答。SNSでも話題沸騰中！", color: "bg-green-500" },
-    { time_range: "0:22-0:30", label: "CTA", text: "今なら初回限定80%OFF！さらに送料無料。このチャンスを逃さないで！", color: "bg-purple-500" },
-  ],
-  power_words: ["衝撃", "驚き", "限定", "無料", "話題沸騰"],
-  predicted_score: 78,
-};
-
-const MOCK_VARIATIONS: ScenarioVariation[] = [
-  {
-    id: "v1",
-    title: "パターンA：感情訴求型",
-    sections: [
-      { time_range: "0:00-0:03", label: "Hook", text: "「もう諦めかけていた...」そんなあなたに朗報です", color: "bg-red-500" },
-      { time_range: "0:03-0:10", label: "共感", text: "何を試しても変わらない日々。でも、ある出会いが全てを変えました", color: "bg-orange-500" },
-      { time_range: "0:10-0:20", label: "変化", text: "使い始めてわずか2週間。朝の鏡が楽しみになる毎日が始まりました", color: "bg-blue-500" },
-      { time_range: "0:20-0:30", label: "CTA", text: "あなたも新しい毎日を始めませんか？今だけ特別価格でお届けします", color: "bg-purple-500" },
-    ],
-    predicted_score: 82,
-  },
-  {
-    id: "v2",
-    title: "パターンB：データ訴求型",
-    sections: [
-      { time_range: "0:00-0:03", label: "Hook", text: "【満足度98.7%】累計100万個突破の実力", color: "bg-red-500" },
-      { time_range: "0:03-0:10", label: "データ", text: "臨床試験で実証された効果。3つの特許成分が他にはない結果を生み出します", color: "bg-orange-500" },
-      { time_range: "0:10-0:20", label: "証拠", text: "医療専門家も推薦。雑誌掲載多数。楽天ランキング1位獲得", color: "bg-green-500" },
-      { time_range: "0:20-0:30", label: "CTA", text: "公式サイト限定キャンペーン実施中。まずはお試しください", color: "bg-purple-500" },
-    ],
-    predicted_score: 75,
-  },
 ];
 
 // ─── Hook options ───
@@ -134,9 +133,130 @@ const toneOptions = [
   { value: "urgent", label: "緊急感" },
 ];
 
+const SECTION_COLORS = [
+  "bg-blue-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+];
+
+function humanizeSectionLabel(label?: string): string {
+  const normalized = String(label || "").trim();
+  if (!normalized) return "セクション";
+  const map: Record<string, string> = {
+    hook: "HOOK",
+    problem: "課題提起",
+    solution: "解決策",
+    proof: "証拠",
+    cta: "CTA",
+  };
+  return map[normalized] || normalized.toUpperCase();
+}
+
+function normalizeGeneratedScenario(payload: GenerateScenarioApiResponse | GeneratedScenario): GeneratedScenario {
+  const scenario = (("scenario" in payload && payload.scenario ? payload.scenario : payload) || {}) as {
+    title_options?: string[];
+    sections?: Array<{
+      section?: string;
+      type?: string;
+      text?: string;
+      duration?: string;
+      time_range?: string;
+      label?: string;
+      color?: string;
+    }>;
+    power_words_used?: string[];
+    power_words?: string[];
+    predicted_score?: number;
+  };
+  const rawSections = Array.isArray(scenario.sections) ? scenario.sections : [];
+  return {
+    title_options: Array.isArray(scenario.title_options) ? scenario.title_options : [],
+    sections: rawSections.map((section, index: number) => ({
+      time_range: String(section.duration || section.time_range || ""),
+      label: humanizeSectionLabel(section.label || section.section || section.type),
+      text: String(section.text || ""),
+      color: section.color || SECTION_COLORS[index % SECTION_COLORS.length],
+    })),
+    power_words: Array.isArray(scenario.power_words)
+      ? scenario.power_words
+      : Array.isArray(scenario.power_words_used)
+      ? scenario.power_words_used
+      : [],
+    predicted_score: Number(scenario.predicted_score || 0),
+  };
+}
+
+function normalizeScenarioVariations(payload: ScenarioVariationsApiResponse): ScenarioVariation[] {
+  const items = (Array.isArray(payload.variations)
+    ? payload.variations
+    : Array.isArray(payload.items)
+    ? payload.items
+    : []) as Array<
+      ScenarioVariation | {
+        variation_id?: number;
+        title?: string;
+        hook_text?: string;
+        cta_text?: string;
+        structure?: string[];
+        predicted_score?: number;
+      }
+    >;
+
+  return items.map((item, index) => {
+    if ("sections" in item && Array.isArray(item.sections)) {
+      return item as ScenarioVariation;
+    }
+    const rawItem = item as {
+      variation_id?: number;
+      title?: string;
+      hook_text?: string;
+      cta_text?: string;
+      structure?: string[];
+      predicted_score?: number;
+    };
+    return {
+      id: String(rawItem.variation_id || index + 1),
+      title: String(rawItem.title || `Variation ${index + 1}`),
+      predicted_score: Number(rawItem.predicted_score || 0),
+      sections: [
+        {
+          time_range: "0:00-0:03",
+          label: "HOOK",
+          text: String(rawItem.hook_text || ""),
+          color: SECTION_COLORS[0],
+        },
+        {
+          time_range: "0:03-0:06",
+          label: "CTA",
+          text: String(rawItem.cta_text || ""),
+          color: SECTION_COLORS[3],
+        },
+        ...((Array.isArray(rawItem.structure) ? rawItem.structure : []).map((part: string, partIndex: number) => ({
+          time_range: "",
+          label: humanizeSectionLabel(part),
+          text: "",
+          color: SECTION_COLORS[(partIndex + 1) % SECTION_COLORS.length],
+        }))),
+      ],
+    };
+  });
+}
+
+function normalizeSavedScenario(payload: SavedScenarioRecord): GeneratedScenario | null {
+  if (!payload.scenario || typeof payload.scenario !== "object") return null;
+  return normalizeGeneratedScenario(payload.scenario as GenerateScenarioApiResponse | GeneratedScenario);
+}
+
 // ─── Main Component ───
 
-export default function ScenarioBuilder() {
+interface ScenarioBuilderProps {
+  loadScenarioId?: string | null;
+  onScenarioLoaded?: () => void;
+}
+
+export default function ScenarioBuilder({ loadScenarioId, onScenarioLoaded }: ScenarioBuilderProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 6;
 
@@ -189,44 +309,146 @@ export default function ScenarioBuilder() {
     { num: 6, label: "保存・エクスポート" },
   ];
 
+  // ─── Archetypes from API ───
+  const [archetypes, setArchetypes] = useState<Archetype[]>(FALLBACK_ARCHETYPES);
+
+  useEffect(() => {
+    fetchApi<{ archetypes?: Archetype[]; items?: Archetype[] }>("/rankings/scenario-archetypes")
+      .then((res) => {
+        const items = res.archetypes || res.items || (Array.isArray(res) ? (res as Archetype[]) : []);
+        if (items.length > 0) setArchetypes(items);
+      })
+      .catch(() => { /* keep fallback */ });
+  }, []);
+
+  useEffect(() => {
+    if (!loadScenarioId) return;
+
+    let cancelled = false;
+    fetchApi<{ items?: SavedScenarioRecord[]; saved_scenarios?: SavedScenarioRecord[] }>("/rankings/saved-scenarios")
+      .then((res) => {
+        if (cancelled) return;
+        const items = res.items || res.saved_scenarios || [];
+        const found = items.find((item) => String(item.id) === String(loadScenarioId));
+        if (!found) {
+          toast.error("保存済みシナリオが見つかりません");
+          onScenarioLoaded?.();
+          return;
+        }
+
+        const normalized = normalizeSavedScenario(found);
+        if (!normalized) {
+          toast.error("保存済みシナリオの形式が不正です");
+          onScenarioLoaded?.();
+          return;
+        }
+
+        setGenre(found.genre || "all");
+        setScenarioName(found.name || "");
+        setSelectedArchetype(found.archetype || null);
+        setGenerated(normalized);
+        setCurrentStep(4);
+        setSaved(false);
+        setSelectedTitle(0);
+        toast.success("保存済みシナリオを読み込みました");
+        onScenarioLoaded?.();
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error("保存済みシナリオの読み込みに失敗しました");
+          onScenarioLoaded?.();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadScenarioId, onScenarioLoaded]);
+
   // ─── API Calls ───
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      // const result = await fetchApi<GeneratedScenario>("/rankings/generate-scenario", {
-      //   method: "POST",
-      //   body: { genre, productName, targetAudience, keyBenefit, archetype: selectedArchetype, hookType, ctaType, platform, duration, tone },
-      // });
-      await new Promise((r) => setTimeout(r, 1500));
-      setGenerated(MOCK_GENERATED);
+      const result = await fetchApi<GenerateScenarioApiResponse>("/rankings/generate-scenario", {
+        method: "POST",
+        body: {
+          genre_en: genre,
+          product_name: productName,
+          target_audience: targetAudience,
+          key_benefit: keyBenefit,
+          archetype: selectedArchetype,
+          cta_type: ctaType,
+          platform,
+          duration_seconds: duration,
+        },
+      });
+      setGenerated(normalizeGeneratedScenario(result));
+      setSaved(false);
     } catch {
       toast.error("シナリオ生成に失敗しました");
     } finally {
       setGenerating(false);
     }
-  }, []);
+  }, [genre, productName, targetAudience, keyBenefit, selectedArchetype, ctaType, platform, duration]);
 
   const handleGenerateVariations = useCallback(async () => {
     setGeneratingVariations(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      await new Promise((r) => setTimeout(r, 1200));
-      setVariations(MOCK_VARIATIONS);
+      const result = await fetchApi<ScenarioVariationsApiResponse>("/rankings/scenario-variations", {
+        method: "POST",
+        body: {
+          genre_en: genre,
+          product_name: productName,
+          key_benefit: keyBenefit,
+          target_audience: targetAudience,
+          variation_count: 4,
+          base_archetype: selectedArchetype,
+        },
+      });
+      setVariations(normalizeScenarioVariations(result));
     } catch {
       toast.error("バリエーション生成に失敗しました");
     } finally {
       setGeneratingVariations(false);
     }
-  }, []);
+  }, [genre, productName, keyBenefit, targetAudience, selectedArchetype]);
 
   const handleSave = useCallback(async () => {
     if (!scenarioName.trim()) return;
     setSaving(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      await new Promise((r) => setTimeout(r, 800));
+      const response = await fetchApi<{ scenario?: SavedScenarioRecord; id?: string }>("/rankings/saved-scenarios", {
+        method: "POST",
+        body: {
+          name: scenarioName,
+          genre,
+          archetype: selectedArchetype,
+          platform,
+          product_name: productName,
+          scenario: generated,
+          selected_variation: selectedVariation,
+          variations,
+        },
+      });
+      if (typeof window !== "undefined") {
+        const scenario = response.scenario;
+        window.dispatchEvent(
+          new CustomEvent("saved-scenarios:changed", {
+            detail: {
+              action: "saved",
+              scenario: scenario
+                ? {
+                    ...scenario,
+                    platform: scenario.platform || platform,
+                    product_name: scenario.product_name || productName,
+                  }
+                : undefined,
+              scenarioId: response.id,
+            },
+          }),
+        );
+      }
       setSaved(true);
       setShowSaveModal(false);
       toast.success("シナリオを保存しました");
@@ -235,27 +457,29 @@ export default function ScenarioBuilder() {
     } finally {
       setSaving(false);
     }
-  }, [scenarioName]);
+  }, [scenarioName, genre, selectedArchetype, platform, productName, generated, selectedVariation, variations]);
 
   const handlePredictPerformance = useCallback(async () => {
     if (!customText.trim()) return;
     setPredicting(true);
     try {
-      // TODO: Replace with actual API call when endpoint is ready
-      await new Promise((r) => setTimeout(r, 1000));
-      setPrediction({
-        predicted_score: 72,
-        hit_probability: 65,
-        strengths: ["フックが強い", "CTAが明確", "ベネフィットが具体的"],
-        weaknesses: ["社会的証明が不足", "緊急性が弱い"],
-        suggestions: ["数字データを追加すると信頼性が向上します", "限定感を出すことで行動率がUPします", "ユーザーの口コミを追加しましょう"],
+      const result = await fetchApi<PerformancePrediction>("/rankings/predict-scenario-performance", {
+        method: "POST",
+        params: {
+          hook_type: hookType,
+          cta_type: ctaType,
+          genre,
+          title: generated?.title_options?.[selectedTitle] || productName,
+          description: customText,
+        },
       });
+      setPrediction(result);
     } catch {
       toast.error("パフォーマンス予測に失敗しました");
     } finally {
       setPredicting(false);
     }
-  }, [customText]);
+  }, [customText, hookType, ctaType, genre, generated, selectedTitle, productName]);
 
   const handleExportText = () => {
     if (!generated) return;
@@ -441,7 +665,7 @@ export default function ScenarioBuilder() {
               <h2 className="text-[15px] font-bold text-gray-900 mb-1">Step 2: アーキタイプ選択</h2>
               <p className="text-[11px] text-gray-500 mb-4">広告シナリオの型を選んでください</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {MOCK_ARCHETYPES.map((arch) => (
+                {archetypes.map((arch) => (
                   <button
                     key={arch.id}
                     onClick={() => setSelectedArchetype(arch.id)}

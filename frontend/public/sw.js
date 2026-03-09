@@ -43,9 +43,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
+  const isHttp = url.protocol === "http:" || url.protocol === "https:";
 
   // Only cache GET requests
   if (request.method !== "GET") return;
+  // Ignore unsupported schemes (e.g. chrome-extension://) to avoid Cache.put errors.
+  if (!isHttp) return;
 
   // API caching — network-first with fallback
   if (url.pathname.startsWith("/api/v1/")) {
@@ -123,7 +126,11 @@ async function cacheFirst(request) {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(STATIC_CACHE);
-      cache.put(request, response.clone());
+      try {
+        await cache.put(request, response.clone());
+      } catch {
+        // Ignore non-cacheable responses.
+      }
     }
     return response;
   } catch {
@@ -136,7 +143,11 @@ async function networkFirst(request) {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(STATIC_CACHE);
-      cache.put(request, response.clone());
+      try {
+        await cache.put(request, response.clone());
+      } catch {
+        // Ignore non-cacheable responses.
+      }
     }
     return response;
   } catch {

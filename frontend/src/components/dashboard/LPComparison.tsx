@@ -85,6 +85,18 @@ export default function LPComparison({ adIds }: LPComparisonProps) {
     return "#ef4444";
   };
 
+  const normalizeScreenshotSrc = (raw?: string, adId?: number) => {
+    const fallback = adId ? `/api/v1/media/lp-screenshot/${adId}` : "";
+    const candidate = (raw || "").trim();
+    if (!candidate) return fallback;
+    if (/^[a-zA-Z]:\\/.test(candidate)) return fallback;
+    if (candidate.startsWith("\\\\")) return fallback;
+    if (candidate.startsWith("/") || candidate.startsWith("http://") || candidate.startsWith("https://") || candidate.startsWith("data:") || candidate.startsWith("blob:")) {
+      return candidate;
+    }
+    return fallback;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -97,7 +109,7 @@ export default function LPComparison({ adIds }: LPComparisonProps) {
       {/* Screenshots side by side */}
       <div className={`grid gap-3 ${details.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
         {details.map((d) => {
-          const screenshotSrc = d.screenshot_url || (d.ad_id ? `/api/v1/media/lp-screenshot/${d.ad_id}` : "");
+          const screenshotSrc = normalizeScreenshotSrc(d.screenshot_url, d.ad_id);
           return (
             <div key={d.ad_id} className="space-y-2">
               <p className="text-[10px] font-medium text-gray-700 truncate">{d.product_name || `広告 #${d.ad_id}`}</p>

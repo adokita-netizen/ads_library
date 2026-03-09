@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "guideline_path": "docs/API_COMPATIBILITY_GUIDELINES.md",
+  "required_sections": [
+    "Compatibility Rules",
+    "Change Classes",
+    "Review Checklist",
+    "Required Review Artifacts",
+    "Rollout Policy"
+  ],
+  "critical_contract_tests": [
+    "backend/tests/test_api_contract_rankings.py",
+    "backend/tests/test_search_api_validation_contract.py",
+    "backend/tests/test_c96_creative_library_contract.py"
+  ],
+  "required_review_questions": [
+    "Which endpoints changed?",
+    "Is the change additive, review-required, or breaking?",
+    "Which existing clients depend on the old shape?",
+    "Which contract tests were added or updated?",
+    "Is there an alias/deprecation window if shape changed?",
+    "Are examples, docs, and operator notes updated?"
+  ]
+}

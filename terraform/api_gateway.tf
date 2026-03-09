@@ -21,7 +21,7 @@ resource "aws_apigatewayv2_integration" "lambda" {
   integration_uri        = aws_lambda_function.api.invoke_arn
   integration_method     = "POST"
   payload_format_version = "2.0"
-  timeout_milliseconds   = 30000  # HTTP API max is 30s
+  timeout_milliseconds   = 30000 # HTTP API max is 30s
 }
 
 resource "aws_apigatewayv2_route" "default" {
@@ -38,14 +38,14 @@ resource "aws_apigatewayv2_stage" "default" {
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn
     format = jsonencode({
-      requestId      = "$context.requestId"
-      ip             = "$context.identity.sourceIp"
-      requestTime    = "$context.requestTime"
-      httpMethod     = "$context.httpMethod"
-      routeKey       = "$context.routeKey"
-      status         = "$context.status"
-      protocol       = "$context.protocol"
-      responseLength = "$context.responseLength"
+      requestId          = "$context.requestId"
+      ip                 = "$context.identity.sourceIp"
+      requestTime        = "$context.requestTime"
+      httpMethod         = "$context.httpMethod"
+      routeKey           = "$context.routeKey"
+      status             = "$context.status"
+      protocol           = "$context.protocol"
+      responseLength     = "$context.responseLength"
       integrationLatency = "$context.integrationLatency"
     })
   }

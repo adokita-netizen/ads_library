@@ -15,6 +15,8 @@ import os
 import re
 import sys
 import time
+import argparse
+import asyncio
 
 sys.path.insert(0, ".")
 
@@ -25,6 +27,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import SyncSessionLocal, is_in_memory_mode, Base
 from app.models.ad import Ad
 from app.api.endpoints.settings import load_api_keys_from_db
+from app.services.media_extraction import MediaExtractor
 
 
 def _get_session() -> Session:
@@ -140,6 +143,14 @@ def _compute_creative_quality(ad: Ad) -> dict:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Recover missing video URLs for ads")
+    parser.add_argument(
+        "--aggressive",
+        action="store_true",
+        help="Use D-R2-3 4-step fallback recovery (meta_api/render_ad/og_tag/iframe).",
+    )
+    args = parser.parse_args()
+
     session = _get_session()
     try:
         # Load Meta access token
@@ -178,6 +189,7 @@ def main():
             # Process ads with no video_url
             stats = {"video_found": 0, "image_confirmed": 0, "error": 0}
 
+            extractor = MediaExtractor(timeout=20.0)
             for i, ad in enumerate(no_video_ads):
                 label = f"[{i+1}/{total}] Ad {ad.id} (ext={ad.external_id})"
                 current_type = ad.creative_type or "unknown"
@@ -194,13 +206,29 @@ def main():
                     continue
 
                 try:
-                    video_url = _extract_video_from_render_ad(ad.external_id, access_token)
+                    method = ""
+                    if args.aggressive:
+                        video_url, method = asyncio.run(
+                            extractor.aggressive_video_recovery(
+                                external_id=ad.external_id,
+                                snapshot_url=ad.snapshot_url,
+                                access_token=access_token,
+                            )
+                        )
+                    else:
+                        video_url = _extract_video_from_render_ad(ad.external_id, access_token)
 
                     if video_url:
                         ad.video_url = video_url
                         ad.creative_type = "video"
+                        if method:
+                            meta = dict(ad.ad_metadata or {})
+                            meta["extraction_method"] = method
+                            ad.ad_metadata = meta
+                            flag_modified(ad, "ad_metadata")
                         stats["video_found"] += 1
-                        print(f"  -> VIDEO found: {video_url[:80]}")
+                        method_info = f" via {method}" if method else ""
+                        print(f"  -> VIDEO found{method_info}: {video_url[:80]}")
                     else:
                         # No video found — confirm as image
                         if ad.creative_type != "image":

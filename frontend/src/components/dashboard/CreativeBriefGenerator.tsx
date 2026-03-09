@@ -21,23 +21,6 @@ interface CreativeBriefGeneratorProps {
   genre?: string;
 }
 
-// ─── Mock Data ───
-
-const MOCK_BRIEF: BriefResult = {
-  recommended_hooks: ["「まだ○○で悩んでいませんか？」", "「たった3日で実感」", "「知らないと損する○○の真実」"],
-  recommended_ctas: ["今すぐ無料で試す", "限定50名様", "30日間全額返金保証"],
-  power_words: ["驚異の", "たった○日で", "プロが認めた", "今だけ", "業界初", "満足度98%"],
-  structure: [
-    { step: "hook", label: "フック", description: "視聴者の注意を3秒以内に掴む質問・衝撃的事実" },
-    { step: "problem", label: "問題提起", description: "ターゲットが共感する具体的な悩み・課題を提示" },
-    { step: "solution", label: "解決策", description: "商品・サービスがどう解決するか明確に提示" },
-    { step: "proof", label: "証拠", description: "実績データ・口コミ・権威性で信頼を獲得" },
-    { step: "cta", label: "CTA", description: "限定性・緊急性を添えて行動を促す" },
-  ],
-  predicted_performance: 74,
-  summary: "質問型フックと限定CTAの組み合わせは、美容系ジャンルで高いCVRを記録しています。",
-};
-
 const purposeOptions = [
   { value: "awareness", label: "認知拡大" },
   { value: "conversion", label: "CV獲得" },
@@ -82,8 +65,7 @@ export default function CreativeBriefGenerator({ genre: initialGenre }: Creative
       setBrief(res);
       toast.success("ブリーフを生成しました");
     } catch {
-      setBrief(MOCK_BRIEF);
-      toast("サンプルデータを表示しています", { icon: "ℹ️" });
+      toast.error("ブリーフ生成に失敗しました");
     } finally {
       setLoading(false);
     }

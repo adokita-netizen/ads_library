@@ -28,9 +28,164 @@ export interface Ad {
   frequency?: number;
   destination_url?: string;
   destination_type?: string;
+  final_url?: string;
+  resolved_url?: string;
+  domain?: string;
+  lp_status?: string;
+  lp_score?: number;
+  language?: string;
+  language_source?: string;
+  exclude_from_analysis?: boolean;
+  exclude_reason?: string;
+  jp_char_ratio?: number;
+  topic_label?: string;
+  topic_confidence?: number;
+  matched_terms?: string[];
+  needs_topic_review?: boolean;
+  review_required?: boolean;
+  review_reason?: string;
+  topic_provenance?: string;
+  classification_provenance?: string;
+  topic_source?: string;
+  classification_source?: string;
+  priority?: "high" | "medium" | "low" | string;
+  priority_level?: "high" | "medium" | "low" | string;
+  priority_score?: number;
+  actual_metrics_priority?: "high" | "medium" | "low" | string;
+  actual_metrics_priority_score?: number;
+  media_status?: MediaStatus;
+  media_cache_status?: string;
+  metric_source?: string;
+  creative_source?: string;
+  lp_source?: string;
+  metric_status?: "real" | "estimated" | "missing" | "stale" | string;
+  creative_status?: "real" | "estimated" | "missing" | "stale" | string;
+  freshness_status?: "fresh" | "missing" | "stale" | string;
+  last_meta_success_at?: string;
+  meta_quality_state?: "real" | "estimated" | "missing" | "stale" | string;
+  meta_recovery_reason?: string;
   tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface MediaStatus {
+  viewable?: boolean;
+  downloadable?: boolean;
+  has_lp?: boolean;
+  primary_type?: string;
+  missing_reasons?: string[];
+}
+
+export interface LPInfo {
+  destination_url?: string;
+  resolved_url?: string;
+  redirect_chain?: string[];
+  domain?: string;
+  final_domain?: string;
+  destination_type?: string;
+  lp_status?: string;
+  lp_score?: number | { score?: number | null } | null;
+  has_lp?: boolean;
+  http_status?: number | string | null;
+}
+
+export interface AdMediaInfo {
+  ad_id: number;
+  creative_type?: string;
+  media_extraction_status?: string;
+  image_url?: string;
+  video_url?: string;
+  snapshot_url?: string;
+  download_url?: string;
+  media_status?: MediaStatus;
+  lp_info?: LPInfo;
+}
+
+export interface MetaTokenInfo {
+  has_token: boolean;
+  token_source: "db" | "env" | "missing" | string;
+  runtime_source: "db" | "env" | "missing" | string;
+  source_priority?: string[];
+  fallback_used?: boolean;
+  fallback_reason?: string | null;
+  is_valid: boolean;
+  app_id?: string | null;
+  type?: string | null;
+  expires_at?: number | null;
+  days_remaining?: number | null;
+  is_expiring?: boolean;
+  scopes?: string[];
+  user_id?: string | null;
+  user_name?: string | null;
+  last_validation_error?: string | null;
+  message?: string | null;
+}
+
+export interface CreativeLibraryAuditRow {
+  label: string;
+  total_ads?: number;
+  viewable_count?: number;
+  downloadable_count?: number;
+  lp_present_count?: number;
+  lp_resolved_count?: number;
+  missing_media_count?: number;
+  download_unavailable_count?: number;
+  missing_lp_count?: number;
+  lp_unresolved_count?: number;
+}
+
+export interface CreativeLibraryAuditAd {
+  ad_id: number;
+  title: string;
+  advertiser_name?: string;
+  platform?: string;
+  genre?: string;
+  priority_score?: number;
+  failure_reason_codes?: string[];
+  needs_cr_recovery?: boolean;
+  needs_download_recovery?: boolean;
+  needs_lp_resolution?: boolean;
+}
+
+export interface CreativeLibraryDailyChange {
+  ad_id: number;
+  title: string;
+  advertiser_name?: string;
+  platform?: string;
+  genre?: string;
+  direction?: string;
+  delta_score?: number;
+  failure_reason_codes?: string[];
+}
+
+export interface CreativeLibraryAudit {
+  summary: {
+    total_ads: number;
+    creative_viewable_rate: number;
+    creative_downloadable_rate: number;
+    lp_present_rate: number;
+    lp_resolved_rate: number;
+    missing_media_count?: number;
+    missing_lp_count?: number;
+  };
+  platform_breakdown: CreativeLibraryAuditRow[];
+  genre_breakdown: CreativeLibraryAuditRow[];
+  priority_recovery_ads: CreativeLibraryAuditAd[];
+  creative_library_daily_report?: {
+    top_regressions: CreativeLibraryDailyChange[];
+    top_recoveries: CreativeLibraryDailyChange[];
+    worsening_segments?: Array<{
+      segment_type?: string;
+      label?: string;
+      metric?: string;
+      delta?: number;
+    }>;
+  };
+}
+
+export interface CreativeLibraryAuditResponse {
+  creative_library_audit: CreativeLibraryAudit;
 }
 
 export interface AdAnalysis {

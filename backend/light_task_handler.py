@@ -53,6 +53,18 @@ def _execute_task(task_name: str, kwargs: dict):
         from app.tasks.alert_tasks import detect_alerts_task
         return detect_alerts_task()
 
+    elif task_name == "daily_ops_health_check":
+        from app.tasks.ops_tasks import daily_ops_health_check_task
+        return daily_ops_health_check_task()
+
+    elif task_name == "mlops_retrain":
+        from app.tasks.mlops_tasks import mlops_retrain_task
+        return mlops_retrain_task(kwargs)
+
+    elif task_name == "mlops_monitoring":
+        from app.tasks.mlops_tasks import mlops_monitoring_task
+        return mlops_monitoring_task(kwargs)
+
     elif task_name == "generate_script":
         from app.tasks.generation_tasks import generate_script_task
         return generate_script_task(**kwargs)

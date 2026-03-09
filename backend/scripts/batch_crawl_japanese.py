@@ -26,6 +26,8 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="repla
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # ---------------------------------------------------------------------------
 # Genre keyword configuration for the Japanese market
 # ---------------------------------------------------------------------------
@@ -49,6 +51,28 @@ GENRE_KEYWORDS = {
             "\u7f8e\u5bb9\u6db2",                        # beauty serum
             "\u30b9\u30ad\u30f3\u30b1\u30a2",            # skincare
             "\u30b3\u30b9\u30e1",                        # cosme
+            "\u307e\u3064\u6bdb\u7f8e\u5bb9\u6db2",      # eyelash serum
+            "\u30b7\u30df\u53d6\u308a",                  # spot removal
+        ],
+    },
+    "hair_removal": {
+        "label": "Hair Removal",
+        "category": "beauty",
+        "keywords": [
+            "\u533b\u7642\u8131\u6bdb",                  # medical hair removal
+            "\u8131\u6bdb",                              # hair removal
+            "\u5168\u8eab\u8131\u6bdb",                  # full-body hair removal
+            "VIO \u8131\u6bdb",                          # VIO hair removal
+        ],
+    },
+    "aga": {
+        "label": "AGA / FAGA",
+        "category": "beauty",
+        "keywords": [
+            "AGA",                                       # hair loss treatment
+            "FAGA",                                      # female hair loss treatment
+            "\u80b2\u6bdb\u5264",                        # hair growth tonic
+            "\u8584\u6bdb \u6cbb\u7642",                # hair thinning treatment
         ],
     },
     "diet": {
@@ -58,6 +82,11 @@ GENRE_KEYWORDS = {
             "\u75e9\u305b\u308b",                        # yaseru (lose weight)
             "\u30c0\u30a4\u30a8\u30c3\u30c8",            # diet
             "\u8102\u80aa\u71c3\u713c",                  # fat burning
+            "\u533b\u7642\u30c0\u30a4\u30a8\u30c3\u30c8",  # medical diet
+            "\u30e1\u30c7\u30a3\u30ab\u30eb\u30c0\u30a4\u30a8\u30c3\u30c8",  # medical diet
+            "GLP-1",                                     # GLP-1
+            "\u80a5\u6e80\u5916\u6765",                  # obesity clinic
+            "\u30de\u30f3\u30b8\u30e3\u30ed",            # Mounjaro
         ],
     },
     "fitness": {
@@ -67,6 +96,12 @@ GENRE_KEYWORDS = {
             "\u30b8\u30e0",                              # gym
             "\u30d1\u30fc\u30bd\u30ca\u30eb\u30c8\u30ec\u30fc\u30cb\u30f3\u30b0",  # personal training
             "\u7b4b\u30c8\u30ec",                        # muscle training
+            "\u30d4\u30e9\u30c6\u30a3\u30b9",            # pilates
+            "\u30de\u30b7\u30f3\u30d4\u30e9\u30c6\u30a3\u30b9",  # reformer pilates
+            "\u30e8\u30ac",                              # yoga
+            "\u30db\u30c3\u30c8\u30e8\u30ac",            # hot yoga
+            "\u5973\u6027\u5c02\u7528\u30b8\u30e0",      # women-only gym
+            "24\u6642\u9593\u30b8\u30e0",                # 24-hour gym
         ],
     },
     "finance": {
@@ -161,6 +196,55 @@ def _classify_genre(crawled_ad, genre_key: str, genre_info: dict) -> dict:
     return meta
 
 
+def _append_unique(values: list[str], value: str | None) -> list[str]:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return values
+    if normalized not in values:
+        values.append(normalized)
+    return values
+
+
+def _get_session():
+    """Get DB session with SQLite fallback for local ops scripts."""
+    try:
+        from app.core.database import SyncSessionLocal
+
+        session = SyncSessionLocal()
+        session.execute(__import__("sqlalchemy").text("SELECT 1"))
+        return session
+    except Exception:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        db_path = os.path.join(BASE_DIR, "vaap_local.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        session_factory = sessionmaker(bind=engine)
+        return session_factory()
+
+
+def _patch_local_task_sessions():
+    """Force crawl tasks to use local SQLite when primary DB is unavailable."""
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.tasks import crawl_tasks as crawl_tasks_module
+
+        db_path = os.path.join(BASE_DIR, "vaap_local.db")
+        if not os.path.exists(db_path):
+            return
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        local_session = sessionmaker(bind=engine)
+        crawl_tasks_module.SyncSessionLocal = local_session
+
+        import app.core.database as db_module
+
+        db_module.SyncSessionLocal = local_session
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Core crawl + save
 # ---------------------------------------------------------------------------
@@ -168,7 +252,6 @@ def _classify_genre(crawled_ad, genre_key: str, genre_info: dict) -> dict:
 def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                          limit_per_platform: int) -> dict:
     """Crawl all keywords for one genre.  Returns summary dict."""
-    from app.core.database import SyncSessionLocal
     from app.models.ad import Ad, AdStatusEnum, AdCategoryEnum, MediaExtractionStatus
     from app.tasks.crawl_tasks import _crawl_platforms, _map_platform, _extract_destination_url, _extract_text_fallback
     from sqlalchemy.orm.attributes import flag_modified
@@ -207,7 +290,7 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
             print(f"found {ad_count}", end=" ", flush=True)
 
             # Save to DB
-            session = SyncSessionLocal()
+            session = _get_session()
             saved = 0
             try:
                 for platform, crawled_ads in crawl_results.items():
@@ -227,6 +310,16 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                                 if "jp_genre_key" not in meta:
                                     meta["jp_genre_key"] = genre_key
                                     meta["jp_genre"] = label
+                                meta["source_keyword"] = keyword
+                                search_terms = list(meta.get("jp_search_terms", []))
+                                _append_unique(search_terms, keyword)
+                                _append_unique(search_terms, crawled_ad.metadata.get("crawl_query") if crawled_ad.metadata else None)
+                                _append_unique(search_terms, meta.get("crawl_query"))
+                                meta["jp_search_terms"] = search_terms
+                                aliases = list(meta.get("crawl_query_aliases", []))
+                                for term in search_terms:
+                                    _append_unique(aliases, term)
+                                meta["crawl_query_aliases"] = aliases
                                 existing.ad_metadata = meta
                                 flag_modified(existing, "ad_metadata")
                                 continue
@@ -261,6 +354,11 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
                         # Build metadata with genre classification
                         ad_meta = _classify_genre(crawled_ad, genre_key, genre_info)
                         ad_meta["jp_genres"] = [genre_key]
+                        ad_meta["source_keyword"] = keyword
+                        ad_meta["jp_search_terms"] = []
+                        _append_unique(ad_meta["jp_search_terms"], keyword)
+                        _append_unique(ad_meta["jp_search_terms"], ad_meta.get("crawl_query"))
+                        ad_meta["crawl_query_aliases"] = list(ad_meta["jp_search_terms"])
                         if dest_url:
                             ad_meta["destination_url"] = dest_url
                             ad_meta.setdefault("destination_type", "LP")
@@ -338,6 +436,8 @@ def crawl_and_save_genre(genre_key: str, genre_info: dict, platforms: list,
 # ---------------------------------------------------------------------------
 
 def main():
+    _patch_local_task_sessions()
+
     parser = argparse.ArgumentParser(
         description="Batch crawl Japanese market ads by genre"
     )
@@ -453,9 +553,9 @@ def main():
 
     # DB stats
     try:
-        from app.core.database import SyncSessionLocal
         from app.models.ad import Ad
-        session = SyncSessionLocal()
+
+        session = _get_session()
         total_ads = session.query(Ad).count()
         session.close()
         print(f"  DB total ads:   {total_ads}")

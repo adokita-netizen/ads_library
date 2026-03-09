@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import patch
 
 from app.core.config import Settings, _INSECURE_SECRET_KEYS
+from app.core.rate_limit import parse_rate_limit_policy
 from app.core.security import (
     add_to_blacklist,
     is_blacklisted,
@@ -127,3 +128,10 @@ class TestSecretKeyValidation:
         settings = Settings()
         assert settings.rate_limit_login == "5/minute"
         assert settings.rate_limit_register == "3/minute"
+        assert settings.rate_limit_rankings_read == "60/minute"
+        assert settings.rate_limit_rankings_heavy == "20/minute"
+
+    def test_parse_rate_limit_policy(self):
+        assert parse_rate_limit_policy("7/minute", default_requests=1, default_window_seconds=1) == (7, 60)
+        assert parse_rate_limit_policy("2/hour", default_requests=1, default_window_seconds=1) == (2, 3600)
+        assert parse_rate_limit_policy("bad", default_requests=9, default_window_seconds=30) == (9, 30)
