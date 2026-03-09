@@ -137,10 +137,11 @@ class LPCrawler:
         try:
             client = await self._get_client()
             response = await client.get(url)
-            response.raise_for_status()
 
             parsed = urlparse(str(response.url))
             html = response.text
+            if response.status_code >= 400 and len((html or "").strip()) < 40:
+                response.raise_for_status()
 
             # Extract meta tags
             title = self._extract_meta(html, "title")
@@ -164,13 +165,88 @@ class LPCrawler:
                 "lp_crawled",
                 url=url,
                 final_url=crawled.final_url,
+                status_code=crawled.status_code,
                 title=crawled.title[:80] if crawled.title else "",
                 html_size=len(html),
             )
             return crawled
 
         except Exception as e:
+            logger.warning("lp_http_crawl_failed_trying_browser", url=url, error=str(e))
+            browser_result = await self._crawl_via_playwright(url)
+            if browser_result is not None:
+                return browser_result
             logger.error("lp_crawl_failed", url=url, error=str(e))
+            return None
+
+    async def _crawl_via_playwright(self, url: str) -> Optional[CrawledLP]:
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            logger.warning("lp_playwright_not_installed", url=url)
+            return None
+
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                    ],
+                )
+                context = None
+                page = None
+                try:
+                    context = await browser.new_context(
+                        viewport={"width": 1440, "height": 2200},
+                        user_agent=(
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/124.0.0.0 Safari/537.36"
+                        ),
+                        locale="ja-JP",
+                    )
+                    page = await context.new_page()
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=max(int(self.timeout * 1000), 45000))
+                    await page.wait_for_timeout(3000)
+                    html = await page.content()
+                    final_url = page.url
+                    parsed = urlparse(str(final_url))
+                    status_code = response.status if response is not None else 200
+
+                    if len((html or "").strip()) < 40:
+                        return None
+
+                    crawled = CrawledLP(
+                        url=url,
+                        final_url=str(final_url),
+                        domain=parsed.netloc,
+                        status_code=status_code,
+                        html_content=html,
+                        title=self._extract_meta(html, "title"),
+                        meta_description=self._extract_meta(html, "description"),
+                        og_image=self._extract_og_image(html),
+                        headers={},
+                        redirect_chain=[],
+                    )
+                    logger.info(
+                        "lp_crawled_via_playwright",
+                        url=url,
+                        final_url=crawled.final_url,
+                        status_code=crawled.status_code,
+                        html_size=len(html),
+                    )
+                    return crawled
+                finally:
+                    if page:
+                        await page.close()
+                    if context:
+                        await context.close()
+                    await browser.close()
+        except Exception as exc:
+            logger.warning("lp_playwright_crawl_failed", url=url, error=str(exc))
             return None
 
     def extract_text_content(self, html: str) -> str:
@@ -310,7 +386,7 @@ class LPCrawler:
     def _extract_meta(self, html: str, name: str) -> str:
         if name == "title":
             match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
-            return match.group(1).strip() if match else ""
+            return str(match.group(1) or "").strip() if match else ""
 
         match = re.search(
             rf'<meta\s+(?:name|property)=["\'](?:og:)?{name}["\']\s+content=["\'](.*?)["\']',
@@ -321,7 +397,7 @@ class LPCrawler:
                 rf'<meta\s+content=["\'](.*?)["\']\s+(?:name|property)=["\'](?:og:)?{name}["\']',
                 html, re.IGNORECASE,
             )
-        return match.group(1).strip() if match else ""
+        return str(match.group(1) or "").strip() if match else ""
 
     def _extract_og_image(self, html: str) -> str:
         match = re.search(
@@ -329,8 +405,26 @@ class LPCrawler:
             html, re.IGNORECASE,
         )
         if match:
-            return (match.group(1) or match.group(2)).strip()
+            return str(match.group(1) or match.group(2) or "").strip()
         return ""
+
+    def _extract_canonical(self, html: str) -> str:
+        match = re.search(
+            r'<link\s+[^>]*rel=["\']canonical["\'][^>]*href=["\'](.*?)["\']',
+            html,
+            re.IGNORECASE,
+        )
+        if not match:
+            match = re.search(
+                r'<link\s+[^>]*href=["\'](.*?)["\'][^>]*rel=["\']canonical["\']',
+                html,
+                re.IGNORECASE,
+            )
+        return str(match.group(1) or "").strip() if match else ""
+
+    def _extract_html_lang(self, html: str) -> str:
+        match = re.search(r"<html[^>]*\slang=['\"]([^'\"]+)['\"]", html, re.IGNORECASE)
+        return str(match.group(1) or "").strip().lower() if match else ""
 
     def _extract_heading(self, html: str) -> str:
         for level in range(1, 4):

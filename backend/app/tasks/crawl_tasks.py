@@ -536,6 +536,32 @@ def _has_viewable_creative(ad: Ad) -> bool:
     return bool(ad.video_url or ad.image_url or ad.thumbnail_url or ad.snapshot_url)
 
 
+def _lp_info_is_complete(ad: Ad) -> bool:
+    meta = _get_meta(ad)
+    lp_info = meta.get("lp_info") if isinstance(meta.get("lp_info"), dict) else {}
+    lp_data = meta.get("lp_data") if isinstance(meta.get("lp_data"), dict) else {}
+    return bool(
+        lp_info.get("final_url")
+        and (
+            lp_info.get("title")
+            or lp_info.get("description")
+            or lp_info.get("og_image")
+            or lp_data.get("full_text_content")
+        )
+    )
+
+
+def _needs_lp_enrichment(ad: Ad) -> bool:
+    if not ad.destination_url:
+        return False
+    if _lp_info_is_complete(ad):
+        return False
+    meta = _get_meta(ad)
+    if str(meta.get("lp_fetch_status") or "").strip().lower() == "success":
+        return False
+    return True
+
+
 def _is_recent(ad: Ad, hours: int = 72) -> bool:
     if not ad.created_at:
         return False
@@ -812,13 +838,15 @@ def crawl_ads_task(
 
                     # Determine media extraction status:
                     # Skip extraction if crawler already provided direct media URLs
-                    has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url)
+                    has_direct_media = bool(crawled_ad.image_urls or crawled_ad.video_url or crawled_ad.thumbnail_url)
                     if has_direct_media:
-                        extraction_status = MediaExtractionStatus.SKIPPED
+                        extraction_status = MediaExtractionStatus.ENRICHED
                     elif crawled_ad.snapshot_url:
                         extraction_status = MediaExtractionStatus.PENDING
+                    elif crawled_ad.external_id:
+                        extraction_status = MediaExtractionStatus.PENDING_HEAVY
                     else:
-                        extraction_status = MediaExtractionStatus.SKIPPED
+                        extraction_status = MediaExtractionStatus.FAILED
 
                     # Extract destination_url robustly from direct field + metadata candidates
                     dest_url = _extract_destination_url(crawled_ad)
@@ -901,11 +929,16 @@ def crawl_ads_task(
                     # Inline fallback: try HTTP+BS4 enrichment directly
                     _inline_enrich(ad_to_extract, session)
 
-            # Dispatch thumbnail download for ads that have thumbnail_url but skipped extraction
+            # Materialize still-image assets for direct-media ads so thumbnails/images are downloadable.
+            from sqlalchemy import or_
+
             ads_needing_thumb = session.query(Ad).filter(
-                Ad.media_extraction_status == MediaExtractionStatus.SKIPPED,
-                Ad.thumbnail_url.isnot(None),
-                Ad.thumbnail_s3_key.is_(None),
+                Ad.media_extraction_status.in_([
+                    MediaExtractionStatus.SKIPPED,
+                    MediaExtractionStatus.ENRICHED,
+                ]),
+                or_(Ad.thumbnail_url.isnot(None), Ad.image_url.isnot(None)),
+                or_(Ad.thumbnail_s3_key.is_(None), Ad.image_s3_key.is_(None)),
             ).order_by(Ad.created_at.desc()).limit(saved_count).all()
             for ad_thumb in ads_needing_thumb:
                 try:
@@ -913,6 +946,41 @@ def crawl_ads_task(
                 except Exception as e:
                     logger.warning("thumbnail_dispatch_failed", ad_id=ad_thumb.id, error=str(e))
                     _inline_download_thumbnail(ad_thumb, session)
+
+            ads_needing_lp = (
+                session.query(Ad)
+                .filter(Ad.destination_url.isnot(None), Ad.destination_url != "")
+                .order_by(Ad.created_at.desc())
+                .limit(saved_count * 4)
+                .all()
+            )
+            queued_lp = 0
+            for ad_lp in ads_needing_lp:
+                if queued_lp >= saved_count:
+                    break
+                if not _needs_lp_enrichment(ad_lp):
+                    continue
+                meta = _get_meta(ad_lp)
+                if meta.get("lp_refresh_dispatched_at"):
+                    continue
+                meta["lp_refresh_dispatched_at"] = datetime.utcnow().isoformat()
+                ad_lp.ad_metadata = meta
+                session.add(ad_lp)
+                try:
+                    dispatch_task(
+                        "crawl_and_analyze_lp",
+                        url=ad_lp.destination_url,
+                        ad_id=ad_lp.id,
+                        genre=getattr(getattr(ad_lp, "category", None), "value", None),
+                        product_name=str(meta.get("product_name") or meta.get("product_category") or "") or None,
+                        advertiser_name=ad_lp.advertiser_name,
+                        auto_analyze=False,
+                    )
+                    queued_lp += 1
+                except Exception as e:
+                    logger.warning("lp_refresh_dispatch_failed", ad_id=ad_lp.id, error=str(e)[:200])
+            if queued_lp:
+                session.commit()
 
             # Inline video download for ads with video_url
             _inline_download_videos(session, saved_count)
@@ -1283,6 +1351,7 @@ def _merge_crawled_data(existing: Ad, crawled_ad, session) -> None:
     for attr, new_val in [
         ("title", title_fallback),
         ("description", desc_fallback),
+        ("image_url", crawled_ad.image_urls[0] if crawled_ad.image_urls else None),
         ("thumbnail_url", crawled_ad.thumbnail_url),
         ("snapshot_url", crawled_ad.snapshot_url),
         ("video_url", crawled_ad.video_url),
@@ -1323,6 +1392,13 @@ def _merge_crawled_data(existing: Ad, crawled_ad, session) -> None:
         changed = True
 
     if changed:
+        if _has_viewable_creative(existing) and existing.media_extraction_status in (
+            None,
+            MediaExtractionStatus.SKIPPED,
+            MediaExtractionStatus.PENDING,
+            MediaExtractionStatus.FAILED,
+        ):
+            existing.media_extraction_status = MediaExtractionStatus.ENRICHED
         try:
             session.commit()
         except Exception:

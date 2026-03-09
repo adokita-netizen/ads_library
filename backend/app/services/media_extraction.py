@@ -249,6 +249,8 @@ class ExtractedMedia:
     debug_excerpt: Optional[str] = None
     debug_dialog_count: int = 0
     debug_stage: Optional[str] = None
+    screenshot_bytes: Optional[bytes] = None
+    screenshot_content_type: Optional[str] = None
 
 
 class MediaExtractor:
@@ -611,6 +613,9 @@ class MediaExtractor:
             if pw_result.image_urls or pw_result.video_urls:
                 result.image_urls = list(set(result.image_urls + pw_result.image_urls))
                 result.video_urls = list(set(result.video_urls + pw_result.video_urls))
+            if pw_result.screenshot_bytes and not result.screenshot_bytes:
+                result.screenshot_bytes = pw_result.screenshot_bytes
+                result.screenshot_content_type = pw_result.screenshot_content_type
 
         # Determine creative_type from extracted media if still unknown
         if result.creative_type == "unknown":
@@ -960,6 +965,22 @@ class MediaExtractor:
                             result.restriction_reason = self._detect_restriction_reason(page_text)
                         result.extraction_method = "playwright"
                         result.debug_stage = "content_parsed"
+                        if (
+                            not result.image_urls
+                            and not result.video_urls
+                            and not result.screenshot_bytes
+                        ):
+                            try:
+                                result.screenshot_bytes = await page.screenshot(
+                                    type="jpeg",
+                                    quality=75,
+                                    full_page=False,
+                                )
+                                result.screenshot_content_type = "image/jpeg"
+                                if result.screenshot_bytes:
+                                    result.debug_stage = "screenshot_captured"
+                            except Exception as e:
+                                logger.warning("media_playwright_screenshot_failed", url=url, error=str(e))
                     finally:
                         if page:
                             await page.close()

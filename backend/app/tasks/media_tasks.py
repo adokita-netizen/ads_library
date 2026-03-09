@@ -567,6 +567,20 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
                 download_failures.append(_classify_download_error(e))
                 logger.warning("thumbnail_upload_failed", ad_id=ad_id, error=str(e))
 
+        # Last-resort fallback: persist a rendered screenshot when source media URLs are blocked.
+        if not _is_downloadable(ad) and getattr(extracted, "screenshot_bytes", None):
+            try:
+                fallback_key = _persist_rendered_screenshot_fallback(
+                    ad,
+                    ad_id=ad_id,
+                    screenshot_bytes=extracted.screenshot_bytes,
+                    screenshot_content_type=getattr(extracted, "screenshot_content_type", None),
+                )
+                logger.info("rendered_screenshot_fallback_uploaded", ad_id=ad_id, s3_key=fallback_key)
+            except Exception as e:
+                download_failures.append(_classify_download_error(e))
+                logger.warning("rendered_screenshot_fallback_failed", ad_id=ad_id, error=str(e))
+
         downloadable = _is_downloadable(ad)
         has_any_media = bool(ad.thumbnail_url or ad.image_url or ad.video_url)
         failure_reason = download_failures[0] if download_failures else None
@@ -691,10 +705,10 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
 
 @celery_app.task(bind=True, max_retries=1, default_retry_delay=30)
 def download_thumbnail_task(self, ad_id: int):
-    """Download thumbnail from thumbnail_url and upload to S3.
+    """Materialize still-image assets from thumbnail/image URLs and upload to S3.
 
     Lightweight task for ads that already have direct media URLs
-    (skipped full media extraction) but need thumbnail stored in S3.
+    but still lack cached thumbnail/image assets.
     """
     logger.info("thumbnail_download_started", ad_id=ad_id)
 
@@ -704,27 +718,55 @@ def download_thumbnail_task(self, ad_id: int):
         if not ad:
             return {"status": "error", "message": "Ad not found"}
 
-        if not ad.thumbnail_url or ad.thumbnail_s3_key:
-            return {"status": "skipped", "message": "No thumbnail_url or already stored"}
+        if (ad.thumbnail_s3_key and ad.image_s3_key) or (not ad.thumbnail_url and not ad.image_url):
+            return {"status": "skipped", "message": "No still-image source URL or already stored"}
 
-        thumb_data = _download_sync(ad.thumbnail_url)
-        if thumb_data:
+        selected_url = None
+        thumb_data = None
+        for candidate_url in _still_image_source_candidates(ad):
+            thumb_data = _download_sync(candidate_url)
+            if thumb_data:
+                selected_url = candidate_url
+                break
+
+        if thumb_data and selected_url:
             from app.core.storage import get_storage_client
             storage = get_storage_client()
-            thumb_hash = hashlib.md5(ad.thumbnail_url.encode()).hexdigest()[:12]
+            thumb_hash = hashlib.md5(selected_url.encode()).hexdigest()[:12]
             thumb_key = f"thumbnails/{uuid.uuid4()}_{thumb_hash}.jpg"
             storage.upload_bytes(thumb_key, thumb_data, content_type="image/jpeg")
-            ad.thumbnail_s3_key = thumb_key
-            _save_to_local_cache(thumb_data, "thumbnails", ad_id)
-            if not ad.image_s3_key and ad.image_url == ad.thumbnail_url:
+            if not ad.thumbnail_url:
+                ad.thumbnail_url = selected_url
+            if not ad.image_url:
+                ad.image_url = selected_url
+            if not ad.thumbnail_s3_key:
+                ad.thumbnail_s3_key = thumb_key
+            if not ad.image_s3_key:
                 ad.image_s3_key = thumb_key
+            _save_to_local_cache(thumb_data, "thumbnails", ad_id)
+            if ad.image_url == selected_url:
+                _save_to_local_cache(thumb_data, "images", ad_id)
             ad.media_extraction_status = MediaExtractionStatus.COMPLETED if _is_downloadable(ad) else MediaExtractionStatus.ENRICHED
             _record_media_recovery_state(ad, status="success" if _is_downloadable(ad) else "partial", source="download_thumbnail_task")
             session.commit()
-            logger.info("thumbnail_downloaded", ad_id=ad_id, s3_key=thumb_key)
-            return {"status": "completed", "s3_key": thumb_key, "downloadable": _is_downloadable(ad)}
+            logger.info("thumbnail_downloaded", ad_id=ad_id, s3_key=thumb_key, source_url=selected_url)
+            return {"status": "completed", "s3_key": thumb_key, "downloadable": _is_downloadable(ad), "source_url": selected_url}
         else:
-            logger.warning("thumbnail_download_empty", ad_id=ad_id, url=ad.thumbnail_url)
+            if not _is_downloadable(ad) and ad.snapshot_url:
+                screenshot_bytes, screenshot_content_type = _capture_snapshot_still_bytes(ad.snapshot_url)
+                if screenshot_bytes:
+                    fallback_key = _persist_rendered_screenshot_fallback(
+                        ad,
+                        ad_id=ad_id,
+                        screenshot_bytes=screenshot_bytes,
+                        screenshot_content_type=screenshot_content_type,
+                    )
+                    ad.media_extraction_status = MediaExtractionStatus.COMPLETED
+                    _record_media_recovery_state(ad, status="success", source="download_thumbnail_task_snapshot_fallback")
+                    session.commit()
+                    logger.info("thumbnail_snapshot_fallback_uploaded", ad_id=ad_id, s3_key=fallback_key)
+                    return {"status": "completed", "s3_key": fallback_key, "downloadable": True, "source_url": ad.snapshot_url}
+            logger.warning("thumbnail_download_empty", ad_id=ad_id, url=ad.thumbnail_url or ad.image_url)
             _record_media_recovery_state(ad, status="failed", reason="download_failed", source="download_thumbnail_task")
             session.commit()
             return {"status": "failed", "message": "Download returned no data"}
@@ -963,6 +1005,17 @@ def _fbcdn_url_variants(url: str) -> list[str]:
     return variants
 
 
+def _still_image_source_candidates(ad: "Ad") -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for source_url in (ad.thumbnail_url, ad.image_url):
+        for variant in _fbcdn_url_variants(source_url) if source_url else []:
+            if variant and variant not in seen:
+                seen.add(variant)
+                candidates.append(variant)
+    return candidates
+
+
 def _download_sync(url: str, timeout: float = 15.0) -> bytes | None:
     """Download a URL synchronously."""
     try:
@@ -973,6 +1026,89 @@ def _download_sync(url: str, timeout: float = 15.0) -> bytes | None:
     except Exception as e:
         logger.warning("download_failed", url=_sanitize_url_for_log(url), error=str(e))
         return None
+
+
+def _persist_rendered_screenshot_fallback(
+    ad: "Ad",
+    *,
+    ad_id: int,
+    screenshot_bytes: bytes | None,
+    screenshot_content_type: str | None = None,
+) -> str | None:
+    if not screenshot_bytes:
+        return None
+
+    from app.core.storage import get_storage_client
+
+    storage = get_storage_client()
+    fallback_key = f"images/{uuid.uuid4()}_rendered_fallback.jpg"
+    storage.upload_bytes(
+        fallback_key,
+        screenshot_bytes,
+        content_type=screenshot_content_type or "image/jpeg",
+    )
+    ad.image_s3_key = ad.image_s3_key or fallback_key
+    ad.thumbnail_s3_key = ad.thumbnail_s3_key or fallback_key
+    if not ad.image_url:
+        ad.image_url = ad.snapshot_url
+    if not ad.thumbnail_url:
+        ad.thumbnail_url = ad.snapshot_url
+    if ad.creative_type in (None, "", "unknown"):
+        ad.creative_type = "image"
+    _save_to_local_cache(screenshot_bytes, "images", ad_id)
+    _save_to_local_cache(screenshot_bytes, "thumbnails", ad_id)
+    return fallback_key
+
+
+def _capture_snapshot_still_bytes(snapshot_url: str | None) -> tuple[bytes | None, str | None]:
+    if not snapshot_url:
+        return None, None
+
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as e:
+        logger.warning("snapshot_still_capture_unavailable", url=_sanitize_url_for_log(snapshot_url), error=str(e))
+        return None, None
+
+    async def _capture() -> tuple[bytes | None, str | None]:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            )
+            context = None
+            page = None
+            try:
+                context = await browser.new_context(
+                    viewport={"width": 1440, "height": 2200},
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    locale="ja-JP",
+                )
+                page = await context.new_page()
+                await page.goto(snapshot_url, wait_until="domcontentloaded", timeout=45000)
+                await page.wait_for_timeout(2500)
+                data = await page.screenshot(type="jpeg", quality=75, full_page=False)
+                return data, "image/jpeg"
+            finally:
+                if page:
+                    await page.close()
+                if context:
+                    await context.close()
+                await browser.close()
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_capture())
+    except Exception as e:
+        logger.warning("snapshot_still_capture_failed", url=_sanitize_url_for_log(snapshot_url), error=str(e))
+        return None, None
+    finally:
+        loop.close()
 
 
 def _save_to_local_cache(data: bytes, media_type: str, ad_id: int) -> str | None:

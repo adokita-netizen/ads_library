@@ -1,11 +1,17 @@
 """LP crawl & analysis Celery tasks."""
 
 import asyncio
+import hashlib
+import os
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import structlog
+from sqlalchemy import or_
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import SyncSessionLocal
+from app.models.ad import Ad, normalize_lp_fetch_error_code
 from app.models.landing_page import (
     AppealAxisAnalysis,
     LandingPage,
@@ -19,6 +25,237 @@ from app.services.lp_analysis.lp_crawler import LPCrawler
 from app.tasks.worker import celery_app
 
 logger = structlog.get_logger()
+
+_LP_HTML_CACHE_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "media_cache", "lp_html")
+)
+
+
+def _save_lp_html_cache(ad_id: int | None, html_content: str | None) -> str | None:
+    if not ad_id or not html_content:
+        return None
+    try:
+        os.makedirs(_LP_HTML_CACHE_DIR, exist_ok=True)
+        path = os.path.join(_LP_HTML_CACHE_DIR, f"{ad_id}.html")
+        with open(path, "w", encoding="utf-8", errors="ignore") as fh:
+            fh.write(html_content)
+        return path
+    except OSError as exc:
+        logger.warning("lp_html_cache_save_failed", ad_id=ad_id, error=str(exc)[:200])
+        return None
+
+
+def _load_cached_lp_html_path(ad_id: int | None) -> str | None:
+    if not ad_id:
+        return None
+    path = os.path.join(_LP_HTML_CACHE_DIR, f"{ad_id}.html")
+    return path if os.path.exists(path) else None
+
+
+def _load_lp_analysis_summary(session, lp_id: int):
+    analysis = session.query(LPAnalysis).filter(LPAnalysis.landing_page_id == lp_id).first()
+    if analysis is None:
+        return None
+    return SimpleNamespace(
+        quality_score=analysis.overall_quality_score,
+        conversion_potential=analysis.conversion_potential_score,
+        trust_score=analysis.trust_score,
+        urgency_score=analysis.urgency_score,
+        page_flow=analysis.page_flow_pattern,
+        structure_summary=analysis.structure_summary,
+        primary_appeal=analysis.primary_appeal_axis,
+        secondary_appeal=analysis.secondary_appeal_axis,
+        cta_effectiveness=analysis.cta_effectiveness,
+        headline_effectiveness=analysis.headline_effectiveness,
+        strengths=analysis.strengths,
+        weaknesses=analysis.weaknesses,
+        reusable_patterns=analysis.reusable_patterns,
+        improvement_suggestions=analysis.improvement_suggestions,
+    )
+
+
+def reuse_existing_lp_for_ad(
+    session,
+    *,
+    ad_id: int | None,
+    url: str,
+) -> bool:
+    if not ad_id or not url:
+        return False
+
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    lp = (
+        session.query(LandingPage)
+        .filter(
+            or_(
+                LandingPage.url_hash == url_hash,
+                LandingPage.url == url,
+                LandingPage.final_url == url,
+            )
+        )
+        .order_by(LandingPage.analyzed_at.desc(), LandingPage.crawled_at.desc(), LandingPage.id.desc())
+        .first()
+    )
+    if lp is None or not lp.full_text_content:
+        return False
+
+    status_code = None
+    redirect_chain: list[str] = []
+    if isinstance(lp.lp_metadata, dict):
+        raw_status = lp.lp_metadata.get("http_status")
+        status_code = int(raw_status) if raw_status not in (None, "") else None
+        redirect_chain = list(lp.lp_metadata.get("redirect_chain") or [])
+
+    crawled = SimpleNamespace(
+        final_url=lp.final_url or lp.url or url,
+        status_code=status_code,
+        redirect_chain=redirect_chain,
+    )
+    _sync_lp_success_to_ad(
+        session,
+        ad_id=ad_id,
+        url=url,
+        crawled=crawled,
+        lp=lp,
+        html_path=_load_cached_lp_html_path(lp.ad_id),
+        analysis_result=_load_lp_analysis_summary(session, lp.id),
+    )
+    return True
+
+
+def _sync_lp_failure_to_ad(
+    session,
+    *,
+    ad_id: int | None,
+    url: str,
+    status: str,
+    error_code: str,
+    error_message: str,
+) -> None:
+    if not ad_id:
+        return
+    ad = session.query(Ad).filter(Ad.id == ad_id).first()
+    if ad is None:
+        return
+
+    meta = dict(ad.ad_metadata or {})
+    meta["lp_status"] = status
+    meta["lp_fetch_status"] = status
+    meta["lp_fetch_error_code"] = normalize_lp_fetch_error_code(error_code) or "unknown"
+    meta["lp_fetch_reason"] = error_code
+    meta["lp_checked_at"] = datetime.now(timezone.utc).isoformat()
+    meta["last_lp_fetch_at"] = meta["lp_checked_at"]
+    meta.setdefault("lp_info", {})
+    meta["lp_info"] = {
+        **(meta["lp_info"] if isinstance(meta.get("lp_info"), dict) else {}),
+        "final_url": ad.destination_url or url,
+    }
+    if error_message:
+        meta["lp_error_message"] = error_message[:500]
+    ad.ad_metadata = meta
+    flag_modified(ad, "ad_metadata")
+    session.commit()
+
+
+def _sync_lp_success_to_ad(
+    session,
+    *,
+    ad_id: int | None,
+    url: str,
+    crawled,
+    lp: LandingPage,
+    html_path: str | None,
+    analysis_result=None,
+) -> None:
+    if not ad_id:
+        return
+    ad = session.query(Ad).filter(Ad.id == ad_id).first()
+    if ad is None:
+        return
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    http_status = int(crawled.status_code) if getattr(crawled, "status_code", None) else None
+    lp_info = {
+        "final_url": lp.final_url or crawled.final_url or ad.destination_url or url,
+        "http_status": http_status,
+        "title": lp.title or "",
+        "description": lp.meta_description or "",
+        "canonical": ((lp.lp_metadata or {}).get("canonical") if isinstance(lp.lp_metadata, dict) else None),
+        "og_image": lp.og_image_url or "",
+        "lang": ((lp.lp_metadata or {}).get("lang") if isinstance(lp.lp_metadata, dict) else None),
+        "fetched_at": fetched_at,
+    }
+    lp_info = {key: value for key, value in lp_info.items() if value not in (None, "", [])}
+    lp_data = {
+        "url": url,
+        "final_url": lp.final_url or crawled.final_url or ad.destination_url or url,
+        "title": lp.title or "",
+        "meta_description": lp.meta_description or "",
+        "description": lp.meta_description or "",
+        "og_image": lp.og_image_url or "",
+        "canonical": ((lp.lp_metadata or {}).get("canonical") if isinstance(lp.lp_metadata, dict) else None),
+        "status_code": http_status,
+        "crawled_at": fetched_at,
+        "html_path": html_path,
+        "word_count": lp.word_count,
+        "image_count": lp.image_count,
+        "video_embed_count": lp.video_embed_count,
+        "form_count": lp.form_count,
+        "cta_count": lp.cta_count,
+        "testimonial_count": lp.testimonial_count,
+        "total_sections": lp.total_sections,
+        "full_text_content": lp.full_text_content or "",
+        "hero_headline": lp.hero_headline or "",
+        "hero_subheadline": lp.hero_subheadline or "",
+        "primary_cta_text": lp.primary_cta_text or "",
+        "price_text": lp.price_text or "",
+        "has_pricing": bool(lp.has_pricing),
+        "redirect_chain": list(getattr(crawled, "redirect_chain", []) or []),
+    }
+    lp_data = {key: value for key, value in lp_data.items() if value not in (None, "", [])}
+
+    meta = dict(ad.ad_metadata or {})
+    meta["lp_status"] = str(http_status or "alive")
+    meta["lp_fetch_status"] = "success"
+    meta["lp_checked_at"] = fetched_at
+    meta["lp_snapshot_at"] = fetched_at
+    meta["last_lp_fetch_at"] = fetched_at
+    meta["lp_final_url"] = lp_data["final_url"]
+    meta["lp_info"] = lp_info
+    meta["lp_data"] = lp_data
+    meta["destination_url"] = ad.destination_url or lp_data["final_url"]
+    meta.setdefault("destination_type", "LP")
+    meta.pop("lp_fetch_error_code", None)
+    meta.pop("lp_fetch_reason", None)
+    meta.pop("lp_error_message", None)
+    if analysis_result is not None:
+        meta["lp_score"] = analysis_result.quality_score
+        meta["lp_score_source"] = "lp_analysis"
+        meta["lp_analysis"] = {
+            "final_url": lp_data["final_url"],
+            "title": lp.title or "",
+            "description": lp.meta_description or "",
+            "og_image": lp.og_image_url or "",
+            "fetched_at": fetched_at,
+            "quality_score": analysis_result.quality_score,
+            "conversion_potential_score": analysis_result.conversion_potential,
+            "trust_score": analysis_result.trust_score,
+            "urgency_score": analysis_result.urgency_score,
+            "page_flow_pattern": analysis_result.page_flow,
+            "structure_summary": analysis_result.structure_summary,
+            "primary_appeal_axis": analysis_result.primary_appeal,
+            "secondary_appeal_axis": analysis_result.secondary_appeal,
+            "cta_effectiveness": analysis_result.cta_effectiveness,
+            "headline_effectiveness": analysis_result.headline_effectiveness,
+            "strengths": analysis_result.strengths,
+            "weaknesses": analysis_result.weaknesses,
+            "reusable_patterns": analysis_result.reusable_patterns,
+            "improvement_suggestions": analysis_result.improvement_suggestions,
+        }
+    ad.destination_url = ad.destination_url or lp_data["final_url"]
+    ad.ad_metadata = meta
+    flag_modified(ad, "ad_metadata")
+    session.commit()
 
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=60, queue="analysis")
@@ -36,6 +273,16 @@ def crawl_and_analyze_lp_task(
 
     session = SyncSessionLocal()
     try:
+        if reuse_existing_lp_for_ad(session, ad_id=ad_id, url=url):
+            ad = session.query(Ad).filter(Ad.id == ad_id).first() if ad_id else None
+            logger.info(
+                "lp_reused_for_ad",
+                url=url,
+                ad_id=ad_id,
+                final_url=(ad.destination_url if ad else url),
+            )
+            return {"status": "completed", "reused": True}
+
         # Phase 1: Crawl
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -47,7 +294,6 @@ def crawl_and_analyze_lp_task(
         if not crawled:
             logger.error("lp_crawl_failed", url=url)
             # Update DB status to FAILED so the user can see the failure
-            import hashlib
             url_hash = hashlib.sha256(url.encode()).hexdigest()
             existing_lp = session.query(LandingPage).filter(
                 LandingPage.url_hash == url_hash
@@ -65,6 +311,14 @@ def crawl_and_analyze_lp_task(
                 )
                 session.add(failed_lp)
                 session.commit()
+            _sync_lp_failure_to_ad(
+                session,
+                ad_id=ad_id,
+                url=url,
+                status="unreachable",
+                error_code="unknown",
+                error_message="クロールに失敗しました。URLが無効またはアクセスできません。",
+            )
             return {"status": "failed", "error": "Crawl failed"}
 
         # Check for existing LP with same URL hash
@@ -136,9 +390,26 @@ def crawl_and_analyze_lp_task(
                 truncated_to=50000,
             )
         lp.full_text_content = raw_text[:50000]
+        lp.lp_metadata = {
+            **(lp.lp_metadata or {}),
+            "canonical": crawler._extract_canonical(crawled.html_content),
+            "lang": crawler._extract_html_lang(crawled.html_content),
+            "http_status": crawled.status_code,
+            "redirect_chain": list(crawled.redirect_chain or []),
+            "headers": dict(crawled.headers or {}),
+        }
 
         session.commit()
         session.refresh(lp)
+        html_path = _save_lp_html_cache(ad_id, crawled.html_content)
+        _sync_lp_success_to_ad(
+            session,
+            ad_id=ad_id,
+            url=url,
+            crawled=crawled,
+            lp=lp,
+            html_path=html_path,
+        )
 
         # Save sections (clear old ones first)
         session.query(LPSection).filter(LPSection.landing_page_id == lp.id).delete()
@@ -240,6 +511,15 @@ def crawl_and_analyze_lp_task(
                 lp.status = LPStatusEnum.COMPLETED
                 lp.analyzed_at = datetime.now(timezone.utc)
                 session.commit()
+                _sync_lp_success_to_ad(
+                    session,
+                    ad_id=ad_id,
+                    url=url,
+                    crawled=crawled,
+                    lp=lp,
+                    html_path=html_path,
+                    analysis_result=analysis_result,
+                )
 
                 logger.info(
                     "lp_analysis_completed",
@@ -254,6 +534,14 @@ def crawl_and_analyze_lp_task(
                 lp.status = LPStatusEnum.FAILED
                 lp.error_message = f"分析エラー: {str(e)[:500]}"
                 session.commit()
+                _sync_lp_failure_to_ad(
+                    session,
+                    ad_id=ad_id,
+                    url=url,
+                    status="alive",
+                    error_code="unknown",
+                    error_message=f"分析エラー: {str(e)[:500]}",
+                )
         else:
             lp.status = LPStatusEnum.COMPLETED
             session.commit()
