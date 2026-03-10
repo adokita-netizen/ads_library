@@ -12,10 +12,21 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const API_BASE =
-    typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_URL
+  const API_BASE = (() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname.toLowerCase();
+      if (
+        process.env.NEXT_PUBLIC_API_URL &&
+        (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1")
+      ) {
+        return `${process.env.NEXT_PUBLIC_API_URL}/api/v1`;
+      }
+      return "/api/v1";
+    }
+    return process.env.NEXT_PUBLIC_API_URL
       ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
       : "/api/v1";
+  })();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
