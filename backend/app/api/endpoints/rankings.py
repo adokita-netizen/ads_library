@@ -642,6 +642,7 @@ def get_product_rankings(
                 metadata = ad.ad_metadata or {}
                 longevity = _extract_longevity_info(ad)
                 ads_map[ad.id] = {
+                    "meta_freshness_contract": _build_meta_freshness_contract(ad),
                     "thumbnail": _resolve_thumbnail_url(ad),
                     "duration_seconds": ad.duration_seconds or 0,
                     "management_id": ad.external_id or f"AD-{ad.id}",
@@ -721,7 +722,7 @@ def get_product_rankings(
                 "media_status": ad_info.get("media_status", "uncached"),
                 "download_urls": ad_info.get("download_urls", {}),
                 "data_quality": ad_info.get("data_quality", {}),
-                **(_build_meta_freshness_contract(ads_map[r.ad_id]) if r.ad_id in ads_map else {}),
+                **ad_info.get("meta_freshness_contract", {}),
             })
 
         data = {
