@@ -532,7 +532,7 @@ export default function Home() {
             />
             <ThemeToggle compact />
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
             <ErrorBoundary key={currentView} label={`画面: ${currentView}`}>
               {currentView !== "settings" && !shouldShowOnboarding && (
                 <SetupProgress onNavigate={(view) => handleViewChange(view)} />

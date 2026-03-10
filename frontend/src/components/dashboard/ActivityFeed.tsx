@@ -67,7 +67,7 @@ interface ActivityFeedProps {
 export default function ActivityFeed({ onAdSelect }: ActivityFeedProps) {
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -140,7 +140,7 @@ export default function ActivityFeed({ onAdSelect }: ActivityFeedProps) {
 
       {/* Content */}
       {!collapsed && (
-        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+        <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
           {loading ? (
             <div className="p-4 space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (

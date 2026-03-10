@@ -30,6 +30,7 @@ export default function CustomKPICards() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<KpiKey[]>(DEFAULT_KEYS);
   const [showConfig, setShowConfig] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
     try {
@@ -75,6 +76,16 @@ export default function CustomKPICards() {
     run();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncCollapsed = () => {
+      setCollapsed(window.innerHeight < 900);
+    };
+    syncCollapsed();
+    window.addEventListener("resize", syncCollapsed);
+    return () => window.removeEventListener("resize", syncCollapsed);
+  }, []);
+
   const allItems = useMemo(() => {
     const d = data || {
       total_ads: 0,
@@ -109,9 +120,17 @@ export default function CustomKPICards() {
   };
 
   return (
-    <div className="mb-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-[12px] font-semibold text-gray-700 dark:text-gray-300">KPIカード</h3>
+    <div className="mb-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[12px] font-semibold text-gray-700 dark:text-gray-300">KPIカード</h3>
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[10px] text-gray-500 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            {collapsed ? "表示" : "たたむ"}
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSelected(DEFAULT_KEYS)}
@@ -127,8 +146,8 @@ export default function CustomKPICards() {
           </button>
         </div>
       </div>
-      {showConfig && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
+      {showConfig && !collapsed && (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
           {allItems.map((item) => {
             const active = selected.includes(item.key);
             return (
@@ -147,17 +166,19 @@ export default function CustomKPICards() {
           })}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+      {!collapsed && (
+      <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4 xl:grid-cols-6">
         {loading && Array.from({ length: 4 }).map((_, idx) => (
-          <div key={`s-${idx}`} className="h-[62px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 animate-pulse" />
+          <div key={`s-${idx}`} className="h-[54px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 animate-pulse" />
         ))}
         {!loading && shown.map((item) => (
-          <div key={item.key} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+          <div key={item.key} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5">
             <p className="text-[10px] text-gray-500 dark:text-gray-400">{item.label}</p>
-            <p className="text-[14px] font-bold text-gray-900 dark:text-gray-100 mt-0.5">{item.value}</p>
+            <p className="mt-0.5 text-[13px] font-bold text-gray-900 dark:text-gray-100">{item.value}</p>
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

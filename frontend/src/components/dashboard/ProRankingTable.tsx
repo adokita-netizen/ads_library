@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { fetchApi } from "@/lib/api";
-import { cachedFetchApi } from "@/lib/prefetch";
 import { platformLabels } from "@/lib/constants";
 import { DEMO_RANKINGS, isDemoMode, type DemoAdItem } from "@/lib/demoData";
 import { formatNumber } from "@/lib/format";
@@ -93,6 +92,7 @@ export interface ProRankingItem {
   duration_seconds?: number;
   destination_url?: string;
   creative_type?: string;
+  management_id?: string;
   ad_format?: string;
   transition_type?: string;
   is_affiliate?: boolean | null;
@@ -136,6 +136,95 @@ export interface ProRankingItem {
   priority_score?: number;
   actual_metrics_priority?: string;
   actual_metrics_priority_score?: number;
+  metric_source?: string | null;
+  creative_source?: string | null;
+  lp_source?: string | null;
+  metric_status?: string | null;
+  creative_status?: string | null;
+  lp_status?: string | null;
+  freshness_status?: string | null;
+  last_meta_success_at?: string | null;
+  meta_quality_state?: string | null;
+  meta_recovery_reason?: string | null;
+}
+
+interface ProductsRankingResponseItem {
+  rank?: number;
+  ad_id?: number;
+  adId?: number;
+  title?: string;
+  description?: string;
+  product_name?: string;
+  productName?: string;
+  advertiser_name?: string;
+  advertiserName?: string;
+  genre?: string | null;
+  fine_genre?: string | null;
+  fineGenre?: string | null;
+  platform?: string;
+  view_increase?: number;
+  viewIncrease?: number;
+  spend_increase?: number;
+  spendIncrease?: number;
+  total_spend_jpy?: number;
+  totalSpendJpy?: number;
+  cumulative_views?: number;
+  cumulativeViews?: number;
+  cumulative_spend?: number;
+  cumulativeSpend?: number;
+  like_increase?: number;
+  likeIncrease?: number;
+  like_count?: number;
+  likeCount?: number;
+  is_hit?: boolean;
+  isHit?: boolean;
+  hit_score?: number;
+  hitScore?: number;
+  trend_score?: number;
+  trendScore?: number;
+  thumbnail?: string;
+  thumbnail_url?: string;
+  thumbnailUrl?: string;
+  image_url?: string;
+  imageUrl?: string;
+  snapshot_url?: string;
+  snapshotUrl?: string;
+  duration_seconds?: number;
+  durationSeconds?: number;
+  destination_url?: string;
+  destinationUrl?: string;
+  creative_type?: string;
+  creativeType?: string;
+  management_id?: string;
+  managementId?: string;
+  days_running?: number;
+  daysRunning?: number;
+  is_still_running?: boolean;
+  isStillRunning?: boolean;
+  hit_level?: string;
+  hitLevel?: string;
+  video_url?: string;
+  videoUrl?: string;
+  metric_source?: string;
+  metricSource?: string;
+  creative_source?: string;
+  creativeSource?: string;
+  lp_source?: string;
+  lpSource?: string;
+  metric_status?: string;
+  metricStatus?: string;
+  creative_status?: string;
+  creativeStatus?: string;
+  lp_status?: string;
+  lpStatus?: string;
+  freshness_status?: string;
+  freshnessStatus?: string;
+  last_meta_success_at?: string | null;
+  lastMetaSuccessAt?: string | null;
+  meta_quality_state?: string | null;
+  metaQualityState?: string | null;
+  meta_recovery_reason?: string | null;
+  metaRecoveryReason?: string | null;
 }
 
 interface ProRankingTableProps {
@@ -252,6 +341,61 @@ function formatDuration(seconds?: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function mapProductItemToRanking(item: ProductsRankingResponseItem, index: number): ProRankingItem {
+  return {
+    rank: item.rank ?? index + 1,
+    ad_id: item.ad_id ?? item.adId ?? 0,
+    title: item.title,
+    description: item.description,
+    product_name: item.product_name ?? item.productName,
+    advertiser_name: item.advertiser_name ?? item.advertiserName,
+    genre: item.genre ?? undefined,
+    fine_genre: item.fine_genre ?? item.fineGenre ?? undefined,
+    platform: item.platform,
+    view_increase: item.view_increase ?? item.viewIncrease ?? 0,
+    spend_increase:
+      item.spend_increase ??
+      item.spendIncrease ??
+      item.total_spend_jpy ??
+      item.totalSpendJpy ??
+      0,
+    cumulative_views: item.cumulative_views ?? item.cumulativeViews ?? 0,
+    cumulative_spend:
+      item.cumulative_spend ??
+      item.cumulativeSpend ??
+      item.total_spend_jpy ??
+      item.totalSpendJpy ??
+      0,
+    like_increase: item.like_increase ?? item.likeIncrease ?? item.like_count ?? item.likeCount ?? 0,
+    like_count: item.like_count ?? item.likeCount ?? 0,
+    is_hit: item.is_hit ?? item.isHit ?? false,
+    hit_score: item.hit_score ?? item.hitScore ?? 0,
+    trend_score: item.trend_score ?? item.trendScore ?? 0,
+    thumbnail: item.thumbnail ?? item.thumbnail_url ?? item.thumbnailUrl,
+    thumbnail_url: item.thumbnail_url ?? item.thumbnailUrl ?? item.thumbnail,
+    image_url: item.image_url ?? item.imageUrl,
+    snapshot_url: item.snapshot_url ?? item.snapshotUrl,
+    duration_seconds: item.duration_seconds ?? item.durationSeconds ?? 0,
+    destination_url: item.destination_url ?? item.destinationUrl,
+    creative_type: item.creative_type ?? item.creativeType ?? "unknown",
+    management_id: item.management_id ?? item.managementId,
+    days_running: item.days_running ?? item.daysRunning,
+    is_still_running: item.is_still_running ?? item.isStillRunning,
+    hit_level: item.hit_level ?? item.hitLevel,
+    video_url: item.video_url ?? item.videoUrl,
+    metric_source: item.metric_source ?? item.metricSource,
+    creative_source: item.creative_source ?? item.creativeSource,
+    lp_source: item.lp_source ?? item.lpSource,
+    metric_status: item.metric_status ?? item.metricStatus,
+    creative_status: item.creative_status ?? item.creativeStatus,
+    lp_status: item.lp_status ?? item.lpStatus,
+    freshness_status: item.freshness_status ?? item.freshnessStatus,
+    last_meta_success_at: item.last_meta_success_at ?? item.lastMetaSuccessAt,
+    meta_quality_state: item.meta_quality_state ?? item.metaQualityState ?? undefined,
+    meta_recovery_reason: item.meta_recovery_reason ?? item.metaRecoveryReason ?? undefined,
+  };
 }
 
 function transitionTypeLabel(v?: string): string {
@@ -571,7 +715,7 @@ export default function ProRankingTable({
         if (advancedFilters.dateRange.to) params.date_to = advancedFilters.dateRange.to;
       }
 
-      const data = await cachedFetchApi<{
+      const data = await fetchApi<{
         items?: ProRankingItem[];
         ads?: ProRankingItem[];
         total: number;
@@ -585,62 +729,84 @@ export default function ProRankingTable({
 
       const resultItems = data.ads || data.items || [];
       const totalCount = data.total || 0;
-      if (totalCount === 0 && isDemoMode()) {
-        const demoItems = DEMO_RANKINGS.items.map(mapDemoItemToRanking);
-        setItems(demoItems);
-        setTotal(DEMO_RANKINGS.total);
-        onSummaryChange?.({ total: DEMO_RANKINGS.total, updatedAt: new Date().toISOString() });
-      } else {
+      if (totalCount > 0) {
         setItems(resultItems);
         setTotal(totalCount);
         onSummaryChange?.({ total: totalCount, updatedAt: new Date().toISOString() });
-      }
-      if (data.hit_line) setHitLine(data.hit_line);
-      if (data.hit_line_threshold) setHitLine(data.hit_line_threshold);
-      if (data.fine_genres && data.fine_genres.length > 0) {
-        setFineGenres(data.fine_genres);
+        if (data.hit_line) setHitLine(data.hit_line);
+        if (data.hit_line_threshold) setHitLine(data.hit_line_threshold);
+        if (data.fine_genres && data.fine_genres.length > 0) {
+          setFineGenres(data.fine_genres);
+        }
+      } else {
+        throw new Error("pro-ranking returned empty");
       }
     } catch {
-      // Fallback: try existing hit-ads endpoint
+      // Fallback 1: products endpoint is the more complete, broader rankings source.
       try {
         const params: Record<string, string | number | undefined> = {
-          limit: perPage,
+          page,
+          page_size: perPage,
+          period: period === "7d" ? "weekly" : period === "30d" ? "monthly" : period,
         };
         if (genre && genre !== "all") params.genre = genre;
+        if (platform && platform !== "all") params.platform = platform;
+        if (topic && topic !== "all") params.topic = topic;
         const fallback = await fetchApi<{
-          items: ProRankingItem[];
+          items?: ProductsRankingResponseItem[];
           total: number;
-        }>("/rankings/hit-ads", { params });
-        setItems(
-          (fallback.items || []).map((item, idx) => ({
-            ...item,
-            rank: item.rank || idx + 1,
-            view_increase: item.view_increase || 0,
-            spend_increase: item.spend_increase || 0,
-            cumulative_views: item.cumulative_views || 0,
-            cumulative_spend: item.cumulative_spend || 0,
-            like_increase:
-              item.like_increase ??
-              (item.like_count ?? 0),
-          }))
-        );
-        const totalCount = fallback.total || 0;
-        setTotal(totalCount);
-        onSummaryChange?.({ total: totalCount, updatedAt: new Date().toISOString() });
+        }>("/rankings/products", { params });
+        const fallbackItems = (fallback.items || []).map(mapProductItemToRanking);
+        if (fallbackItems.length > 0) {
+          const totalCount = fallback.total || fallbackItems.length;
+          setItems(fallbackItems);
+          setTotal(totalCount);
+          onSummaryChange?.({ total: totalCount, updatedAt: new Date().toISOString() });
+          return;
+        }
+        throw new Error("products returned empty");
       } catch {
-        if (isDemoMode()) {
-          const demoItems = DEMO_RANKINGS.items.map(mapDemoItemToRanking);
-          setItems(demoItems);
-          setTotal(DEMO_RANKINGS.total);
-          onSummaryChange?.({ total: DEMO_RANKINGS.total, updatedAt: new Date().toISOString() });
-        } else {
-          setError("ランキングデータの取得に失敗しました");
+        // Fallback 2: existing hit-ads endpoint
+        try {
+          const params: Record<string, string | number | undefined> = {
+            limit: perPage,
+          };
+          if (genre && genre !== "all") params.genre = genre;
+          const fallback = await fetchApi<{
+            items: ProRankingItem[];
+            total: number;
+          }>("/rankings/hit-ads", { params });
+          setItems(
+            (fallback.items || []).map((item, idx) => ({
+              ...item,
+              rank: item.rank || idx + 1,
+              view_increase: item.view_increase || 0,
+              spend_increase: item.spend_increase || 0,
+              cumulative_views: item.cumulative_views || 0,
+              cumulative_spend: item.cumulative_spend || 0,
+              like_increase:
+                item.like_increase ??
+                (item.like_count ?? 0),
+            }))
+          );
+          const totalCount = fallback.total || 0;
+          setTotal(totalCount);
+          onSummaryChange?.({ total: totalCount, updatedAt: new Date().toISOString() });
+        } catch {
+          if (isDemoMode()) {
+            const demoItems = DEMO_RANKINGS.items.map(mapDemoItemToRanking);
+            setItems(demoItems);
+            setTotal(DEMO_RANKINGS.total);
+            onSummaryChange?.({ total: DEMO_RANKINGS.total, updatedAt: new Date().toISOString() });
+          } else {
+            setError("ランキングデータの取得に失敗しました");
+          }
         }
       }
     } finally {
       setLoading(false);
     }
-  }, [genre, fineGenre, platform, topic, searchQuery, sortBy, period, snapshotDate, transitionType, adFormat, isAffiliate, page, perPage, selectedGenreChip, debouncedSearch, scoreRange, advancedFilters, refreshNonce, onSummaryChange]);
+  }, [genre, fineGenre, platform, topic, searchQuery, sortBy, period, snapshotDate, transitionType, adFormat, isAffiliate, page, perPage, selectedGenreChip, debouncedSearch, scoreRange, advancedFilters, refreshNonce, onSummaryChange, jpOnly, priorityFilter, reviewRequiredOnly, actualMetricsFocus]);
 
   useEffect(() => {
     fetchData();
@@ -727,7 +893,7 @@ export default function ProRankingTable({
     }
 
     if (jpOnly) {
-      result = result.filter((item) => deriveLanguageStatus(item as unknown as Record<string, unknown>).kind === "jp");
+      result = result.filter((item) => deriveLanguageStatus(item as unknown as Record<string, unknown>).kind !== "non-jp");
     }
 
     if (priorityFilter !== "all") {
@@ -894,7 +1060,7 @@ export default function ProRankingTable({
       style: { left: `${STICKY_LEFT_OFFSETS[columnKey]}px` } as React.CSSProperties,
     };
   }, [shouldCondenseTable]);
-  const shouldVirtualizeTable = effectiveViewMode === "table" && filteredAndSortedItems.length > TABLE_VIRTUAL_THRESHOLD;
+  const shouldVirtualizeTable = false;
   const virtualWindowRows = Math.ceil(TABLE_VIRTUAL_VIEWPORT_HEIGHT / TABLE_VIRTUAL_ROW_HEIGHT);
   const virtualStartIndex = shouldVirtualizeTable
     ? Math.max(0, Math.floor(tableScrollTop / TABLE_VIRTUAL_ROW_HEIGHT) - TABLE_VIRTUAL_OVERSCAN)
@@ -1022,9 +1188,9 @@ export default function ProRankingTable({
   // ─── Error state ───
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+      <div className="rounded-lg border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-900 md:p-6">
         <svg
-          className="w-10 h-10 mx-auto text-gray-300 mb-3"
+          className="mx-auto mb-2.5 h-8 w-8 text-gray-300"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -1036,10 +1202,10 @@ export default function ProRankingTable({
             d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
           />
         </svg>
-        <p className="text-[13px] text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-3">{error}</p>
+        <p className="mb-2 text-[13px] text-gray-500 dark:text-gray-400 dark:text-gray-500">{error}</p>
         <button
           onClick={fetchData}
-          className="text-[12px] font-medium text-[#4A7DFF] hover:underline"
+          className="inline-flex items-center rounded-md px-2.5 py-1 text-[12px] font-medium text-[#4A7DFF] hover:bg-[#EEF2FF]"
         >
           再試行
         </button>
@@ -1050,9 +1216,9 @@ export default function ProRankingTable({
   // ─── Empty state ───
   if (!loading && items.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+      <div className="rounded-lg border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-900 md:p-6">
         <svg
-          className="w-10 h-10 mx-auto text-gray-300 mb-3"
+          className="mx-auto mb-2.5 h-8 w-8 text-gray-300"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

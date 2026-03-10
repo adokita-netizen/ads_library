@@ -1,8 +1,14 @@
 import axios from "axios";
 
+const isBrowser = typeof window !== "undefined";
+const isDev = process.env.NODE_ENV !== "production";
+const publicApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+// In local development, always use Next.js same-origin rewrites.
+// This avoids browser-side CORS/preflight failures against localhost:8000.
 const API_BASE =
-  typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_URL
-    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+  isBrowser && !isDev && publicApiUrl
+    ? `${publicApiUrl}/api/v1`
     : "/api/v1";
 
 const api = axios.create({

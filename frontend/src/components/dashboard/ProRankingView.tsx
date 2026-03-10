@@ -294,8 +294,9 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
   const [genreGroups, setGenreGroups] = useState<GenreGroup[]>([]);
   const [genreList, setGenreList] = useState<GenreMasterItem[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
-  const [showGenreSidebar, setShowGenreSidebar] = useState(true);
+  const [showGenreSidebar, setShowGenreSidebar] = useState(false);
   const [showGenreDrawer, setShowGenreDrawer] = useState(false);
+  const [genreSidebarCollapsed, setGenreSidebarCollapsed] = useState(false);
   const [genreSearch, setGenreSearch] = useState("");
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
 
@@ -343,6 +344,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [retryFeedback, setRetryFeedback] = useState<{ count: number; at: string } | null>(null);
   const [tableSummary, setTableSummary] = useState<{ total: number; updatedAt: string } | null>(null);
+  const [showHeaderControls, setShowHeaderControls] = useState(false);
 
   useEffect(() => {
     if (!operationView) return;
@@ -360,6 +362,27 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [evidenceMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncHeaderDensity = () => {
+      setShowHeaderControls(window.innerHeight >= 940 && window.innerWidth >= 1440);
+    };
+    syncHeaderDensity();
+    window.addEventListener("resize", syncHeaderDensity);
+    return () => window.removeEventListener("resize", syncHeaderDensity);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncGenreDensity = () => {
+      setGenreSidebarCollapsed(window.innerWidth < 1400 || window.innerHeight < 860);
+      setShowGenreSidebar(window.innerWidth >= 1536);
+    };
+    syncGenreDensity();
+    window.addEventListener("resize", syncGenreDensity);
+    return () => window.removeEventListener("resize", syncGenreDensity);
+  }, []);
 
   // ─── Fetch genre master + search collections in parallel ───
   const fetchCollections = useCallback(async () => {
@@ -1092,21 +1115,21 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-[#f8f9fb] dark:bg-gray-950">
+    <div className="flex min-h-full flex-col bg-[#f8f9fb] dark:bg-gray-950">
       {/* ─── Dashboard KPI Cards ─── */}
-      <div className="shrink-0 px-5 pt-4 pb-0 bg-[#f8f9fb] dark:bg-gray-950">
+      <div className="shrink-0 bg-[#f8f9fb] px-3 pt-2 pb-0 dark:bg-gray-950 md:px-4">
         <CustomKPICards />
       </div>
 
       {/* ─── Top Header Bar ─── */}
       <div className="shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-5 py-3">
+        <div className="px-3 py-2 md:px-4">
           {/* Title row */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <svg
-                  className="w-5 h-5 text-[#4A7DFF]"
+                  className="h-4 w-4 text-[#4A7DFF]"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1118,20 +1141,38 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
                     d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
                   />
                 </svg>
-                <h1 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
+                <h1 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
                   PRO DATABASE
                 </h1>
               </div>
-              <span className="text-[11px] text-gray-400 dark:text-gray-500">
+              <span className={`text-[11px] text-gray-400 dark:text-gray-500 ${showHeaderControls ? "" : "hidden xl:inline"}`}>
                 広告データベース分析
               </span>
             </div>
 
             {/* Right: Share link + Collections dropdown */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <button
+              onClick={() => setShowGenreSidebar((v) => !v)}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                showGenreSidebar
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+              title="ジャンルサイドバーの表示を切り替え"
+            >
+              {showGenreSidebar ? "ジャンル非表示" : "ジャンル表示"}
+            </button>
+            <button
+              onClick={() => setShowHeaderControls((v) => !v)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              title="ヘッダー領域の表示を切り替え"
+            >
+              {showHeaderControls ? "コンパクト" : "詳細表示"}
+            </button>
             <button
               onClick={handleCopyShareLink}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               title="フィルタ条件の共有リンクをコピー"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -1142,7 +1183,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
             <div className="relative" ref={collectionsRef}>
               <button
                 onClick={() => setShowCollections(!showCollections)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 <svg
                   className="w-3.5 h-3.5"
@@ -1313,23 +1354,27 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
             </div>
           </div>
 
-          <SavedViews
-            views={sortedCollections.map((c) => ({ id: c.id, name: c.name }))}
-            activeViewId={activeCollectionId}
-            onSelect={(id) => {
-              const target = sortedCollections.find((c) => c.id === id);
-              if (target) handleApplyCollection(target);
-            }}
-            onCreate={() => {
-              setEditingCollectionId(null);
-              setSaveName("");
-              setShowSaveDialog(true);
-            }}
-          />
+          {showHeaderControls && (
+            <SavedViews
+              views={sortedCollections.map((c) => ({ id: c.id, name: c.name }))}
+              activeViewId={activeCollectionId}
+              onSelect={(id) => {
+                const target = sortedCollections.find((c) => c.id === id);
+                if (target) handleApplyCollection(target);
+              }}
+              onCreate={() => {
+                setEditingCollectionId(null);
+                setSaveName("");
+                setShowSaveDialog(true);
+              }}
+            />
+          )}
 
+          {showHeaderControls && (
+            <>
           {/* Search bar + period toggle row */}
           <QuickFilterBar active={quickFilters} onToggle={handleToggleQuickFilter} />
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <SmartSearchBar
               currentQuery={searchQuery}
               onSearch={(q) => setSearchQuery(q)}
@@ -1793,11 +1838,41 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
               </span>
             )}
           </div>
+            </>
+          )}
+
+          {!showHeaderControls && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <SmartSearchBar
+                currentQuery={searchQuery}
+                onSearch={(q) => setSearchQuery(q)}
+                onGenreFilter={(g) => setSelectedGenre(g)}
+                onProductFilter={(p) => setSearchQuery(p)}
+                onAdvertiserFilter={(a) => setSearchQuery(a)}
+                onSaveCollection={() => setShowSaveDialog(true)}
+              />
+              <button
+                onClick={() => setShowSaveDialog(true)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                検索保存
+              </button>
+              <button
+                onClick={() => setShowAdvancedFilter(true)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                フィルター
+              </button>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 px-2.5 py-1 text-[11px] text-indigo-700">
+                {periodLabelMap[period]} / {tableSummary?.total ?? 0}件 / {selectedTopic === "all" ? "全トピック" : selectedTopic}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ─── Main Content Area ─── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1">
         {showGenreDrawer && (
           <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setShowGenreDrawer(false)}>
             <aside
@@ -1887,33 +1962,48 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
 
         {/* ─── Genre Sidebar ─── */}
         {showGenreSidebar && (
-          <aside className="hidden lg:block shrink-0 w-52 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar">
+          <aside className={`hidden lg:block shrink-0 self-start bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all ${genreSidebarCollapsed ? "w-[72px]" : "w-52"}`}>
             <div className="py-3">
               <div className="px-3 pb-2 space-y-2">
-                <input
-                  value={genreSearch}
-                  onChange={(e) => setGenreSearch(e.target.value)}
-                  placeholder="ジャンル検索..."
-                  className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-1.5 text-[12px] text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                />
-                <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
-                  <span>一致ジャンル {matchedGenreCount}件</span>
-                  <span>表示広告 {selectedGenre === "all" ? tableSummary?.total ?? 0 : selectedGenreCount}件</span>
-                </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  {!genreSidebarCollapsed && (
+                    <input
+                      value={genreSearch}
+                      onChange={(e) => setGenreSearch(e.target.value)}
+                      placeholder="ジャンル検索..."
+                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-1.5 text-[12px] text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                    />
+                  )}
                   <button
-                    onClick={() => setExpandedParents(new Set(filteredGenreGroups.map((g) => g.parent)))}
-                    className="text-[10px] px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => setGenreSidebarCollapsed((v) => !v)}
+                    className="shrink-0 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-[10px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    title="ジャンル欄の表示切替"
                   >
-                    全展開
-                  </button>
-                  <button
-                    onClick={() => setExpandedParents(new Set())}
-                    className="text-[10px] px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    全折りたたみ
+                    {genreSidebarCollapsed ? "展開" : "縮小"}
                   </button>
                 </div>
+                {!genreSidebarCollapsed && (
+                  <>
+                    <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                      <span>一致ジャンル {matchedGenreCount}件</span>
+                      <span>表示広告 {selectedGenre === "all" ? tableSummary?.total ?? 0 : selectedGenreCount}件</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setExpandedParents(new Set(filteredGenreGroups.map((g) => g.parent)))}
+                        className="text-[10px] px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        全展開
+                      </button>
+                      <button
+                        onClick={() => setExpandedParents(new Set())}
+                        className="text-[10px] px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        全折りたたみ
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
               {/* All genres option */}
               <button
@@ -1923,8 +2013,9 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
                     ? "bg-[#EEF2FF] text-[#4A7DFF] border-r-2 border-[#4A7DFF]"
                     : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 }`}
+                title="すべての広告"
               >
-                <span>すべての広告</span>
+                <span className={genreSidebarCollapsed ? "mx-auto" : ""}>{genreSidebarCollapsed ? "全" : "すべての広告"}</span>
               </button>
 
               {/* Genre groups */}
@@ -1934,11 +2025,18 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
                       <button
                         onClick={() => toggleParent(group.parent)}
                         className="w-full px-4 py-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800"
+                        title={genreGroupLabels[group.parent] || group.parent}
                       >
-                        <span>{genreGroupLabels[group.parent] || group.parent}</span>
-                        <span className="text-[9px] text-gray-400 dark:text-gray-500">
-                          {group.items.reduce((s, g) => s + (g.count || 0), 0)}
+                        <span className={genreSidebarCollapsed ? "mx-auto" : ""}>
+                          {genreSidebarCollapsed
+                            ? (genreGroupLabels[group.parent] || group.parent).slice(0, 2)
+                            : (genreGroupLabels[group.parent] || group.parent)}
                         </span>
+                        {!genreSidebarCollapsed && (
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                            {group.items.reduce((s, g) => s + (g.count || 0), 0)}
+                          </span>
+                        )}
                       </button>
                       {expandedParents.has(group.parent) &&
                         group.items.map((g) => (
@@ -1950,9 +2048,12 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
                                 ? "bg-[#EEF2FF] text-[#4A7DFF] font-medium border-r-2 border-[#4A7DFF]"
                                 : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                             }`}
+                            title={g.label}
                           >
-                            <span className="truncate">{g.label}</span>
-                            {g.count !== undefined && (
+                            <span className={`truncate ${genreSidebarCollapsed ? "mx-auto max-w-full text-center" : ""}`}>
+                              {genreSidebarCollapsed ? g.label.slice(0, 4) : g.label}
+                            </span>
+                            {!genreSidebarCollapsed && g.count !== undefined && (
                               <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                                 {g.count}
                               </span>
@@ -1987,7 +2088,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
         )}
 
         {/* ─── Table Content ─── */}
-        <div className="flex-1 overflow-auto custom-scrollbar p-4">
+        <div className="min-w-0 flex-1 p-3 md:p-4">
           {selectedGenre !== "all" && (
             <div className="mb-2 flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
               <button onClick={() => setSelectedGenre("all")} className="hover:text-[#4A7DFF] transition-colors">
@@ -2050,7 +2151,7 @@ export default function ProRankingView({ onAdSelect }: ProRankingViewProps) {
       </div>
 
       {/* ─── Activity Feed (collapsible bottom bar) ─── */}
-      <div className="shrink-0 px-4 pb-3">
+      <div className="shrink-0 px-3 pb-3 md:px-4">
         <ActivityFeed onAdSelect={onAdSelect} />
       </div>
 

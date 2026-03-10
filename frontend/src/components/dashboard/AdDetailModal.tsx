@@ -469,11 +469,12 @@ export default function AdDetailModal({ ad, onClose, onAdSelect, onRecoveryQueue
           <div className="grid gap-5 xl:grid-cols-[1.02fr_0.98fr]">
             <div className="space-y-4">
               <CreativeViewer
-                imageUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (mediaInfo?.image_url || ad.image_url || ad.thumbnail || null)}
-                videoUrl={ad.ad_id ? `/api/v1/media/video/${ad.ad_id}` : (mediaInfo?.video_url || ad.video_url || null)}
+                imageUrl={mediaInfo?.image_url || ad.image_url || ad.thumbnail || null}
+                videoUrl={mediaInfo?.video_url || ad.video_url || null}
                 snapshotUrl={mediaInfo?.snapshot_url || ad.snapshot_url || null}
-                thumbnailUrl={ad.ad_id ? `/api/v1/media/thumbnail/${ad.ad_id}` : (ad.thumbnail || mediaInfo?.image_url || null)}
+                thumbnailUrl={ad.thumbnail || mediaInfo?.image_url || ad.image_url || null}
                 creativeType={ad.creative_type || null}
+                adId={ad.ad_id}
               />
               <div className="grid grid-cols-2 gap-2">
                 <button
