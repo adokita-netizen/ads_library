@@ -16,14 +16,17 @@ import { deriveBedrockStatus, ProvenanceBadge, PriorityBadge, ConfidenceBandBadg
 import SearchUxSettingsPanel from "../common/SearchUxSettingsPanel";
 import SearchFallbackChips, { type SearchFallbackSuggestion } from "../common/SearchFallbackChips";
 
-const getThumbnailCandidates = (item: ProRankingItem): string[] =>
-  [
-    `/api/v1/media/thumbnail/${item.ad_id}`,
+const getThumbnailCandidates = (item: ProRankingItem): string[] => {
+  const preferred = [
     item.thumbnail_url,
     item.thumbnail,
     item.image_url,
     item.snapshot_url,
+    `/api/v1/media/thumbnail/${item.ad_id}`,
   ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(preferred));
+};
 
 // ─── Column definitions for column toggle ───
 const TABLE_COLUMNS: ColumnDef[] = [

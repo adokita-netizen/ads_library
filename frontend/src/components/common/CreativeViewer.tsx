@@ -41,7 +41,8 @@ export function CreativeViewer({
   const [extractedUrl, setExtractedUrl] = useState<string | null>(null);
   const [videoFallbackToRaw, setVideoFallbackToRaw] = useState(false);
 
-  // B36: Build fallback chain with S3 proxy priority
+  // Prefer concrete media URLs first. Some proxy thumbnail endpoints return
+  // SVG placeholders with 200, which prevents img onError fallback.
   const s3ProxyUrl = useMemo(() => {
     if (imageS3Key) return `/api/v1/media/images/${encodeURIComponent(imageS3Key)}`;
     if (adId) return `/api/v1/media/thumbnail/${adId}`;
@@ -49,8 +50,8 @@ export function CreativeViewer({
   }, [imageS3Key, adId]);
 
   const fallbackSources = useMemo(
-    () => [s3ProxyUrl, imageUrl, thumbnailUrl].filter((s): s is string => !!s),
-    [s3ProxyUrl, imageUrl, thumbnailUrl],
+    () => Array.from(new Set([imageUrl, thumbnailUrl, s3ProxyUrl, snapshotUrl].filter((s): s is string => !!s))),
+    [imageUrl, thumbnailUrl, s3ProxyUrl, snapshotUrl],
   );
   const [fallbackIndex, setFallbackIndex] = useState(0);
 
