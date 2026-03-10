@@ -14,3 +14,4 @@ frontend/
 test-results/
 *.png
 *.json
+# Deployment sync marker for push-triggered workflow
