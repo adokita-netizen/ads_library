@@ -41,6 +41,8 @@ def _init_database():
             import app.models.alert_rule  # noqa: F401
             import app.models.alert_history  # noqa: F401
             import app.models.crawl_job  # noqa: F401
+            import app.models.creative_asset  # noqa: F401
+            import app.models.brand_registry  # noqa: F401
             session = get_session_with_retry()
             Base.metadata.create_all(bind=sync_engine)
             _DB_INITIALIZED = True
