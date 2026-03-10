@@ -1,15 +1,28 @@
 import axios from "axios";
 
 const isBrowser = typeof window !== "undefined";
-const isDev = process.env.NODE_ENV !== "production";
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const localhostHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
-// In local development, always use Next.js same-origin rewrites.
-// This avoids browser-side CORS/preflight failures against localhost:8000.
-const API_BASE =
-  isBrowser && !isDev && publicApiUrl
-    ? `${publicApiUrl}/api/v1`
-    : "/api/v1";
+function resolveApiBase(): string {
+  if (isBrowser) {
+    const hostname = window.location.hostname.toLowerCase();
+    if (publicApiUrl && localhostHosts.has(hostname)) {
+      return `${publicApiUrl}/api/v1`;
+    }
+    return "/api/v1";
+  }
+
+  if (publicApiUrl) {
+    return `${publicApiUrl}/api/v1`;
+  }
+
+  return "/api/v1";
+}
+
+// Browser requests should only use localhost API targets when the app itself
+// is being served from localhost. Hosted environments must stay same-origin.
+const API_BASE = resolveApiBase();
 
 const api = axios.create({
   baseURL: API_BASE,
