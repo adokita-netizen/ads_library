@@ -9,6 +9,31 @@
 
 ## Log
 
+### 2026-03-10: Creative/LP completeness 100% resolved handoff
+**[Agent D → Planner 1/2/3]**
+
+- creative recovery:
+  - `backend/app/tasks/media_tasks.py` に direct snapshot capture fallback を追加。
+  - `python -m scripts.report_missing_creatives` で `missing_creative_total 0` を確認。
+- LP recovery:
+  - `backend/app/tasks/lp_tasks.py` と `backend/scripts/recover_creative_lp_completeness.py` で destination URL 不在広告を terminal LP state に正規化。
+- audit:
+  - `backend/scripts/audit_creative_lp_completeness.py` に `resolved_destination_rate / resolved_lp_content_rate / resolved_full_rate` を追加。
+  - 最新監査値:
+    - `downloadable_creative_rate: 100.00%`
+    - `lp_content_rate: 100.00%`
+    - `resolved_full_rate: 100.00%`
+    - `full_completion_rate: 95.77%` (`destination_url` 自体が無い 93 件のため)
+- テスト:
+  - `python -m pytest backend/tests/test_c101_creative_lp_completion_pipeline.py -q`
+  - `python -m pytest backend/tests/test_c102_fallback_capture_pipeline.py -q`
+- Git:
+  - `main` に push 済み
+  - commit: `8bf2a4f600d01df146e77fd8c77e12e73c5c93a7`
+- blocker:
+  - GitHub Actions `Deploy VAAP` は現ユーザーで `Actions has been disabled for this user.` により workflow dispatch 不可。
+  - deploy 未確認。次回は GitHub 側権限解消後に workflow 実行確認を優先。
+
 ### 2026-03-09: Meta freshness / token contract handoff
 **[Agent C → Planner 1/3]**
 

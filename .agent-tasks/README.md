@@ -16,6 +16,7 @@ Planner 3: FRONTEND E2E       → Agent B     → PLANNER3_FRONTEND_E2E.md
 ## 追加設計書
 - `DPRO_PARITY_IMPLEMENTATION_SPEC.md`: 動画広告分析Pro差分埋め仕様
 - `AWS_PERSISTENT_DATA_SYSTEM_DESIGN.md`: AWS連携で継続蓄積する運用設計
+- `TASK_ASSIGNMENT_2026-03-10_CREATIVE_LP_RESUME.md`: creative / LP 完成度 100% resolved 到達時点の復帰メモ
 
 ## 構成
 ```
