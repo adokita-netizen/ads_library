@@ -388,7 +388,7 @@ def extract_media_task(self, ad_id: int, use_playwright: bool = True):
             from app.services.media_extraction import MediaExtractor
             extractor = MediaExtractor()
             extracted = loop.run_until_complete(
-                extractor.extract(ad.snapshot_url, use_playwright=use_playwright)
+                extractor.extract(ad.snapshot_url, use_playwright=use_playwright, external_id=ad.external_id)
             )
         finally:
             loop.close()
@@ -1157,3 +1157,165 @@ def _save_to_local_cache(data: bytes, media_type: str, ad_id: int) -> str | None
     except Exception as e:
         logger.warning("local_cache_save_failed", media_type=media_type, ad_id=ad_id, error=str(e))
         return None
+
+
+# ── v1.5: Auto CR extraction batch task ──────────────────────
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=60)
+def auto_extract_pending_media_task(self, limit: int = 50, use_playwright: bool = True):
+    """Automatically extract media for all pending ads.
+
+    Designed to run on a schedule (e.g., every 2 hours) to continuously
+    accumulate creative assets (images + videos) for all new ads.
+    """
+    session = SyncSessionLocal()
+    try:
+        from sqlalchemy import or_
+
+        # Find ads needing media extraction
+        ads = (
+            session.query(Ad)
+            .filter(
+                Ad.snapshot_url.isnot(None),
+                or_(
+                    Ad.image_url.is_(None),
+                    Ad.thumbnail_url.is_(None),
+                ),
+                Ad.media_extraction_status.in_([
+                    MediaExtractionStatus.PENDING,
+                    MediaExtractionStatus.FAILED,
+                    MediaExtractionStatus.ENRICHED,
+                ]),
+            )
+            .order_by(Ad.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not ads:
+            logger.info("auto_extract_no_pending_ads")
+            return {"processed": 0, "success": 0, "failed": 0, "message": "No pending ads"}
+
+        logger.info("auto_extract_starting", count=len(ads), limit=limit)
+
+        from app.services.media_extraction import MediaExtractor
+
+        extractor = MediaExtractor(timeout=30.0)
+        success = 0
+        failed = 0
+
+        for ad in ads:
+            try:
+                ad.media_extraction_status = MediaExtractionStatus.PROCESSING
+                session.commit()
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    extracted = loop.run_until_complete(
+                        extractor.extract(
+                            ad.snapshot_url,
+                            use_playwright=use_playwright,
+                            external_id=ad.external_id,
+                        )
+                    )
+                finally:
+                    loop.close()
+
+                # Update ad with extracted data
+                updated = False
+                if extracted.image_urls and not ad.image_url:
+                    ad.image_url = extracted.image_urls[0]
+                    updated = True
+                if extracted.thumbnail_url and not ad.thumbnail_url:
+                    ad.thumbnail_url = extracted.thumbnail_url
+                elif ad.image_url and not ad.thumbnail_url:
+                    ad.thumbnail_url = ad.image_url
+                    updated = True
+                if extracted.video_urls and not ad.video_url:
+                    ad.video_url = extracted.video_urls[0]
+                    updated = True
+                if extracted.creative_type and extracted.creative_type != "unknown":
+                    if ad.creative_type in (None, "unknown"):
+                        ad.creative_type = extracted.creative_type
+                        updated = True
+                if extracted.destination_url and not ad.destination_url:
+                    ad.destination_url = extracted.destination_url
+                    updated = True
+                if extracted.ad_text and not ad.description:
+                    ad.description = extracted.ad_text[:2000]
+                    updated = True
+
+                if updated or extracted.image_urls or extracted.video_urls:
+                    ad.media_extraction_status = MediaExtractionStatus.COMPLETED
+                    success += 1
+                else:
+                    ad.media_extraction_status = MediaExtractionStatus.FAILED
+                    failed += 1
+
+                session.commit()
+
+                # Rate limit between extractions
+                time.sleep(0.5)
+
+            except Exception as e:
+                failed += 1
+                ad.media_extraction_status = MediaExtractionStatus.FAILED
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                logger.warning("auto_extract_ad_failed", ad_id=ad.id, error=str(e)[:200])
+
+        result = {
+            "processed": len(ads),
+            "success": success,
+            "failed": failed,
+            "message": f"Auto-extracted {success}/{len(ads)} ads",
+        }
+        logger.info("auto_extract_completed", **result)
+        return result
+
+    finally:
+        session.close()
+
+
+@celery_app.task(bind=True, max_retries=0)
+def media_extraction_stats_task(self):
+    """Return current media extraction statistics."""
+    session = SyncSessionLocal()
+    try:
+        from sqlalchemy import func
+
+        total = session.query(func.count(Ad.id)).scalar()
+        with_image = session.query(func.count(Ad.id)).filter(Ad.image_url.isnot(None)).scalar()
+        with_thumb = session.query(func.count(Ad.id)).filter(Ad.thumbnail_url.isnot(None)).scalar()
+        with_video = session.query(func.count(Ad.id)).filter(Ad.video_url.isnot(None)).scalar()
+        pending = session.query(func.count(Ad.id)).filter(
+            Ad.media_extraction_status == MediaExtractionStatus.PENDING,
+        ).scalar()
+        failed = session.query(func.count(Ad.id)).filter(
+            Ad.media_extraction_status == MediaExtractionStatus.FAILED,
+        ).scalar()
+
+        # Type breakdown
+        type_counts = dict(
+            session.query(Ad.creative_type, func.count(Ad.id))
+            .group_by(Ad.creative_type)
+            .all()
+        )
+
+        return {
+            "total_ads": total,
+            "with_image": with_image,
+            "with_thumbnail": with_thumb,
+            "with_video": with_video,
+            "image_rate": round(with_image / total * 100, 1) if total else 0,
+            "thumbnail_rate": round(with_thumb / total * 100, 1) if total else 0,
+            "pending_extraction": pending,
+            "failed_extraction": failed,
+            "creative_types": type_counts,
+        }
+    finally:
+        session.close()

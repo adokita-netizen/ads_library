@@ -37,6 +37,12 @@ from app.models.competitive_intel import (
     FunnelStep,
     TrendPrediction,
 )
+from app.models.creative_asset import (
+    GenreTaxonomy,
+    CreativeAsset,
+    CreativeFamily,
+    AdGenreTag,
+)
 from app.models.conversation import Conversation
 from app.models.alert_rule import AlertRule
 from app.models.alert_history import AlertHistory
@@ -82,4 +88,8 @@ __all__ = [
     "AlertRule",
     "AlertHistory",
     "DataQualitySnapshot",
+    "GenreTaxonomy",
+    "CreativeAsset",
+    "CreativeFamily",
+    "AdGenreTag",
 ]

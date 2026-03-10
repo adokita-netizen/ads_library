@@ -1626,6 +1626,153 @@ async def get_media_stats():
         session.close()
 
 
+# ── v1.5: Auto CR Extraction API ─────────────────────────────────────
+
+
+class AutoExtractRequest(BaseModel):
+    limit: int = Field(default=50, ge=1, le=200)
+    use_playwright: bool = True
+
+
+@router.post("/auto-extract")
+async def trigger_auto_extract(req: AutoExtractRequest):
+    """Trigger automatic media extraction for pending ads.
+
+    Extracts images and videos (CR) for ads missing media.
+    Uses Playwright + network intercept for reliable extraction.
+    """
+    from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad, MediaExtractionStatus
+    from sqlalchemy import or_, func
+
+    session = SyncSessionLocal()
+    try:
+        # Count pending
+        pending_count = (
+            session.query(func.count(Ad.id))
+            .filter(
+                Ad.snapshot_url.isnot(None),
+                or_(Ad.image_url.is_(None), Ad.thumbnail_url.is_(None)),
+                Ad.media_extraction_status.in_([
+                    MediaExtractionStatus.PENDING,
+                    MediaExtractionStatus.FAILED,
+                    MediaExtractionStatus.ENRICHED,
+                ]),
+            )
+            .scalar()
+        )
+
+        if pending_count == 0:
+            return {
+                "status": "no_pending",
+                "message": "All ads already have media extracted",
+                "pending_count": 0,
+            }
+
+        # Try Celery dispatch first, fallback to inline
+        try:
+            from app.tasks.media_tasks import auto_extract_pending_media_task
+            result = auto_extract_pending_media_task.delay(
+                limit=req.limit, use_playwright=req.use_playwright
+            )
+            return {
+                "status": "dispatched",
+                "message": f"Auto-extraction dispatched for up to {req.limit} ads",
+                "pending_count": pending_count,
+                "task_id": str(getattr(result, "id", None)),
+            }
+        except Exception:
+            # Inline fallback
+            from app.tasks.media_tasks import auto_extract_pending_media_task
+            result = auto_extract_pending_media_task(
+                limit=min(req.limit, 10),  # Limit inline to avoid timeout
+                use_playwright=req.use_playwright,
+            )
+            return {
+                "status": "completed_inline",
+                "pending_count": pending_count,
+                **result,
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+
+@router.get("/extraction-progress")
+async def get_extraction_progress():
+    """Real-time extraction progress for the UI dashboard."""
+    from app.core.database import SyncSessionLocal
+    from app.models.ad import Ad, MediaExtractionStatus
+    from sqlalchemy import func, or_
+
+    session = SyncSessionLocal()
+    try:
+        total = session.query(func.count(Ad.id)).scalar()
+
+        # Media coverage
+        with_image = session.query(func.count(Ad.id)).filter(Ad.image_url.isnot(None)).scalar()
+        with_thumb = session.query(func.count(Ad.id)).filter(Ad.thumbnail_url.isnot(None)).scalar()
+        with_video = session.query(func.count(Ad.id)).filter(Ad.video_url.isnot(None)).scalar()
+
+        # Status breakdown
+        status_counts = dict(
+            session.query(Ad.media_extraction_status, func.count(Ad.id))
+            .group_by(Ad.media_extraction_status)
+            .all()
+        )
+
+        # Type breakdown
+        type_counts = dict(
+            session.query(Ad.creative_type, func.count(Ad.id))
+            .group_by(Ad.creative_type)
+            .all()
+        )
+
+        # Pending extraction (missing image or thumbnail)
+        pending = (
+            session.query(func.count(Ad.id))
+            .filter(
+                Ad.snapshot_url.isnot(None),
+                or_(Ad.image_url.is_(None), Ad.thumbnail_url.is_(None)),
+                Ad.media_extraction_status.in_([
+                    MediaExtractionStatus.PENDING,
+                    MediaExtractionStatus.FAILED,
+                    MediaExtractionStatus.ENRICHED,
+                ]),
+            )
+            .scalar()
+        )
+
+        # Recent extractions (last 24h)
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent_count = (
+            session.query(func.count(Ad.id))
+            .filter(Ad.updated_at >= cutoff, Ad.image_url.isnot(None))
+            .scalar()
+        )
+
+        return {
+            "total_ads": total,
+            "coverage": {
+                "image": with_image,
+                "image_rate": round(with_image / total * 100, 1) if total else 0,
+                "thumbnail": with_thumb,
+                "thumbnail_rate": round(with_thumb / total * 100, 1) if total else 0,
+                "video": with_video,
+            },
+            "pending_extraction": pending,
+            "recent_extractions_24h": recent_count,
+            "status_breakdown": status_counts,
+            "type_breakdown": type_counts,
+            "auto_schedule": "Every 2 hours (xx:30)",
+        }
+    finally:
+        session.close()
+
+
 # ── Per-Ad Media Composite (D19) ─────────────────────────────────────
 
 @router.get("/ad/{ad_id}/all")

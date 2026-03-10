@@ -145,6 +145,12 @@ celery_app.conf.update(
             "task": "app.tasks.optimization_tasks.update_ab_test_metrics_task",
             "schedule": crontab(minute=0, hour="*/4"),  # 4時間ごと
         },
+        # v1.5: Auto CR extraction — continuously extract media for new ads
+        "auto-extract-pending-media": {
+            "task": "app.tasks.media_tasks.auto_extract_pending_media_task",
+            "schedule": crontab(minute=30, hour="*/2"),  # 2時間ごと (03:30, 05:30, ...)
+            "kwargs": {"limit": 50, "use_playwright": True},
+        },
     },
 )
 
@@ -153,6 +159,7 @@ celery_app.autodiscover_tasks([
     "app.tasks.crawl_tasks",
     "app.tasks.lp_tasks",
     "app.tasks.generation_tasks",
+    "app.tasks.media_tasks",
     "app.tasks.ranking_tasks",
     "app.tasks.metrics_tasks",
     "app.tasks.alert_tasks",

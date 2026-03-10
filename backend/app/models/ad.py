@@ -419,6 +419,10 @@ class Ad(Base):
     ad_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
     tags: Mapped[list | None] = mapped_column(JSONB, default=list, nullable=True)
 
+    # Hit proxy score (reference architecture)
+    hit_proxy_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    active_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

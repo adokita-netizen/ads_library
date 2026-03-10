@@ -17,6 +17,22 @@ interface ExtractionStatus {
   status_breakdown: Record<string, number>;
 }
 
+interface ExtractionProgress {
+  total_ads: number;
+  coverage: {
+    image: number;
+    image_rate: number;
+    thumbnail: number;
+    thumbnail_rate: number;
+    video: number;
+  };
+  pending_extraction: number;
+  recent_extractions_24h: number;
+  status_breakdown: Record<string, number>;
+  type_breakdown: Record<string, number>;
+  auto_schedule: string;
+}
+
 interface ExtractionAd {
   id: number;
   title: string;
@@ -120,6 +136,8 @@ export default function MediaExtractionDashboard() {
   const [selectedDetail, setSelectedDetail] = useState<ExtractionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ExtractionProgress | null>(null);
+  const [autoExtractRunning, setAutoExtractRunning] = useState(false);
 
   const selectedAd = useMemo(
     () => ads.find((ad) => ad.id === selectedAdId) ?? ads[0] ?? null,
@@ -212,9 +230,46 @@ export default function MediaExtractionDashboard() {
     }
   }, [fetchAds, fetchStatus, status]);
 
+  const fetchProgress = useCallback(async () => {
+    try {
+      const data = await fetchApi<ExtractionProgress>("/media/extraction-progress");
+      setProgress(data);
+    } catch {
+      // Silently fail — progress is supplementary
+    }
+  }, []);
+
+  const handleAutoExtract = async (limit = 50) => {
+    setAutoExtractRunning(true);
+    try {
+      const result = await fetchApi<{ status: string; message: string; pending_count: number }>(
+        "/media/auto-extract",
+        { method: "POST", body: { limit, use_playwright: true } },
+      );
+      if (result.status === "no_pending") {
+        toast.success("全広告のCR取得済みです");
+      } else {
+        toast.success(`自動CR抽出を開始: ${result.pending_count}件が対象`);
+      }
+      // Refresh progress after short delay
+      setTimeout(() => { void fetchProgress(); }, 2000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "自動CR抽出に失敗しました");
+    } finally {
+      setAutoExtractRunning(false);
+    }
+  };
+
   useEffect(() => {
     void refreshAll(!loading);
-  }, [refreshAll]);
+    void fetchProgress();
+  }, [refreshAll, fetchProgress]);
+
+  // Poll progress every 30s
+  useEffect(() => {
+    const interval = setInterval(() => { void fetchProgress(); }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchProgress]);
 
   useEffect(() => {
     setPage(1);
@@ -334,6 +389,13 @@ export default function MediaExtractionDashboard() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => { void handleAutoExtract(50); }}
+            disabled={autoExtractRunning || !!actionLoading}
+            className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {autoExtractRunning ? "抽出中..." : "自動CR抽出"}
+          </button>
+          <button
             onClick={handleBatchExtract}
             disabled={!!actionLoading}
             className="px-3 py-2 rounded-xl bg-[#4A7DFF] text-white text-[12px] font-semibold hover:bg-[#3a6ae8] disabled:opacity-50"
@@ -374,6 +436,57 @@ export default function MediaExtractionDashboard() {
               <p className="text-[11px] text-gray-500 mb-1">失敗</p>
               <p className="text-2xl font-bold text-rose-600">{status.failed}</p>
               <p className="text-[11px] text-gray-400 mt-1">一覧内の要再抽出 {retryCandidateCount}件</p>
+            </div>
+          </div>
+        )}
+
+        {progress && (
+          <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-[13px] font-semibold text-gray-900">CR取得カバレッジ</h3>
+                <p className="text-[11px] text-gray-500">
+                  自動スケジュール: {progress.auto_schedule} / 直近24h: {progress.recent_extractions_24h}件抽出
+                </p>
+              </div>
+              {progress.pending_extraction > 0 && (
+                <span className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+                  未抽出 {progress.pending_extraction}件
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-600">静止画</span>
+                  <span className="text-[11px] font-semibold text-gray-900">{progress.coverage.image}/{progress.total_ads} ({progress.coverage.image_rate}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress.coverage.image_rate}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-600">サムネイル</span>
+                  <span className="text-[11px] font-semibold text-gray-900">{progress.coverage.thumbnail}/{progress.total_ads} ({progress.coverage.thumbnail_rate}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress.coverage.thumbnail_rate}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-600">動画</span>
+                  <span className="text-[11px] font-semibold text-gray-900">{progress.coverage.video}件</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {Object.entries(progress.type_breakdown).map(([type, count]) => (
+                    <span key={type} className="px-2 py-0.5 rounded-full bg-gray-100 text-[10px] text-gray-600">
+                      {type}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

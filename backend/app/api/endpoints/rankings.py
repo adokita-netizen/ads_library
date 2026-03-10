@@ -7848,80 +7848,80 @@ _DEFAULT_CPM_JPY = 800
 # Maps japanese_label -> { en_key, parent }
 GENRE_MASTER: dict[str, dict] = {
     # Beauty
-    "medical_weight_loss": {"jp_label": "medical_weight_loss", "parent": "beauty"},
-    "beauty_clinic": {"jp_label": "beauty_clinic", "parent": "beauty"},
-    "skincare": {"jp_label": "skincare", "parent": "beauty"},
-    "hair_removal": {"jp_label": "hair_removal", "parent": "beauty"},
-    "hair_growth_aga": {"jp_label": "hair_growth_aga", "parent": "beauty"},
-    "beauty_serum": {"jp_label": "beauty_serum", "parent": "beauty"},
-    "cosmetics": {"jp_label": "cosmetics", "parent": "beauty"},
-    "whitening": {"jp_label": "whitening", "parent": "beauty"},
-    "esthetic": {"jp_label": "esthetic", "parent": "beauty"},
-    "mens_beauty": {"jp_label": "mens_beauty", "parent": "beauty"},
-    "ladies_clinic": {"jp_label": "ladies_clinic", "parent": "beauty"},
+    "medical_weight_loss": {"jp_label": "医療痩身", "parent": "beauty"},
+    "beauty_clinic": {"jp_label": "美容クリニック", "parent": "beauty"},
+    "skincare": {"jp_label": "スキンケア", "parent": "beauty"},
+    "hair_removal": {"jp_label": "脱毛", "parent": "beauty"},
+    "hair_growth_aga": {"jp_label": "育毛・AGA", "parent": "beauty"},
+    "beauty_serum": {"jp_label": "美容液", "parent": "beauty"},
+    "cosmetics": {"jp_label": "コスメ", "parent": "beauty"},
+    "whitening": {"jp_label": "ホワイトニング", "parent": "beauty"},
+    "esthetic": {"jp_label": "エステ", "parent": "beauty"},
+    "mens_beauty": {"jp_label": "メンズ美容", "parent": "beauty"},
+    "ladies_clinic": {"jp_label": "レディースクリニック", "parent": "beauty"},
     # Health
-    "diet_supplement": {"jp_label": "diet_supplement", "parent": "health"},
-    "fitness": {"jp_label": "fitness", "parent": "health"},
-    "yoga_pilates": {"jp_label": "yoga_pilates", "parent": "health"},
-    "protein": {"jp_label": "protein", "parent": "health"},
-    "health_food": {"jp_label": "health_food", "parent": "health"},
-    "clinic": {"jp_label": "clinic", "parent": "health"},
-    "chiropractic": {"jp_label": "chiropractic", "parent": "health"},
-    "dental": {"jp_label": "dental", "parent": "health"},
-    "gym_fitness": {"jp_label": "gym_fitness", "parent": "health"},
-    "sauna": {"jp_label": "sauna", "parent": "health"},
+    "diet_supplement": {"jp_label": "ダイエットサプリ", "parent": "health"},
+    "fitness": {"jp_label": "フィットネス", "parent": "health"},
+    "yoga_pilates": {"jp_label": "ヨガ・ピラティス", "parent": "health"},
+    "protein": {"jp_label": "プロテイン", "parent": "health"},
+    "health_food": {"jp_label": "健康食品", "parent": "health"},
+    "clinic": {"jp_label": "クリニック", "parent": "health"},
+    "chiropractic": {"jp_label": "整体・整骨院", "parent": "health"},
+    "dental": {"jp_label": "歯科", "parent": "health"},
+    "gym_fitness": {"jp_label": "ジム", "parent": "health"},
+    "sauna": {"jp_label": "サウナ", "parent": "health"},
     # Business
-    "finance_investment": {"jp_label": "finance_investment", "parent": "business"},
-    "education_school": {"jp_label": "education_school", "parent": "business"},
-    "real_estate": {"jp_label": "real_estate", "parent": "business"},
-    "recruitment": {"jp_label": "recruitment", "parent": "business"},
-    "insurance": {"jp_label": "insurance", "parent": "business"},
-    "legal_financial": {"jp_label": "legal_financial", "parent": "business"},
-    "debt_settlement": {"jp_label": "debt_settlement", "parent": "business"},
-    "professional_consultation": {"jp_label": "professional_consultation", "parent": "business"},
-    "subsidies": {"jp_label": "subsidies", "parent": "business"},
-    "charity": {"jp_label": "charity", "parent": "business"},
-    "public_service": {"jp_label": "public_service", "parent": "business"},
+    "finance_investment": {"jp_label": "金融・投資", "parent": "business"},
+    "education_school": {"jp_label": "教育・スクール", "parent": "business"},
+    "real_estate": {"jp_label": "不動産", "parent": "business"},
+    "recruitment": {"jp_label": "求人・採用", "parent": "business"},
+    "insurance": {"jp_label": "保険", "parent": "business"},
+    "legal_financial": {"jp_label": "法律・税務", "parent": "business"},
+    "debt_settlement": {"jp_label": "債務整理", "parent": "business"},
+    "professional_consultation": {"jp_label": "専門相談", "parent": "business"},
+    "subsidies": {"jp_label": "助成金・補助金", "parent": "business"},
+    "charity": {"jp_label": "チャリティ", "parent": "business"},
+    "public_service": {"jp_label": "公共サービス", "parent": "business"},
     # Lifestyle
-    "ec_shopping": {"jp_label": "ec_shopping", "parent": "lifestyle"},
-    "app": {"jp_label": "app", "parent": "lifestyle"},
-    "matching_app": {"jp_label": "matching_app", "parent": "lifestyle"},
-    "delivery": {"jp_label": "delivery", "parent": "lifestyle"},
-    "meal_delivery": {"jp_label": "meal_delivery", "parent": "lifestyle"},
-    "gaming": {"jp_label": "gaming", "parent": "lifestyle"},
-    "net_shopping": {"jp_label": "net_shopping", "parent": "lifestyle"},
-    "shopping": {"jp_label": "shopping", "parent": "lifestyle"},
-    "streaming": {"jp_label": "streaming", "parent": "lifestyle"},
-    "social_contact": {"jp_label": "social_contact", "parent": "lifestyle"},
-    "romance_marriage": {"jp_label": "romance_marriage", "parent": "lifestyle"},
-    "travel": {"jp_label": "travel", "parent": "lifestyle"},
-    "hotel": {"jp_label": "hotel", "parent": "lifestyle"},
-    "tourism_tickets": {"jp_label": "tourism_tickets", "parent": "lifestyle"},
-    "pet": {"jp_label": "pet", "parent": "lifestyle"},
-    "lifestyle_service": {"jp_label": "lifestyle_service", "parent": "lifestyle"},
-    "printing_service": {"jp_label": "printing_service", "parent": "lifestyle"},
-    "pest_control": {"jp_label": "pest_control", "parent": "lifestyle"},
-    "fortune_telling": {"jp_label": "fortune_telling", "parent": "lifestyle"},
-    "hobby_culture": {"jp_label": "hobby_culture", "parent": "lifestyle"},
-    "photography": {"jp_label": "photography", "parent": "lifestyle"},
+    "ec_shopping": {"jp_label": "ECショッピング", "parent": "lifestyle"},
+    "app": {"jp_label": "アプリ", "parent": "lifestyle"},
+    "matching_app": {"jp_label": "マッチングアプリ", "parent": "lifestyle"},
+    "delivery": {"jp_label": "デリバリー", "parent": "lifestyle"},
+    "meal_delivery": {"jp_label": "食事宅配", "parent": "lifestyle"},
+    "gaming": {"jp_label": "ゲーム", "parent": "lifestyle"},
+    "net_shopping": {"jp_label": "ネット通販", "parent": "lifestyle"},
+    "shopping": {"jp_label": "ショッピング", "parent": "lifestyle"},
+    "streaming": {"jp_label": "動画配信", "parent": "lifestyle"},
+    "social_contact": {"jp_label": "SNS・コミュニティ", "parent": "lifestyle"},
+    "romance_marriage": {"jp_label": "恋愛・婚活", "parent": "lifestyle"},
+    "travel": {"jp_label": "旅行", "parent": "lifestyle"},
+    "hotel": {"jp_label": "ホテル", "parent": "lifestyle"},
+    "tourism_tickets": {"jp_label": "観光・チケット", "parent": "lifestyle"},
+    "pet": {"jp_label": "ペット", "parent": "lifestyle"},
+    "lifestyle_service": {"jp_label": "生活サービス", "parent": "lifestyle"},
+    "printing_service": {"jp_label": "印刷サービス", "parent": "lifestyle"},
+    "pest_control": {"jp_label": "害虫駆除", "parent": "lifestyle"},
+    "fortune_telling": {"jp_label": "占い", "parent": "lifestyle"},
+    "hobby_culture": {"jp_label": "趣味・カルチャー", "parent": "lifestyle"},
+    "photography": {"jp_label": "写真・撮影", "parent": "lifestyle"},
     # Also map AdCategoryEnum values
-    "ec_d2c": {"jp_label": "ec_d2c", "parent": "lifestyle"},
-    "finance": {"jp_label": "finance", "parent": "business"},
-    "education": {"jp_label": "education", "parent": "business"},
-    "beauty": {"jp_label": "beauty", "parent": "beauty"},
-    "food": {"jp_label": "food", "parent": "lifestyle"},
-    "health": {"jp_label": "health", "parent": "health"},
-    "technology": {"jp_label": "technology", "parent": "business"},
-    "other": {"jp_label": "other", "parent": "other"},
+    "ec_d2c": {"jp_label": "EC・D2C", "parent": "lifestyle"},
+    "finance": {"jp_label": "金融", "parent": "business"},
+    "education": {"jp_label": "教育", "parent": "business"},
+    "beauty": {"jp_label": "美容", "parent": "beauty"},
+    "food": {"jp_label": "フード", "parent": "lifestyle"},
+    "health": {"jp_label": "健康", "parent": "health"},
+    "technology": {"jp_label": "テクノロジー", "parent": "business"},
+    "other": {"jp_label": "その他", "parent": "other"},
 }
 
 # Parent category display labels
 _PARENT_LABELS: dict[str, str] = {
-    "beauty": "beauty",
-    "health": "health",
-    "business": "business",
-    "lifestyle": "lifestyle",
-    "other": "other",
+    "beauty": "美容系",
+    "health": "健康系",
+    "business": "ビジネス系",
+    "lifestyle": "ライフスタイル系",
+    "other": "その他",
 }
 
 
@@ -8331,6 +8331,9 @@ def get_pro_ranking(
                 "video_url": _resolve_video_url(ad),
                 "snapshot_url": ad.snapshot_url or "",
                 "download_url": f"/api/v1/media/download/{ad.id}",
+                # v2.0: Hit proxy scoring
+                "hit_proxy_score": round(float(ad.hit_proxy_score or 0), 1),
+                "active_days": ad.active_days or 0,
             })
 
         # Sort
@@ -8347,6 +8350,7 @@ def get_pro_ranking(
             "days_running": "days_running",
             "spend": "total_spend_jpy",
             "longevity": "days_running",
+            "hit_proxy": "hit_proxy_score",
         }
         sk = sort_key_map.get(sort_by, "total_views")
         ad_rows.sort(key=lambda r: r.get(sk, 0), reverse=True)
@@ -8523,13 +8527,33 @@ def smart_autocomplete(
 def get_genre_master():
     """Return the full genre taxonomy grouped by parent category.
 
-    Uses the comprehensive GENRE_MASTER constant with:
-    - Japanese name, English key, ad count, hit_line_views
-    - Parent category grouping for sidebar display
+    v2.0: Uses genre_taxonomy + ad_genre_tags tables for accurate counts.
+    Falls back to GENRE_MASTER dict + metadata JSON if tables are empty.
+    Also includes hit_proxy_score stats per genre.
     """
-    print("[C18] Loading genre master")
+    from sqlalchemy import text as sa_text
+
     with sync_session_scope() as session:
-        # Get ad counts per category
+        # ── v2.0: Try new ad_genre_tags table first ──
+        tag_counts = session.execute(sa_text(
+            'SELECT genre_code, COUNT(*) as cnt '
+            'FROM ad_genre_tags WHERE is_primary = 1 '
+            'GROUP BY genre_code'
+        )).fetchall()
+        tag_count_map: dict[str, int] = {str(gc).lower(): cnt for gc, cnt in tag_counts}
+
+        # Get fine_genre_en counts from metadata as fallback
+        fine_genre_results = session.execute(sa_text(
+            'SELECT json_extract(metadata, "$.fine_genre_en") as fg, COUNT(*) as cnt '
+            'FROM ads WHERE json_extract(metadata, "$.fine_genre_en") IS NOT NULL '
+            'GROUP BY fg'
+        )).fetchall()
+        fine_count_map: dict[str, int] = {}
+        for fg, cnt in fine_genre_results:
+            if fg:
+                fine_count_map[str(fg).lower()] = cnt
+
+        # Broad category counts
         cat_results = (
             session.query(Ad.category, func.count(Ad.id).label("cnt"))
             .filter(Ad.category.isnot(None))
@@ -8541,67 +8565,64 @@ def get_genre_master():
             cat_str = str(cat.value) if hasattr(cat, "value") else str(cat)
             cat_count_map[cat_str] = cnt
 
-        # Also get view counts for hit line computation
-        cat_views: dict[str, list[int]] = {}
-        view_data = (
-            session.query(Ad.category, Ad.view_count, Ad.estimated_impressions)
-            .filter(Ad.category.isnot(None))
-            .all()
-        )
-        for cat, vc, ei in view_data:
-            cat_str = str(cat.value) if hasattr(cat, "value") else str(cat)
-            views = vc or ei or 0
-            cat_views.setdefault(cat_str, []).append(views)
+        # ── v2.0: Hit proxy stats per genre ──
+        hp_stats = session.execute(sa_text(
+            'SELECT t.genre_code, '
+            '  AVG(a.hit_proxy_score) as avg_hp, '
+            '  MAX(a.hit_proxy_score) as max_hp, '
+            '  AVG(a.active_days) as avg_days '
+            'FROM ad_genre_tags t '
+            'JOIN ads a ON t.ad_id = a.id '
+            'WHERE t.is_primary = 1 AND a.hit_proxy_score IS NOT NULL '
+            'GROUP BY t.genre_code'
+        )).fetchall()
+        hp_map: dict[str, dict] = {}
+        for gc, avg_hp, max_hp, avg_days in hp_stats:
+            hp_map[str(gc).lower()] = {
+                "avg_hit_proxy": round(float(avg_hp or 0), 1),
+                "max_hit_proxy": round(float(max_hp or 0), 1),
+                "avg_active_days": round(float(avg_days or 0), 1),
+            }
 
         # Build genre items from GENRE_MASTER
         genre_items: list[dict] = []
         seen_keys: set[str] = set()
         for en_key, info in GENRE_MASTER.items():
             parent = info["parent"]
-            count = cat_count_map.get(en_key, 0)
+            # Priority: ad_genre_tags > fine_genre_en > category
+            count = tag_count_map.get(en_key, 0) or fine_count_map.get(en_key, 0) or cat_count_map.get(en_key, 0)
             seen_keys.add(en_key)
 
-            # Compute hit line for this genre
-            vlist = cat_views.get(en_key, [])
-            if vlist:
-                sorted_v = sorted(vlist, reverse=True)
-                top20_n = max(1, int(len(sorted_v) * 0.2))
-                hit_line_views = int(sum(sorted_v[:top20_n]) / top20_n)
-            else:
-                hit_line_views = 0
-
+            jp_label = info.get("jp_label", en_key)
+            hp = hp_map.get(en_key, {})
             genre_items.append({
-                "jp_label": info.get("jp_label", en_key),
+                "jp_label": jp_label,
                 "en_key": en_key,
                 "value": en_key,
-                "label": en_key.replace("_", " ").title(),
+                "label": jp_label,
                 "parent": parent,
                 "parent_label": _PARENT_LABELS.get(parent, parent),
                 "count": count,
-                "hit_line_views": hit_line_views,
+                "avg_hit_proxy": hp.get("avg_hit_proxy", 0),
+                "max_hit_proxy": hp.get("max_hit_proxy", 0),
+                "avg_active_days": hp.get("avg_active_days", 0),
             })
 
         # Also include DB categories not in GENRE_MASTER
         for cat_str, cnt in cat_count_map.items():
             if cat_str not in seen_keys:
-                parent = "other"
-                vlist = cat_views.get(cat_str, [])
-                if vlist:
-                    sorted_v = sorted(vlist, reverse=True)
-                    top20_n = max(1, int(len(sorted_v) * 0.2))
-                    hit_line_views = int(sum(sorted_v[:top20_n]) / top20_n)
-                else:
-                    hit_line_views = 0
-
+                hp = hp_map.get(cat_str, {})
                 genre_items.append({
                     "jp_label": cat_str,
                     "en_key": cat_str,
                     "value": cat_str,
-                    "label": cat_str.replace("_", " ").title(),
-                    "parent": parent,
-                    "parent_label": _PARENT_LABELS.get(parent, parent),
+                    "label": cat_str,
+                    "parent": "other",
+                    "parent_label": _PARENT_LABELS.get("other", "その他"),
                     "count": cnt,
-                    "hit_line_views": hit_line_views,
+                    "avg_hit_proxy": hp.get("avg_hit_proxy", 0),
+                    "max_hit_proxy": hp.get("max_hit_proxy", 0),
+                    "avg_active_days": hp.get("avg_active_days", 0),
                 })
 
         genre_items.sort(key=lambda x: x["count"], reverse=True)
@@ -8615,18 +8636,65 @@ def get_genre_master():
         for parent_key in ["beauty", "health", "business", "lifestyle", "other"]:
             items = groups_map.get(parent_key, [])
             if items:
+                total_count = sum(i["count"] for i in items)
                 groups.append({
                     "parent": parent_key,
                     "label": _PARENT_LABELS.get(parent_key, parent_key),
+                    "total_count": total_count,
                     "items": items,
                 })
 
-        print(f"[C18] Genre master: {len(genre_items)} genres in {len(groups)} groups")
         return {
             "genres": genre_items,
             "groups": groups,
             "total": len(genre_items),
         }
+
+
+# ---------- 4b. GET /rankings/hit-proxy-stats ----------
+
+
+@router.get("/hit-proxy-stats")
+def get_hit_proxy_stats():
+    """Return hit proxy score distribution and top performers."""
+    from sqlalchemy import text as sa_text
+    from app.services.hit_proxy import get_hit_proxy_distribution
+
+    with sync_session_scope() as session:
+        dist = get_hit_proxy_distribution()
+
+        # Top 20 highest-scoring ads
+        top_ads = session.execute(sa_text(
+            'SELECT id, title, advertiser_name, hit_proxy_score, active_days, '
+            'platform, creative_type, json_extract(metadata, "$.fine_genre_en") as genre '
+            'FROM ads WHERE hit_proxy_score IS NOT NULL '
+            'ORDER BY hit_proxy_score DESC LIMIT 20'
+        )).fetchall()
+
+        return {
+            "distribution": dist,
+            "top_performers": [
+                {
+                    "id": row[0],
+                    "title": row[1],
+                    "advertiser_name": row[2],
+                    "hit_proxy_score": round(float(row[3] or 0), 2),
+                    "active_days": row[4] or 0,
+                    "platform": row[5],
+                    "creative_type": row[6],
+                    "genre": row[7],
+                }
+                for row in top_ads
+            ],
+        }
+
+
+@router.post("/hit-proxy-recompute")
+def recompute_hit_proxy():
+    """Recompute hit proxy scores for all ads."""
+    from app.services.hit_proxy import batch_compute_hit_proxy
+    result = batch_compute_hit_proxy()
+    return {"status": "ok", **result}
 
 
 # ---------- 5. Search Collections (GET/POST/DELETE /rankings/search-collections) ----------

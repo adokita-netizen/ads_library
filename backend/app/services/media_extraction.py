@@ -14,13 +14,16 @@ from bs4 import BeautifulSoup
 logger = structlog.get_logger()
 
 # CI-118: Extractor version tracking
-EXTRACTOR_VERSION = "1.4.0"
+EXTRACTOR_VERSION = "2.0.0"
 EXTRACTOR_CHANGELOG = {
     "1.0.0": "Initial: HTTP+BS4 extraction",
     "1.1.0": "Added Playwright fallback",
     "1.2.0": "render_ad URL parser, fbcdn image filter",
     "1.3.0": "CI-098 timeout presets, CI-064 health tracking",
     "1.4.0": "D-R2-3 aggressive video recovery with 4-step fallback",
+    "1.5.0": "Network intercept, image validation, enhanced lazy-load handling",
+    "1.6.0": "Target-ad isolation, URL validation, BS4 skip for Meta Library",
+    "2.0.0": "Card-scoped intercept, aspect ratio filter, size-based dedup, creative asset registration",
 }
 _IMAGE_ATTRS = (
     "src",
@@ -115,14 +118,18 @@ _META_LIBRARY_CARD_EXTRACT_JS = r"""() => {
         }
 
         const imageUrls = [];
+        const imageMeta = [];
         for (const img of card.querySelectorAll('img')) {
             const src = img.getAttribute('src') || '';
             if (!src || src.startsWith('data:')) continue;
             const w = img.naturalWidth || img.width || parseInt(img.getAttribute('width') || '0');
             const h = img.naturalHeight || img.height || parseInt(img.getAttribute('height') || '0');
             if ((w > 0 && w < 50) || (h > 0 && h < 50)) continue;
-            if (src.includes('emoji') || src.includes('rsrc.php')) continue;
-            if (!imageUrls.includes(src)) imageUrls.push(src);
+            if (src.includes('emoji') || src.includes('rsrc.php') || src.includes('static.xx') || src.includes('platform-lookaside') || src.includes('profile_pic')) continue;
+            if (!imageUrls.includes(src)) {
+                imageUrls.push(src);
+                imageMeta.push({url: src, w: w || 0, h: h || 0});
+            }
         }
 
         const videoUrls = [];
@@ -146,6 +153,7 @@ _META_LIBRARY_CARD_EXTRACT_JS = r"""() => {
                 destination_url: extLinks.length ? extLinks[0] : null,
                 all_external_links: extLinks,
                 image_urls: imageUrls,
+                image_meta: imageMeta,
                 video_urls: videoUrls,
                 poster_url: posterUrl,
             });
@@ -331,6 +339,33 @@ class MediaExtractor:
         return True
 
     @staticmethod
+    def _is_valid_creative_url(url: str | None) -> bool:
+        """Validate that a URL is an actual creative asset, not garbage."""
+        if not url:
+            return False
+        lowered = url.lower()
+        # Reject known garbage patterns
+        _garbage = (
+            "s2/favicons", "favicon", "google.com/s2/",
+            "facebook.com/ads/library", "facebook.com/ads/archive",
+            "og.png", "og__", "og_image",
+            "/static/placeholders/",
+        )
+        if any(g in lowered for g in _garbage):
+            return False
+        # Must be an actual media CDN or known image host
+        _valid_hosts = ("fbcdn", "scontent", "instagram", "cdninstagram",
+                        ".jpg", ".jpeg", ".png", ".webp", ".mp4", ".webm",
+                        "cdn/shop", "cloudfront", "amazonaws", "imgix")
+        # Allow if it looks like an actual image/video URL
+        if any(h in lowered for h in _valid_hosts):
+            return True
+        # Reject if it's just a webpage URL
+        if "facebook.com" in lowered or "google.com" in lowered:
+            return False
+        return True
+
+    @staticmethod
     def _is_placeholder_text(value: str | None) -> bool:
         return str(value or "").strip() in _DISCLAIMER_TEXTS
 
@@ -422,12 +457,37 @@ class MediaExtractor:
                 if str(card.get("ad_id") or "").strip() == target_external_id:
                     selected = card
                     break
-        if selected is None and cards:
+        # v1.6: Do NOT fall back to cards[0] if target ID is specified but not found
+        if selected is None and cards and not target_external_id:
             selected = cards[0]
         if not selected:
             return result
 
-        result.image_urls = list(dict.fromkeys(selected.get("image_urls") or []))
+        # v2.0: Filter images by size/quality — only keep creative-grade images
+        raw_images = list(dict.fromkeys(selected.get("image_urls") or []))
+        image_meta = selected.get("image_meta") or []
+        meta_by_url = {m.get("url"): m for m in image_meta if m.get("url")}
+
+        quality_images = []
+        for img_url in raw_images:
+            if not self._is_valid_creative_url(img_url):
+                continue
+            meta = meta_by_url.get(img_url, {})
+            w, h = meta.get("w", 0), meta.get("h", 0)
+            # Skip tiny UI elements (icons, buttons, avatars)
+            if w > 0 and h > 0 and (w < 100 or h < 100):
+                continue
+            # Skip profile pictures and small avatars
+            if w > 0 and h > 0 and w == h and w < 150:
+                continue
+            quality_images.append(img_url)
+
+        # v2.0: Limit to reasonable count — a single ad has at most ~10 carousel cards
+        if len(quality_images) > 10:
+            # Prefer larger images (sort by content-length from meta if available)
+            quality_images = quality_images[:10]
+
+        result.image_urls = quality_images
         result.video_urls = list(dict.fromkeys(selected.get("video_urls") or []))
         result.thumbnail_url = selected.get("poster_url") or (result.image_urls[0] if result.image_urls else None)
         result.ad_text = selected.get("body") or None
@@ -480,7 +540,8 @@ class MediaExtractor:
             if normalized_target and normalized_target in text:
                 selected = dialog
                 break
-        if selected is None:
+        # v1.6: Only fall back to last dialog if no target ID specified
+        if selected is None and not normalized_target:
             selected = dialogs[-1]
 
         result.image_urls = [
@@ -598,24 +659,94 @@ class MediaExtractor:
                 logger.warning("video_recovery_method_failed", method=method, error=str(e), external_id=external_id)
         return None, ""
 
-    async def extract(self, snapshot_url: str, use_playwright: bool = True) -> ExtractedMedia:
-        """Extract media from snapshot URL, trying HTTP first, then Playwright fallback."""
-        result = await self._extract_via_http(snapshot_url)
+    @staticmethod
+    async def validate_image_url(url: str, timeout: float = 10.0) -> bool:
+        """v1.5: HEAD request to verify URL returns actual image content."""
+        if not url:
+            return False
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(timeout),
+                follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as client:
+                resp = await client.head(url)
+                if resp.status_code >= 400:
+                    return False
+                ct = (resp.headers.get("content-type") or "").lower()
+                return any(t in ct for t in ("image/", "video/"))
+        except Exception:
+            return False
+
+    @staticmethod
+    def build_ads_library_url(external_id: str) -> str:
+        """v1.6: Build public Meta Ads Library URL with full params for reliable loading."""
+        return (
+            f"https://www.facebook.com/ads/library/?id={external_id}"
+            f"&active_status=all&ad_type=all&country=ALL&media_type=all"
+        )
+
+    async def extract(self, snapshot_url: str, use_playwright: bool = True, external_id: str | None = None) -> ExtractedMedia:
+        """Extract media from snapshot URL, trying HTTP first, then Playwright fallback.
+
+        v1.6: Always prefer ads/library URL when external_id is available (render_ad tokens expire).
+        """
+        # v1.6: Use ads/library URL as primary when external_id is known
+        primary_url = snapshot_url
+        if external_id and use_playwright:
+            primary_url = self.build_ads_library_url(external_id)
+
+        result = await self._extract_via_http(primary_url)
 
         if result.creative_type == "unknown" and use_playwright:
-            pw_result = await self._extract_via_playwright(snapshot_url)
+            # v1.6: Use primary_url (ads/library with full params) for Playwright
+            pw_result = await self._extract_via_playwright(primary_url)
             if pw_result.creative_type != "unknown":
-                return pw_result
-            result = self._merge_debug_fields(pw_result, result)
-            if not result.restriction_reason:
-                result.restriction_reason = pw_result.restriction_reason
-            # Merge any additional URLs found by Playwright
-            if pw_result.image_urls or pw_result.video_urls:
-                result.image_urls = list(set(result.image_urls + pw_result.image_urls))
-                result.video_urls = list(set(result.video_urls + pw_result.video_urls))
-            if pw_result.screenshot_bytes and not result.screenshot_bytes:
-                result.screenshot_bytes = pw_result.screenshot_bytes
-                result.screenshot_content_type = pw_result.screenshot_content_type
+                if pw_result.image_urls:
+                    is_valid = await self.validate_image_url(pw_result.image_urls[0])
+                    if not is_valid:
+                        logger.warning("image_url_validation_failed", url=pw_result.image_urls[0])
+                        pw_result.image_urls = [u for u in pw_result.image_urls if u != pw_result.image_urls[0]]
+                        if not pw_result.image_urls and not pw_result.video_urls:
+                            pw_result.creative_type = "unknown"
+                if pw_result.creative_type != "unknown":
+                    result = pw_result  # v1.6: go through sanitize, don't return early
+            if result.creative_type == "unknown":
+                result = self._merge_debug_fields(pw_result, result)
+                if not result.restriction_reason:
+                    result.restriction_reason = pw_result.restriction_reason
+                if pw_result.image_urls or pw_result.video_urls:
+                    result.image_urls = list(set(result.image_urls + pw_result.image_urls))
+                    result.video_urls = list(set(result.video_urls + pw_result.video_urls))
+                if pw_result.screenshot_bytes and not result.screenshot_bytes:
+                    result.screenshot_bytes = pw_result.screenshot_bytes
+                    result.screenshot_content_type = pw_result.screenshot_content_type
+
+        # v1.6: Library fallback now handled by primary_url. Keep for legacy render_ad snapshots.
+        if result.creative_type == "unknown" and external_id and "/render_ad/" in (snapshot_url or "") and primary_url == snapshot_url:
+            library_url = self.build_ads_library_url(external_id)
+            logger.info("trying_ads_library_fallback", external_id=external_id)
+            lib_result = await self._extract_via_playwright(library_url)
+            if lib_result.creative_type != "unknown":
+                lib_result.extraction_method = "playwright_library_fallback"
+                result = lib_result  # go through sanitize
+            elif lib_result.image_urls or lib_result.video_urls:
+                result.image_urls = list(set(result.image_urls + lib_result.image_urls))
+                result.video_urls = list(set(result.video_urls + lib_result.video_urls))
+
+        # v1.6: Sanitize — remove garbage URLs before returning
+        result.image_urls = [u for u in result.image_urls if self._is_valid_creative_url(u)]
+        result.video_urls = [u for u in result.video_urls if u and "facebook.com/ads/" not in u.lower()]
+        if result.thumbnail_url and not self._is_valid_creative_url(result.thumbnail_url):
+            result.thumbnail_url = result.image_urls[0] if result.image_urls else None
+
+        # v1.6: If ad was not found on Meta Library page, discard all media
+        # (they belong to unrelated ads shown on the page)
+        if result.restriction_reason in ("ad_not_found", "ad_expired"):
+            result.image_urls = []
+            result.video_urls = []
+            result.thumbnail_url = None
+            result.creative_type = "unknown"
 
         # Determine creative_type from extracted media if still unknown
         if result.creative_type == "unknown":
@@ -650,8 +781,10 @@ class MediaExtractor:
             soup = BeautifulSoup(response.text, "html.parser")
             if "/ads/archive/render_ad/" in url:
                 result = self._parse_render_ad_html(soup)
-            else:
+            elif "facebook.com/ads/library/" not in url:
                 result = self._parse_html(soup)
+            else:
+                result = ExtractedMedia()  # v2.0: Skip BS4 for Meta Library (handled by Playwright)
             result.extraction_method = "http_bs4"
             logger.info("media_http_extracted", url=url, type=result.creative_type,
                         images=len(result.image_urls), videos=len(result.video_urls))
@@ -827,6 +960,46 @@ class MediaExtractor:
                         result.debug_stage = "context_created"
                         page = await context.new_page()
                         result.debug_stage = "page_created"
+
+                        # ── v1.5: Network intercept for actual media URLs ──
+                        intercepted_images: list[str] = []
+                        intercepted_videos: list[str] = []
+                        # Track content-length to distinguish creative images from UI assets
+                        _intercepted_image_sizes: dict[str, int] = {}
+
+                        def _on_response(response):
+                            try:
+                                resp_url = response.url
+                                ct = (response.headers.get("content-type") or "").lower()
+                                status = response.status
+                                if status < 200 or status >= 400:
+                                    return
+                                # Skip UI resource images
+                                _ui_skip = ("rsrc.php", "emoji", "pixel", "beacon", "1x1",
+                                            "favicon", "static.xx", "/static/", "platform-lookaside",
+                                            "profile_pic", "safe_image.php")
+                                lowered = resp_url.lower()
+                                if any(skip in lowered for skip in _ui_skip):
+                                    return
+                                if any(t in ct for t in ("image/jpeg", "image/png", "image/webp", "image/gif")):
+                                    if self._should_keep_image(resp_url):
+                                        if resp_url not in intercepted_images:
+                                            intercepted_images.append(resp_url)
+                                            # Track size for quality filtering
+                                            cl = response.headers.get("content-length")
+                                            if cl:
+                                                try:
+                                                    _intercepted_image_sizes[resp_url] = int(cl)
+                                                except ValueError:
+                                                    pass
+                                elif any(t in ct for t in ("video/mp4", "video/webm", "video/quicktime")):
+                                    if resp_url not in intercepted_videos:
+                                        intercepted_videos.append(resp_url)
+                            except Exception:
+                                pass
+
+                        page.on("response", _on_response)
+
                         try:
                             is_meta_library = "facebook.com/ads/library/" in url
                             result.debug_stage = "goto_started"
@@ -839,17 +1012,64 @@ class MediaExtractor:
                             await page.wait_for_timeout(5000 if is_meta_library else 3000)
                             result.debug_stage = "post_wait_completed"
                             if is_meta_library:
-                                for _ in range(2):
+                                # Enhanced scroll: more iterations for lazy-load
+                                for _ in range(4):
                                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                                     await page.wait_for_timeout(1500)
+                                # Scroll back to top to trigger viewport images
+                                await page.evaluate("window.scrollTo(0, 0)")
+                                await page.wait_for_timeout(1500)
                                 result.debug_stage = "scroll_completed"
+
+                            # v1.5: Wait for network to settle (images may still be loading)
+                            try:
+                                await page.wait_for_load_state("networkidle", timeout=10000)
+                            except Exception:
+                                pass  # Best-effort; don't fail if network stays busy
+
                         except Exception:
                             logger.warning("page_load_timeout", url=url)
                             result.debug_stage = "goto_timeout"
                             result.debug_excerpt = "page_load_timeout"
 
+                        target_external_id = None
                         if "facebook.com/ads/library/" in url:
                             target_external_id = self._target_external_id_from_url(url)
+
+                            # v1.5: Check page state for expired/unavailable ads
+                            try:
+                                page_text = await page.evaluate("() => document.body?.innerText || ''")
+                                _expired_markers = (
+                                    "この広告はご利用いただけません",
+                                    "This ad is not available",
+                                    "このページは利用できません",
+                                    "This Page isn't available",
+                                    "この広告は削除されました",
+                                    "This ad has been removed",
+                                    "結果がありません",
+                                    "No results",
+                                )
+                                if any(marker in (page_text or "") for marker in _expired_markers):
+                                    result.restriction_reason = "ad_expired"
+                                    result.extraction_method = "playwright"
+                                    result.debug_stage = "ad_expired_detected"
+                                    result.debug_excerpt = (page_text or "")[:500]
+                                    logger.info("meta_library_ad_expired", url=url, target_external_id=target_external_id)
+                                    # Still check intercepted images before returning
+                                    if intercepted_images:
+                                        quality_intercepted = [
+                                            img for img in intercepted_images
+                                            if ("fbcdn" in img or "scontent" in img)
+                                            and not any(skip in img.lower() for skip in ("emoji", "rsrc.php", "pixel", "favicon"))
+                                        ]
+                                        if quality_intercepted:
+                                            result.image_urls = quality_intercepted
+                                            result.thumbnail_url = quality_intercepted[0]
+                                            result.creative_type = "image"
+                                    return result
+                            except Exception:
+                                pass
+
                             try:
                                 result.debug_stage = "card_extract_started"
                                 debug_base = result
@@ -860,6 +1080,29 @@ class MediaExtractor:
                                 )
                                 result = self._merge_debug_fields(debug_base, card_result)
                                 result.debug_stage = "card_extract_completed"
+
+                                # v1.6: Only use network intercept if target ad was found on page
+                                # (otherwise we'd capture images from unrelated ads)
+                                if card_result.creative_type == "unknown" and intercepted_images and target_external_id:
+                                    # Verify the target ad is actually on this page
+                                    page_text_check = await page.evaluate("() => document.body?.innerText || ''")
+                                    target_on_page = target_external_id in (page_text_check or "")
+                                    if target_on_page:
+                                        quality_intercepted = [
+                                            img for img in intercepted_images
+                                            if ("fbcdn" in img or "scontent" in img)
+                                            and not any(skip in img.lower() for skip in ("emoji", "rsrc.php", "pixel", "favicon"))
+                                        ]
+                                        if quality_intercepted:
+                                            result.image_urls = list(dict.fromkeys(result.image_urls + quality_intercepted))
+                                            if not result.thumbnail_url:
+                                                result.thumbnail_url = quality_intercepted[0]
+                                            result.creative_type = "image" if len(result.image_urls) == 1 else "carousel"
+                                            result.debug_stage = "network_intercept_fallback"
+                                    else:
+                                        result.debug_stage = "target_ad_not_on_page"
+                                        result.restriction_reason = "ad_not_found"
+
                                 if result.creative_type != "unknown" or result.destination_url:
                                     result.extraction_method = "playwright"
                                     logger.info(
@@ -951,10 +1194,14 @@ class MediaExtractor:
                             return result
                         soup = BeautifulSoup(html, "html.parser")
                         page_text = soup.get_text(separator="\n", strip=True)
+                        # v1.6: Skip BS4 full-page parse for Meta Library pages
+                        # — it picks up 100+ images from unrelated ads on the page
                         if "/ads/archive/render_ad/" in url:
                             parsed_result = self._parse_render_ad_html(soup)
-                        else:
+                        elif "facebook.com/ads/library/" not in url:
                             parsed_result = self._parse_html(soup)
+                        else:
+                            parsed_result = ExtractedMedia()  # empty — rely on card/dialog/intercept only
                         result = self._merge_debug_fields(result, parsed_result)
                         if not result.debug_title:
                             title_text = soup.title.string.strip() if soup.title and soup.title.string else ""
@@ -965,22 +1212,97 @@ class MediaExtractor:
                             result.restriction_reason = self._detect_restriction_reason(page_text)
                         result.extraction_method = "playwright"
                         result.debug_stage = "content_parsed"
+
+                        # ── v1.6: Network intercept merge (only for non-Meta-Library or confirmed target) ──
+                        _is_meta_lib = "facebook.com/ads/library/" in url
+                        _use_intercept = True
+                        if _is_meta_lib and target_external_id:
+                            # For Meta Library: only use intercept if target ad is on the page
+                            _use_intercept = target_external_id in (page_text or "")
+
+                        if _use_intercept and (intercepted_images or intercepted_videos):
+                            _min_creative_size = 5000
+                            quality_intercepted = [
+                                img for img in intercepted_images
+                                if ("fbcdn" in img or "scontent" in img or "cdninstagram" in img)
+                                and not any(skip in img.lower() for skip in (
+                                    "emoji", "rsrc.php", "pixel", "beacon", "1x1", "favicon",
+                                    "static.xx", "platform-lookaside", "profile_pic",
+                                    "safe_image.php", "s75x75", "s100x100", "p50x50",
+                                ))
+                                and _intercepted_image_sizes.get(img, _min_creative_size + 1) >= _min_creative_size
+                            ]
+                            quality_intercepted.sort(
+                                key=lambda u: _intercepted_image_sizes.get(u, 0), reverse=True
+                            )
+                            # v2.0: Limit to 10 — single ad never has more than ~10 carousel slides
+                            quality_intercepted = quality_intercepted[:10]
+
+                            if quality_intercepted:
+                                valid_parsed = [u for u in result.image_urls if self._is_valid_creative_url(u) and "fbcdn" in u]
+                                result.image_urls = list(dict.fromkeys(quality_intercepted + valid_parsed))
+                                if not result.thumbnail_url or not self._is_valid_creative_url(result.thumbnail_url):
+                                    result.thumbnail_url = quality_intercepted[0]
+
+                            if intercepted_videos:
+                                existing_v = set(result.video_urls)
+                                for vid_url in intercepted_videos:
+                                    if vid_url not in existing_v:
+                                        result.video_urls.append(vid_url)
+                                        existing_v.add(vid_url)
+
+                            if result.video_urls:
+                                result.creative_type = "video"
+                            elif len(result.image_urls) > 1:
+                                result.creative_type = "carousel"
+                            elif result.image_urls:
+                                result.creative_type = "image"
+                            if not result.thumbnail_url and result.image_urls:
+                                result.thumbnail_url = result.image_urls[0]
+                            logger.info(
+                                "media_network_intercept_primary",
+                                url=url,
+                                intercepted_images=len(quality_intercepted),
+                                intercepted_videos=len(intercepted_videos),
+                                total_images=len(result.image_urls),
+                            )
+                            result.debug_stage = "network_intercept_primary"
+
                         if (
                             not result.image_urls
                             and not result.video_urls
                             and not result.screenshot_bytes
                         ):
+                            # v1.5: Enhanced screenshot — try element-specific capture first
                             try:
-                                result.screenshot_bytes = await page.screenshot(
-                                    type="jpeg",
-                                    quality=75,
-                                    full_page=False,
+                                # Try to find the main creative container
+                                creative_el = await page.query_selector(
+                                    'img[src*="fbcdn"], img[src*="scontent"], '
+                                    'video, [data-testid="ad_creative"], '
+                                    '[class*="creative"], [class*="media"]'
                                 )
+                                if creative_el:
+                                    result.screenshot_bytes = await creative_el.screenshot(
+                                        type="jpeg", quality=85
+                                    )
+                                else:
+                                    result.screenshot_bytes = await page.screenshot(
+                                        type="jpeg", quality=75, full_page=False,
+                                    )
                                 result.screenshot_content_type = "image/jpeg"
                                 if result.screenshot_bytes:
                                     result.debug_stage = "screenshot_captured"
                             except Exception as e:
-                                logger.warning("media_playwright_screenshot_failed", url=url, error=str(e))
+                                # Fallback to full page screenshot
+                                try:
+                                    result.screenshot_bytes = await page.screenshot(
+                                        type="jpeg", quality=75, full_page=False,
+                                    )
+                                    result.screenshot_content_type = "image/jpeg"
+                                    if result.screenshot_bytes:
+                                        result.debug_stage = "screenshot_captured"
+                                except Exception as e2:
+                                    logger.warning("media_playwright_screenshot_failed", url=url, error=str(e2))
                     finally:
                         if page:
                             await page.close()
