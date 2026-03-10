@@ -15512,3 +15512,266 @@ def get_recent_ecs_tasks(limit: int = Query(20, ge=1, le=50)):
         return {"tasks": tasks, "running": len(running), "stopped": len(stopped)}
     except Exception as e:
         return {"error": str(e), "tasks": [], "running": 0, "stopped": 0}
+
+
+# ==================== Brand Registry & Angle Extraction ====================
+
+
+@router.get("/brands")
+def list_brands(
+    vertical: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    sort: str = Query("total_ad_count", regex="^(total_ad_count|avg_hit_proxy_score|canonical_name|last_seen_at)$"),
+):
+    """List brands from the brand registry."""
+    from app.models.brand_registry import BrandRegistry
+
+    with sync_session_scope() as session:
+        q = session.query(BrandRegistry).filter(BrandRegistry.is_active.is_(True))
+        if vertical:
+            q = q.filter(BrandRegistry.vertical == vertical)
+
+        sort_col = getattr(BrandRegistry, sort, BrandRegistry.total_ad_count)
+        q = q.order_by(desc(sort_col))
+
+        total = q.count()
+        brands = q.offset(offset).limit(limit).all()
+
+        return {
+            "total": total,
+            "brands": [
+                {
+                    "id": b.id,
+                    "canonical_name": b.canonical_name,
+                    "display_name": b.display_name,
+                    "vertical": b.vertical,
+                    "aliases": b.aliases or [],
+                    "domains": b.domains or [],
+                    "total_ad_count": b.total_ad_count,
+                    "total_active_ads": b.total_active_ads,
+                    "avg_hit_proxy_score": b.avg_hit_proxy_score,
+                    "first_seen_at": str(b.first_seen_at) if b.first_seen_at else None,
+                    "last_seen_at": str(b.last_seen_at) if b.last_seen_at else None,
+                }
+                for b in brands
+            ],
+        }
+
+
+@router.post("/brands/discover")
+def discover_brands(min_ads: int = Query(2, ge=1)):
+    """Auto-discover and create brands from advertiser names."""
+    from app.services.brand_resolver import auto_discover_brands
+
+    with sync_session_scope() as session:
+        result = auto_discover_brands(session, min_ads=min_ads)
+        return result
+
+
+@router.get("/brands/{brand_id}/ads")
+def get_brand_ads(brand_id: int, limit: int = Query(50, ge=1, le=200)):
+    """Get ads for a specific brand."""
+    with sync_session_scope() as session:
+        ads = (
+            session.query(Ad)
+            .filter(Ad.brand_id == brand_id)
+            .order_by(desc(Ad.hit_proxy_score))
+            .limit(limit)
+            .all()
+        )
+        return {
+            "brand_id": brand_id,
+            "total": len(ads),
+            "ads": [
+                {
+                    "id": ad.id,
+                    "title": ad.title,
+                    "advertiser_name": ad.advertiser_name,
+                    "platform": ad.platform.value if ad.platform else None,
+                    "creative_type": ad.creative_type,
+                    "hit_proxy_score": ad.hit_proxy_score,
+                    "active_days": ad.active_days,
+                    "thumbnail_url": ad.thumbnail_url,
+                    "first_seen_at": str(ad.first_seen_at) if ad.first_seen_at else None,
+                }
+                for ad in ads
+            ],
+        }
+
+
+@router.get("/ad-cards/{ad_id}")
+def get_ad_cards(ad_id: int):
+    """Get all cards for a specific ad."""
+    from app.models.brand_registry import AdCard
+
+    with sync_session_scope() as session:
+        cards = (
+            session.query(AdCard)
+            .filter(AdCard.ad_id == ad_id)
+            .order_by(AdCard.card_index)
+            .all()
+        )
+        return {
+            "ad_id": ad_id,
+            "card_count": len(cards),
+            "cards": [
+                {
+                    "id": c.id,
+                    "card_index": c.card_index,
+                    "body_text": c.body_text,
+                    "link_title": c.link_title,
+                    "link_description": c.link_description,
+                    "call_to_action": c.call_to_action,
+                    "media_type": c.media_type,
+                    "aspect_ratio": c.aspect_ratio,
+                    "image_url": c.image_url,
+                    "video_url": c.video_url,
+                    "destination_url_initial": c.destination_url_initial,
+                    "destination_domain": c.destination_domain,
+                    "ocr_text": c.ocr_text,
+                    "quality_score": c.quality_score,
+                }
+                for c in cards
+            ],
+        }
+
+
+@router.post("/ad-cards/build")
+def build_ad_cards(limit: int = Query(500, ge=1, le=5000)):
+    """Build AdCard entities from existing ad data."""
+    from app.services.card_builder import batch_build_cards
+
+    with sync_session_scope() as session:
+        result = batch_build_cards(session, limit=limit)
+        return result
+
+
+@router.get("/angle-facts/{ad_id}")
+def get_angle_facts(ad_id: int):
+    """Get creative angle analysis for an ad."""
+    from app.models.brand_registry import AngleFact
+
+    with sync_session_scope() as session:
+        facts = (
+            session.query(AngleFact)
+            .filter(AngleFact.ad_id == ad_id)
+            .order_by(desc(AngleFact.confidence))
+            .all()
+        )
+        return {
+            "ad_id": ad_id,
+            "angle_count": len(facts),
+            "angles": [
+                {
+                    "id": f.id,
+                    "hook_type": f.hook_type,
+                    "pain_points": f.pain_points or [],
+                    "promises": f.promises or [],
+                    "offer_types": f.offer_types or [],
+                    "proof_types": f.proof_types or [],
+                    "urgency_types": f.urgency_types or [],
+                    "audience_hints": f.audience_hints or [],
+                    "creative_styles": f.creative_styles or [],
+                    "lp_pattern": f.lp_pattern,
+                    "confidence": f.confidence,
+                    "extracted_from": f.extracted_from,
+                }
+                for f in facts
+            ],
+        }
+
+
+@router.post("/angle-facts/extract")
+def extract_angle_facts(limit: int = Query(500, ge=1, le=5000)):
+    """Batch extract creative angles for ads without angle facts."""
+    from app.services.angle_extractor import batch_extract_angles
+
+    with sync_session_scope() as session:
+        result = batch_extract_angles(session, limit=limit)
+        return result
+
+
+@router.get("/angle-stats")
+def get_angle_stats():
+    """Get aggregate statistics on creative angles across all ads."""
+    from app.models.brand_registry import AngleFact
+
+    with sync_session_scope() as session:
+        total = session.query(AngleFact).count()
+
+        # Hook type distribution
+        hook_dist = (
+            session.query(AngleFact.hook_type, func.count(AngleFact.id))
+            .filter(AngleFact.hook_type.isnot(None))
+            .group_by(AngleFact.hook_type)
+            .order_by(desc(func.count(AngleFact.id)))
+            .all()
+        )
+
+        # Average confidence
+        avg_conf = session.query(func.avg(AngleFact.confidence)).scalar() or 0
+
+        return {
+            "total_angle_facts": total,
+            "avg_confidence": round(float(avg_conf), 3),
+            "hook_type_distribution": [
+                {"hook_type": h, "count": c} for h, c in hook_dist
+            ],
+        }
+
+
+@router.get("/genre-keyword-packs")
+def list_genre_keyword_packs():
+    """List all genre keyword packs for crawl discovery."""
+    from app.models.brand_registry import GenreKeywordPack
+
+    with sync_session_scope() as session:
+        packs = session.query(GenreKeywordPack).filter(GenreKeywordPack.is_active.is_(True)).all()
+        return {
+            "packs": [
+                {
+                    "id": p.id,
+                    "genre_code": p.genre_code,
+                    "search_keywords_ja": p.search_keywords_ja or [],
+                    "search_keywords_en": p.search_keywords_en or [],
+                    "appeal_keywords": p.appeal_keywords or [],
+                    "negative_keywords": p.negative_keywords or [],
+                    "total_ads_discovered": p.total_ads_discovered,
+                    "last_used_at": str(p.last_used_at) if p.last_used_at else None,
+                }
+                for p in packs
+            ],
+        }
+
+
+@router.get("/video-timeline/{ad_id}")
+def get_video_timeline(ad_id: int):
+    """Get unified OCR+ASR video timeline for an ad."""
+    from app.models.brand_registry import VideoTimeline
+
+    with sync_session_scope() as session:
+        timelines = (
+            session.query(VideoTimeline)
+            .filter(VideoTimeline.ad_id == ad_id)
+            .all()
+        )
+        if not timelines:
+            return {"ad_id": ad_id, "timelines": []}
+        return {
+            "ad_id": ad_id,
+            "timelines": [
+                {
+                    "id": t.id,
+                    "timeline": t.timeline or [],
+                    "opening_hook": t.opening_hook,
+                    "opening_hook_type": t.opening_hook_type,
+                    "proof_sequence": t.proof_sequence or [],
+                    "cta_endcard": t.cta_endcard,
+                    "total_duration_ms": t.total_duration_ms,
+                    "keyframe_count": t.keyframe_count,
+                    "has_asr": t.has_asr,
+                }
+                for t in timelines
+            ],
+        }

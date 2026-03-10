@@ -43,6 +43,14 @@ from app.models.creative_asset import (
     CreativeFamily,
     AdGenreTag,
 )
+from app.models.brand_registry import (
+    BrandRegistry,
+    AdCard,
+    AngleFact,
+    LPSnapshot,
+    GenreKeywordPack,
+    VideoTimeline,
+)
 from app.models.conversation import Conversation
 from app.models.alert_rule import AlertRule
 from app.models.alert_history import AlertHistory
@@ -92,4 +100,10 @@ __all__ = [
     "CreativeAsset",
     "CreativeFamily",
     "AdGenreTag",
+    "BrandRegistry",
+    "AdCard",
+    "AngleFact",
+    "LPSnapshot",
+    "GenreKeywordPack",
+    "VideoTimeline",
 ]

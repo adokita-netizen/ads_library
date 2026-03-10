@@ -423,6 +423,11 @@ class Ad(Base):
     hit_proxy_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     active_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Brand registry link
+    brand_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("brand_registry.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
