@@ -823,12 +823,12 @@ def _download_thumbnails_inline(session):
 
 
 def _refresh_thumbnails(event: dict) -> dict:
-    """Re-fetch thumbnail URLs from Graph API and download them for existing ads.
+    """Re-fetch thumbnails for existing ads using Ad Library API.
 
-    For ads that have external_id but no image_s3_key, this:
-    1. Queries the Graph API for fresh ad_creative_link_thumbnails
-    2. Downloads the thumbnail immediately (before fbcdn token expires)
-    3. Uploads to S3 and updates DB
+    Strategy:
+    1. For ads with snapshot_url — download the snapshot directly
+    2. For ads with image_url/thumbnail_url — try downloading those
+    3. For remaining ads — query Ad Library API for ad_snapshot_url
     """
     import hashlib
     import uuid
@@ -862,69 +862,74 @@ def _refresh_thumbnails(event: dict) -> dict:
         from app.core.storage import get_storage_client
         storage = get_storage_client()
 
-        results = {"total": len(ads), "downloaded": 0, "api_failed": 0, "dl_failed": 0}
+        results = {"total": len(ads), "downloaded": 0, "api_fetched": 0, "api_failed": 0, "dl_failed": 0}
 
-        # Batch query Graph API (max 50 IDs per request)
-        for i in range(0, len(ads), 50):
-            batch = ads[i:i+50]
-            ext_ids = [a.external_id for a in batch]
-            ad_map = {a.external_id: a for a in batch}
-
+        def _try_download_and_store(ad_obj, url):
+            """Download image from URL and store to S3. Returns True on success."""
             try:
-                with httpx.Client(timeout=30.0) as client:
-                    for ext_id in ext_ids:
-                        ad = ad_map[ext_id]
-                        try:
-                            r = client.get(
-                                f"https://graph.facebook.com/v25.0/ads_archive",
-                                params={
-                                    "access_token": token,
-                                    "search_terms": "",
-                                    "ad_reached_countries": '["JP"]',
-                                    "search_page_ids": ext_id.split("_")[0] if "_" in ext_id else "",
-                                    "fields": "id,ad_creative_link_thumbnails",
-                                    "limit": "1",
-                                },
-                            )
-                            # Graph API search might not find the exact ad
-                            # Try direct ad lookup instead
-                            r2 = client.get(
-                                f"https://graph.facebook.com/v25.0/{ext_id}",
-                                params={
-                                    "access_token": token,
-                                    "fields": "ad_creative_link_thumbnails",
-                                },
-                            )
-                            if r2.status_code == 200:
-                                data = r2.json()
-                                thumbnails = data.get("ad_creative_link_thumbnails", [])
-                                if thumbnails:
-                                    thumb_url = thumbnails[0] if isinstance(thumbnails[0], str) else thumbnails[0].get("url", "")
-                                    if thumb_url:
-                                        # Download immediately
-                                        try:
-                                            tr = client.get(thumb_url, follow_redirects=True)
-                                            tr.raise_for_status()
-                                            thumb_data = tr.content
-                                            if thumb_data and len(thumb_data) > 200:
-                                                url_hash = hashlib.md5(thumb_url.encode()).hexdigest()[:12]
-                                                s3_key = f"images/{uuid.uuid4()}_{url_hash}.jpg"
-                                                storage.upload_bytes(s3_key, thumb_data, content_type="image/jpeg")
-                                                ad.image_s3_key = s3_key
-                                                ad.thumbnail_s3_key = s3_key
-                                                ad.thumbnail_url = thumb_url
-                                                if ad.creative_type == "unknown":
-                                                    ad.creative_type = "image"
-                                                ad.media_extraction_status = "completed"
-                                                results["downloaded"] += 1
-                                        except Exception:
-                                            results["dl_failed"] += 1
+                with httpx.Client(timeout=15.0, follow_redirects=True) as dl:
+                    r = dl.get(url)
+                    r.raise_for_status()
+                    data = r.content
+                if data and len(data) > 500:
+                    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+                    s3_key = f"thumbnails/{uuid.uuid4()}_{url_hash}.jpg"
+                    content_type = r.headers.get("content-type", "image/jpeg").split(";")[0]
+                    storage.upload_bytes(s3_key, data, content_type=content_type)
+                    ad_obj.image_s3_key = s3_key
+                    ad_obj.thumbnail_s3_key = s3_key
+                    ad_obj.thumbnail_url = url
+                    if ad_obj.creative_type == "unknown":
+                        ad_obj.creative_type = "image"
+                    ad_obj.media_extraction_status = "completed"
+                    return True
+            except Exception:
+                pass
+            return False
+
+        # Phase 1: Try existing URLs (snapshot_url, image_url, thumbnail_url)
+        need_api = []
+        for ad in ads:
+            downloaded = False
+            for url in [ad.snapshot_url, ad.image_url, ad.thumbnail_url]:
+                if url and url.startswith("http"):
+                    if _try_download_and_store(ad, url):
+                        results["downloaded"] += 1
+                        downloaded = True
+                        break
+            if not downloaded:
+                need_api.append(ad)
+
+        # Phase 2: Query Ad Library API for ads without any URL
+        if need_api:
+            with httpx.Client(timeout=30.0) as client:
+                for ad in need_api:
+                    try:
+                        r = client.get(
+                            "https://graph.facebook.com/v25.0/ads_archive",
+                            params={
+                                "access_token": token,
+                                "search_terms": "",
+                                "ad_reached_countries": '["JP"]',
+                                "fields": "id,ad_snapshot_url,ad_creative_bodies,ad_creative_link_titles",
+                                "search_page_ids": ad.external_id.split("_")[0] if "_" in ad.external_id else ad.external_id,
+                                "limit": "5",
+                            },
+                        )
+                        if r.status_code == 200:
+                            api_data = r.json().get("data", [])
+                            for item in api_data:
+                                snap_url = item.get("ad_snapshot_url")
+                                if snap_url and _try_download_and_store(ad, snap_url):
+                                    results["downloaded"] += 1
+                                    results["api_fetched"] += 1
+                                    break
                             else:
                                 results["api_failed"] += 1
-                        except Exception:
+                        else:
                             results["api_failed"] += 1
-            except Exception as e:
-                logger.error("refresh_thumbnails_batch_error", error=str(e))
+                    except Exception:
+                        results["api_failed"] += 1
 
         session.commit()
         return {"statusCode": 200, "body": json.dumps(results, default=str)}
