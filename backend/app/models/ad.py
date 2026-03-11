@@ -419,6 +419,21 @@ class Ad(Base):
     ad_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict, nullable=True)
     tags: Mapped[list | None] = mapped_column(JSONB, default=list, nullable=True)
 
+    # Meta Ad Library delivery dates (from API, NOT observation-based)
+    ad_creation_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ad_delivery_start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ad_delivery_stop_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Multi-platform & audience
+    publisher_platforms: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # ["facebook","instagram"]
+    estimated_audience_size_min: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    estimated_audience_size_max: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    country_context: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # ["JP"]
+    demographic_distribution: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    # Searchable text (unified: body + OCR + ASR + LP hero + offers)
+    searchable_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Hit proxy score (reference architecture)
     hit_proxy_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     active_days: Mapped[int | None] = mapped_column(Integer, nullable=True)

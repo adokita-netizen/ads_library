@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { AppealShareResponse, AppealTrendsResponse } from "../types";
 
 const isBrowser = typeof window !== "undefined";
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -272,6 +273,28 @@ export const analyticsApi = {
   getCompetitor: (name: string) => api.get(`/analytics/competitor/${name}`),
   getTrends: (params?: Record<string, unknown>) =>
     api.get("/analytics/trends", { params }),
+
+  // Appeal Share & Trends
+  getAppealShare: (params?: { genre?: string; date_from?: string; date_to?: string }) =>
+    fetchApi<AppealShareResponse>(`/rankings/appeal-share?${new URLSearchParams(params as any)}`),
+
+  getAppealTrends: (months?: number, genre?: string) =>
+    fetchApi<AppealTrendsResponse>(`/rankings/appeal-trends?months=${months || 6}${genre ? `&genre=${genre}` : ''}`),
+
+  // Brand Registry
+  getBrandDetail: (brandId: number) =>
+    fetchApi<any>(`/rankings/brand/${brandId}`),
+
+  // Creative Families
+  getCreativeFamilies: (params?: { page?: number; page_size?: number; advertiser?: string; genre?: string; min_members?: number }) =>
+    fetchApi<any>(`/rankings/creative-families?${new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])))}`),
+
+  getCreativeFamilyDetail: (familyId: number) =>
+    fetchApi<any>(`/rankings/creative-family/${familyId}`),
+
+  // LP Snapshots
+  getLPSnapshots: (cardId: number) =>
+    fetchApi<any>(`/rankings/lp-snapshot/${cardId}`),
 };
 
 // Auth API

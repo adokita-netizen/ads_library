@@ -58,10 +58,14 @@ const AnalyticsDashboard = dynamic(() => import("@/components/dashboard/Analytic
 const MediaExtractionDashboard = dynamic(() => import("@/components/dashboard/MediaExtractionDashboard"), { ssr: false, loading: ViewLoader });
 const BatchOperationsPanel = dynamic(() => import("@/components/dashboard/BatchOperationsPanel"), { ssr: false, loading: ViewLoader });
 const AIChatView = dynamic(() => import("@/components/ai/AIChatView"), { ssr: false, loading: ViewLoader });
+const BrandDetailView = dynamic(() => import("@/components/dashboard/BrandDetailView"), { ssr: false, loading: ViewLoader });
+const AppealMapView = dynamic(() => import("@/components/dashboard/AppealMapView"), { ssr: false, loading: ViewLoader });
+const CreativeFamilyView = dynamic(() => import("@/components/dashboard/CreativeFamilyView"), { ssr: false, loading: ViewLoader });
+const AngleFactDashboard = dynamic(() => import("@/components/dashboard/AngleFactDashboard"), { ssr: false, loading: ViewLoader });
 const NotificationListView = dynamic(() => import("@/components/dashboard/NotificationListView"), { ssr: false, loading: ViewLoader });
 const HeatmapView = dynamic(() => import("@/components/dashboard/HeatmapView"), { ssr: false, loading: ViewLoader });
 
-type ViewType = "pro-database" | "search" | "trend" | "analysis" | "heatmap" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "media-management" | "admin" | "ai-chat" | "notifications";
+type ViewType = "pro-database" | "search" | "trend" | "analysis" | "heatmap" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "media-management" | "admin" | "ai-chat" | "notifications" | "brand-detail" | "appeal-map" | "creative-families" | "angle-dashboard";
 
 const VIEW_LABELS: Record<ViewType, string> = {
   "pro-database": "広告DB",
@@ -91,6 +95,10 @@ const VIEW_LABELS: Record<ViewType, string> = {
   "admin": "管理",
   "ai-chat": "AIチャット",
   "notifications": "通知",
+  "brand-detail": "ブランド詳細",
+  "appeal-map": "訴求マップ",
+  "creative-families": "クリエイティブ系統",
+  "angle-dashboard": "訴求分析",
 };
 
 function ScreenReadyProbe({
@@ -462,6 +470,14 @@ export default function Home() {
         return <CollectionsView fullPage onAdSelect={handleAdSelect} />;
       case "compare":
         return <AdComparisonTool onAdSelect={handleAdSelect} />;
+      case "brand-detail":
+        return <BrandDetailView onAdSelect={handleAdSelect} onBack={() => handleViewChange("pro-database")} />;
+      case "appeal-map":
+        return <AppealMapView />;
+      case "creative-families":
+        return <CreativeFamilyView onAdSelect={handleAdSelect} />;
+      case "angle-dashboard":
+        return <AngleFactDashboard onAdSelect={handleAdSelect} />;
       case "advertiser-profile":
         return (
             <AdvertiserProfile

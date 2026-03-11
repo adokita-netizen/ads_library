@@ -6,11 +6,16 @@ urgency_types, audience_hints, and creative_styles from ad text
 
 Two extraction modes:
   1. Rule-based (fast, no API cost) — keyword matching with JP/EN patterns
-  2. LLM-based (deep, accurate) — GPT/Claude structured extraction
+  2. LLM-based (deep, accurate) — AWS Bedrock Claude structured extraction
 """
 
+from __future__ import annotations
+
+import asyncio
+import json
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 import structlog
 
@@ -154,6 +159,7 @@ class AngleResult:
     lp_pattern: str | None = None
     confidence: float = 0.0
     extracted_from: str = "rule_based"
+    angle_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _match_keywords(text: str, keyword_dict: dict[str, list[str]]) -> list[str]:
@@ -274,8 +280,13 @@ def extract_angle_from_text(
     )
 
 
-def batch_extract_angles(session, limit: int = 500) -> dict:
+def batch_extract_angles(session, limit: int = 500, use_llm: bool = False) -> dict:
     """Extract angles for all ads that don't have angle_facts yet.
+
+    Args:
+        session: SQLAlchemy session
+        limit: Maximum number of ads to process
+        use_llm: If True, use LLM-based extraction via async bridge
 
     Returns summary dict.
     """
@@ -290,6 +301,22 @@ def batch_extract_angles(session, limit: int = 500) -> dict:
     ads = session.query(Ad).limit(limit + len(existing_ad_ids)).all()
     created = 0
     skipped = 0
+
+    # If use_llm requested, delegate to async batch and run via event loop
+    if use_llm:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already in async context — caller should use batch_extract_angles_llm directly
+            logger.warning(
+                "batch_extract_angles called with use_llm=True inside running loop; "
+                "falling back to rule-based. Use batch_extract_angles_llm() instead."
+            )
+        else:
+            return asyncio.run(_batch_extract_angles_llm_inner(session, ads, existing_ad_ids))
 
     for ad in ads:
         if ad.id in existing_ad_ids:
@@ -338,10 +365,263 @@ def batch_extract_angles(session, limit: int = 500) -> dict:
             lp_pattern=result.lp_pattern,
             confidence=result.confidence,
             extracted_from=result.extracted_from,
+            angle_metadata=result.angle_metadata or None,
         )
         session.add(fact)
         created += 1
 
     session.commit()
     logger.info("angle_extraction_complete", created=created, skipped=skipped)
+    return {"created": created, "skipped": skipped, "total": len(ads)}
+
+
+# ==================== LLM-Based Extraction ====================
+
+_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+_BEDROCK_REGION = "ap-northeast-1"
+
+_LLM_SYSTEM_PROMPT = """\
+あなたは広告クリエイティブの訴求分析AIです。
+与えられた広告テキスト（OCR/ASR/本文）とLP情報から、構造化された訴求要素を抽出してください。
+
+以下のJSON形式で回答してください。余計な説明は不要です。JSONのみ出力してください。
+
+{
+  "genre": ["選択肢: beauty, health, finance, career, education, ecommerce, saas, app, entertainment"],
+  "hook_type": "選択肢: question, empathy, benefit_first, scarcity, authority, social_proof, comparison, before_after, shock, curiosity, storytelling",
+  "primary_hook": "テキストから最も強い訴求ワンライナーを抽出",
+  "pain_points": ["特定されたペインポイントのリスト"],
+  "promises": ["広告が約束している内容のリスト"],
+  "offer_types": ["選択肢: free_trial, first_discount, diagnosis, booking, bonus, free_shipping, refund, installment"],
+  "proof_types": ["選択肢: review, testimonial, doctor, media_feature, ranking_claim, numbers_claim, ugc, expert_endorsement"],
+  "urgency_types": ["選択肢: limited_time, limited_stock, countdown, first_n, today_only"],
+  "audience_hints": ["例: female_30s, sensitive_skin, diet_interested"],
+  "creative_styles": ["選択肢: static, ugc_video, founder_talk, testimonial_video, product_demo, slideshow, carousel, motion_graphics"],
+  "cta": "抽出されたCTAテキスト",
+  "lp_pattern": "選択肢: quiz, lead_form, advertorial, direct_response_lp, comparison_lp, ecommerce_pdp, vsl_lp, appointment_lp（LP情報がない場合はnull）",
+  "confidence": 0.0
+}
+
+注意:
+- 該当しない項目は空リスト[]またはnullにしてください
+- confidenceは0〜1で自己評価してください（情報が豊富なら高く、少なければ低く）
+- genre, hook_type, offer_types等は指定選択肢から選んでください
+- primary_hookは広告テキストからそのまま抜き出してください
+- 日本語の広告テキストに最適化して分析してください
+"""
+
+
+def _build_user_message(text: str, lp_text: str | None = None) -> str:
+    """Build the user message for Bedrock Claude."""
+    msg = f"## 広告テキスト\n{text}"
+    if lp_text:
+        msg += f"\n\n## LPテキスト\n{lp_text}"
+    return msg
+
+
+def _get_bedrock_client():
+    """Lazy-initialize boto3 bedrock-runtime client."""
+    import boto3
+    return boto3.client("bedrock-runtime", region_name=_BEDROCK_REGION)
+
+
+def _parse_llm_response(response_body: dict) -> dict[str, Any]:
+    """Extract and parse JSON from Bedrock Claude Messages API response."""
+    content_blocks = response_body.get("content", [])
+    raw_text = ""
+    for block in content_blocks:
+        if block.get("type") == "text":
+            raw_text += block["text"]
+
+    # Strip markdown code fences if present
+    raw_text = raw_text.strip()
+    if raw_text.startswith("```"):
+        # Remove opening fence (```json or ```)
+        first_newline = raw_text.index("\n")
+        raw_text = raw_text[first_newline + 1:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+    raw_text = raw_text.strip()
+
+    return json.loads(raw_text)
+
+
+def _llm_result_to_angle(parsed: dict[str, Any]) -> AngleResult:
+    """Map parsed LLM JSON to AngleResult dataclass."""
+    # Map offer_types from LLM taxonomy to DB-compatible labels
+    return AngleResult(
+        hook_type=parsed.get("hook_type"),
+        pain_points=parsed.get("pain_points") or [],
+        promises=parsed.get("promises") or [],
+        offer_types=parsed.get("offer_types") or [],
+        proof_types=parsed.get("proof_types") or [],
+        urgency_types=parsed.get("urgency_types") or [],
+        audience_hints=parsed.get("audience_hints") or [],
+        creative_styles=parsed.get("creative_styles") or [],
+        lp_pattern=parsed.get("lp_pattern"),
+        confidence=min(1.0, max(0.0, float(parsed.get("confidence", 0.5)))),
+        extracted_from="llm",
+        angle_metadata={
+            "primary_hook": parsed.get("primary_hook"),
+            "cta": parsed.get("cta"),
+            "genre": parsed.get("genre") or [],
+            "model": _BEDROCK_MODEL_ID,
+        },
+    )
+
+
+async def extract_angle_with_llm(
+    text: str,
+    lp_text: str | None = None,
+) -> AngleResult:
+    """Extract creative angle using AWS Bedrock Claude.
+
+    Calls Claude 3 Haiku via the Bedrock Messages API for cost-efficient
+    structured angle extraction. Falls back to rule-based on any error.
+
+    Args:
+        text: Combined ad text (OCR + ASR + body text)
+        lp_text: Optional LP text for additional signals
+
+    Returns:
+        AngleResult with extracted persuasion elements
+    """
+    if not text or not text.strip():
+        return AngleResult()
+
+    try:
+        client = _get_bedrock_client()
+
+        request_body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "system": _LLM_SYSTEM_PROMPT,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": _build_user_message(text, lp_text),
+                }
+            ],
+            "temperature": 0.0,
+        })
+
+        # Run blocking boto3 call in executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.invoke_model(
+                modelId=_BEDROCK_MODEL_ID,
+                contentType="application/json",
+                accept="application/json",
+                body=request_body,
+            ),
+        )
+
+        response_body = json.loads(response["body"].read())
+        parsed = _parse_llm_response(response_body)
+        result = _llm_result_to_angle(parsed)
+
+        logger.info(
+            "llm_angle_extraction_success",
+            hook_type=result.hook_type,
+            confidence=result.confidence,
+            pain_points_count=len(result.pain_points),
+        )
+        return result
+
+    except Exception:
+        logger.exception("llm_angle_extraction_failed, falling back to rule-based")
+        return extract_angle_from_text(text, lp_text)
+
+
+async def batch_extract_angles_llm(session, limit: int = 500) -> dict:
+    """Extract angles for ads using LLM-based extraction.
+
+    Processes ads sequentially (Bedrock has rate limits) with LLM extraction,
+    falling back to rule-based per-ad on errors.
+
+    Returns summary dict.
+    """
+    return await _batch_extract_angles_llm_inner(session, None, None, limit=limit)
+
+
+async def _batch_extract_angles_llm_inner(
+    session,
+    ads=None,
+    existing_ad_ids=None,
+    limit: int = 500,
+) -> dict:
+    """Inner implementation for LLM batch extraction.
+
+    Shared by both batch_extract_angles(use_llm=True) and batch_extract_angles_llm().
+    """
+    from app.models.ad import Ad
+    from app.models.brand_registry import AngleFact
+
+    if existing_ad_ids is None:
+        existing_ad_ids = {
+            row[0]
+            for row in session.query(AngleFact.ad_id).filter(AngleFact.ad_id.isnot(None)).all()
+        }
+
+    if ads is None:
+        ads = session.query(Ad).limit(limit + len(existing_ad_ids)).all()
+
+    created = 0
+    skipped = 0
+
+    for ad in ads:
+        if ad.id in existing_ad_ids:
+            skipped += 1
+            continue
+
+        # Gather text signals
+        texts = []
+        if ad.title:
+            texts.append(ad.title)
+        if ad.description:
+            texts.append(ad.description)
+        meta = ad.ad_metadata or {}
+        if isinstance(meta, dict):
+            if meta.get("ocr_text"):
+                texts.append(meta["ocr_text"])
+            if meta.get("asr_text"):
+                texts.append(meta["asr_text"])
+
+        combined_text = "\n".join(texts)
+        if not combined_text.strip():
+            skipped += 1
+            continue
+
+        # LP text
+        lp_text = None
+        if isinstance(meta, dict) and meta.get("lp_info", {}).get("title"):
+            lp_text = meta["lp_info"]["title"]
+
+        result = await extract_angle_with_llm(combined_text, lp_text)
+
+        if result.confidence < 0.1:
+            skipped += 1
+            continue
+
+        fact = AngleFact(
+            ad_id=ad.id,
+            hook_type=result.hook_type,
+            pain_points=result.pain_points or None,
+            promises=result.promises or None,
+            offer_types=result.offer_types or None,
+            proof_types=result.proof_types or None,
+            urgency_types=result.urgency_types or None,
+            audience_hints=result.audience_hints or None,
+            creative_styles=result.creative_styles or None,
+            lp_pattern=result.lp_pattern,
+            confidence=result.confidence,
+            extracted_from=result.extracted_from,
+            angle_metadata=result.angle_metadata or None,
+        )
+        session.add(fact)
+        created += 1
+
+    session.commit()
+    logger.info("llm_angle_extraction_complete", created=created, skipped=skipped)
     return {"created": created, "skipped": skipped, "total": len(ads)}

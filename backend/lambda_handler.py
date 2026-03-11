@@ -44,7 +44,13 @@ def _init_database():
             import app.models.creative_asset  # noqa: F401
             import app.models.brand_registry  # noqa: F401
             session = get_session_with_retry()
-            Base.metadata.create_all(bind=sync_engine)
+            # Create tables one-by-one with checkfirst to avoid DuplicateTable errors
+            from sqlalchemy import inspect as sa_inspect
+            inspector = sa_inspect(sync_engine)
+            existing_tables = set(inspector.get_table_names())
+            for table in Base.metadata.sorted_tables:
+                if table.name not in existing_tables:
+                    table.create(bind=sync_engine, checkfirst=True)
             _DB_INITIALIZED = True
             return
         except Exception as e:
@@ -123,32 +129,157 @@ def handler(event, context):
     # Direct invocation for DB migration
     if isinstance(event, dict) and event.get("action") == "migrate":
         try:
-            from alembic.config import Config
-            from alembic import command
-            from alembic.migration import MigrationContext
+            from sqlalchemy import text as sa_text
             from app.core.database import sync_engine, Base
 
-            alembic_cfg = Config("alembic.ini")
+            results = {"columns_added": [], "tables_created": [], "errors": []}
 
-            # Check current alembic version
-            with sync_engine.connect() as conn:
-                context = MigrationContext.configure(conn)
-                current_rev = context.get_current_revision()
+            # Add missing columns to ads table
+            alter_statements = [
+                ("ads", "hit_proxy_score", "ALTER TABLE ads ADD COLUMN hit_proxy_score DOUBLE PRECISION"),
+                ("ads", "active_days", "ALTER TABLE ads ADD COLUMN active_days INTEGER"),
+                ("ads", "brand_id", "ALTER TABLE ads ADD COLUMN brand_id BIGINT"),
+                # H1: Meta Ad Library dedicated fields
+                ("ads", "ad_creation_time", "ALTER TABLE ads ADD COLUMN ad_creation_time TIMESTAMPTZ"),
+                ("ads", "ad_delivery_start_time", "ALTER TABLE ads ADD COLUMN ad_delivery_start_time TIMESTAMPTZ"),
+                ("ads", "ad_delivery_stop_time", "ALTER TABLE ads ADD COLUMN ad_delivery_stop_time TIMESTAMPTZ"),
+                ("ads", "publisher_platforms", "ALTER TABLE ads ADD COLUMN publisher_platforms JSONB"),
+                ("ads", "estimated_audience_size_min", "ALTER TABLE ads ADD COLUMN estimated_audience_size_min BIGINT"),
+                ("ads", "estimated_audience_size_max", "ALTER TABLE ads ADD COLUMN estimated_audience_size_max BIGINT"),
+                ("ads", "country_context", "ALTER TABLE ads ADD COLUMN country_context JSONB"),
+                ("ads", "demographic_distribution", "ALTER TABLE ads ADD COLUMN demographic_distribution JSONB"),
+                ("ads", "searchable_text", "ALTER TABLE ads ADD COLUMN searchable_text TEXT"),
+            ]
 
-            if current_rev is None:
-                # DB exists but no alembic_version — stamp initial schema, then upgrade
-                logger.info("migration_stamp", msg="No alembic version found, stamping 001")
-                command.stamp(alembic_cfg, "001")
+            with sync_engine.begin() as conn:
+                for table, col, stmt in alter_statements:
+                    try:
+                        conn.execute(sa_text(stmt))
+                        results["columns_added"].append(f"{table}.{col}")
+                    except Exception as col_err:
+                        if "already exists" in str(col_err).lower() or "duplicate" in str(col_err).lower():
+                            pass  # Column already exists
+                        else:
+                            results["errors"].append(f"{table}.{col}: {str(col_err)}")
 
-            command.upgrade(alembic_cfg, "head")
-            # Some newer models (e.g. crawl_jobs) are not covered by early revisions.
-            # Ensure they exist after migration for runtime safety.
+            # Create any missing tables via metadata
+            from sqlalchemy import inspect as sa_inspect
+            inspector = sa_inspect(sync_engine)
+            existing_tables = set(inspector.get_table_names())
+            import app.models.brand_registry  # noqa: F401
+            import app.models.creative_asset  # noqa: F401
             import app.models.crawl_job  # noqa: F401
-            Base.metadata.create_all(bind=sync_engine)
-            return {"statusCode": 200, "body": json.dumps({"status": "migration_complete", "from_rev": current_rev})}
+            for tbl in Base.metadata.sorted_tables:
+                if tbl.name not in existing_tables:
+                    try:
+                        tbl.create(bind=sync_engine, checkfirst=True)
+                        results["tables_created"].append(tbl.name)
+                    except Exception as tbl_err:
+                        results["errors"].append(f"table {tbl.name}: {str(tbl_err)}")
+
+            # L5: Create meta_creative_search_index materialized view
+            _SEARCH_INDEX_SQL = """
+            CREATE MATERIALIZED VIEW IF NOT EXISTS meta_creative_search_index AS
+            SELECT
+                cf.id AS family_id,
+                cf.canonical_advertiser_name AS brand_name,
+                cf.primary_genre_code,
+                cf.first_seen,
+                cf.last_seen,
+                cf.active_days,
+                cf.member_count,
+                cf.variant_count,
+                cf.platform_count,
+                cf.hit_proxy_score,
+                array_agg(DISTINCT a.platform) FILTER (WHERE a.platform IS NOT NULL) AS platforms,
+                array_agg(DISTINCT a.external_id) FILTER (WHERE a.external_id IS NOT NULL) AS library_ids,
+                string_agg(DISTINCT a.searchable_text, ' ') AS searchable_text
+            FROM creative_families cf
+            LEFT JOIN creative_assets ca ON ca.family_id = cf.id
+            LEFT JOIN ads a ON a.id = ca.ad_id
+            GROUP BY cf.id
+            """
+            try:
+                with sync_engine.begin() as conn:
+                    conn.execute(sa_text(_SEARCH_INDEX_SQL))
+                    results["tables_created"].append("meta_creative_search_index (matview)")
+            except Exception as mv_err:
+                if "already exists" not in str(mv_err).lower():
+                    results["errors"].append(f"matview: {str(mv_err)}")
+
+            # Create GIN index on searchable_text for full-text search (M3)
+            _GIN_INDEX_SQL = """
+            CREATE INDEX IF NOT EXISTS idx_ads_searchable_text_gin
+            ON ads USING gin(to_tsvector('simple', COALESCE(searchable_text, '')))
+            """
+            try:
+                with sync_engine.begin() as conn:
+                    conn.execute(sa_text(_GIN_INDEX_SQL))
+                    results["columns_added"].append("idx_ads_searchable_text_gin")
+            except Exception as gin_err:
+                if "already exists" not in str(gin_err).lower():
+                    results["errors"].append(f"gin_index: {str(gin_err)}")
+
+            # Stamp alembic to latest
+            try:
+                from alembic.config import Config
+                from alembic import command
+                alembic_cfg = Config("alembic.ini")
+                command.stamp(alembic_cfg, "head")
+                results["alembic"] = "stamped to head"
+            except Exception as alembic_err:
+                results["alembic"] = f"stamp error: {str(alembic_err)}"
+
+            return {"statusCode": 200, "body": json.dumps({"status": "migration_complete", "results": results})}
         except Exception as e:
             logger.error("migration_error", error=str(e), exc_info=True)
             return {"statusCode": 500, "body": json.dumps({"status": "migration_error", "error": _safe_error(e)})}
+
+    # Direct invocation for batch pipeline (all enrichment steps)
+    if isinstance(event, dict) and event.get("action") == "enrich":
+        try:
+            from app.core.database import SyncSessionLocal
+            session = SyncSessionLocal()
+            results = {}
+            try:
+                # Step 1: Build cards
+                from app.services.card_builder import batch_build_cards
+                results["cards"] = batch_build_cards(session)
+
+                # Step 2: Extract angles
+                from app.services.angle_extractor import batch_extract_angles
+                results["angles"] = batch_extract_angles(session)
+
+                # Step 3: Discover brands
+                from app.services.brand_resolver import auto_discover_brands
+                results["brands"] = auto_discover_brands(session)
+
+                # Step 4: Hit proxy scores
+                from app.services.hit_proxy import batch_compute_hit_proxy
+                results["hit_proxy"] = batch_compute_hit_proxy()
+
+                # Step 5: Build searchable text
+                from app.services.searchable_text_builder import build_searchable_text
+                results["searchable_text"] = build_searchable_text(session)
+
+                # Step 6: Build creative families
+                from app.services.creative_family_builder import build_creative_families
+                results["families"] = build_creative_families(session)
+
+                # Step 7: Compute ad-LP consistency
+                from app.services.ad_lp_consistency import batch_compute_consistency
+                results["consistency"] = batch_compute_consistency(session)
+
+                session.commit()
+            except Exception as inner_err:
+                session.rollback()
+                raise inner_err
+            finally:
+                session.close()
+            return {"statusCode": 200, "body": json.dumps({"status": "enrich_complete", "results": results}, default=str)}
+        except Exception as e:
+            logger.error("enrich_error", error=str(e), exc_info=True)
+            return {"statusCode": 500, "body": json.dumps({"status": "enrich_error", "error": _safe_error(e)})}
 
     # Direct invocation for data cleanup (foreign ads, duplicates, creative_type)
     if isinstance(event, dict) and event.get("action") == "cleanup":

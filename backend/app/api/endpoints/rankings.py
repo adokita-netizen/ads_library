@@ -15721,6 +15721,394 @@ def get_angle_stats():
         }
 
 
+# ==================== Appeal Share Analytics (M5) ====================
+
+
+@router.get("/appeal-share")
+def get_appeal_share(
+    genre: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Get appeal share distribution across all angle_facts."""
+    from app.models.brand_registry import AngleFact
+
+    with sync_session_scope() as session:
+        query = session.query(AngleFact)
+        if genre:
+            query = query.join(Ad, Ad.id == AngleFact.ad_id).filter(Ad.category == genre)
+        if date_from:
+            query = query.filter(AngleFact.created_at >= date_from)
+        if date_to:
+            query = query.filter(AngleFact.created_at <= date_to)
+        facts = query.limit(50000).all()
+        total = len(facts)
+
+        # Distributions
+        hook_counts: dict[str, int] = {}
+        offer_counts: dict[str, int] = {}
+        proof_counts: dict[str, int] = {}
+        style_counts: dict[str, int] = {}
+        lp_counts: dict[str, int] = {}
+        pain_counts: dict[str, int] = {}
+        urgency_counts: dict[str, int] = {}
+
+        for f in facts:
+            if f.hook_type:
+                hook_counts[f.hook_type] = hook_counts.get(f.hook_type, 0) + 1
+            for item in (f.offer_types or []):
+                offer_counts[item] = offer_counts.get(item, 0) + 1
+            for item in (f.proof_types or []):
+                proof_counts[item] = proof_counts.get(item, 0) + 1
+            for item in (f.creative_styles or []):
+                style_counts[item] = style_counts.get(item, 0) + 1
+            if f.lp_pattern:
+                lp_counts[f.lp_pattern] = lp_counts.get(f.lp_pattern, 0) + 1
+            for item in (f.pain_points or []):
+                pain_counts[item] = pain_counts.get(item, 0) + 1
+            for item in (f.urgency_types or []):
+                urgency_counts[item] = urgency_counts.get(item, 0) + 1
+
+        def _to_dist(counts):
+            return sorted(
+                [{"type": k, "count": v, "share": round(v / total, 4) if total else 0} for k, v in counts.items()],
+                key=lambda x: x["count"], reverse=True,
+            )
+
+        # Cross-tab: hook_type x offer_type
+        hook_x_offer: dict[str, dict[str, int]] = {}
+        for f in facts:
+            if f.hook_type:
+                for ot in (f.offer_types or []):
+                    hook_x_offer.setdefault(f.hook_type, {})[ot] = hook_x_offer.get(f.hook_type, {}).get(ot, 0) + 1
+
+        return {
+            "hook_type_distribution": _to_dist(hook_counts),
+            "offer_type_distribution": _to_dist(offer_counts),
+            "proof_type_distribution": _to_dist(proof_counts),
+            "creative_style_distribution": _to_dist(style_counts),
+            "lp_pattern_distribution": _to_dist(lp_counts),
+            "pain_point_distribution": _to_dist(pain_counts),
+            "urgency_type_distribution": _to_dist(urgency_counts),
+            "cross_tab": {"hook_x_offer": hook_x_offer},
+            "total_facts": total,
+            "filters": {"genre": genre, "date_from": date_from, "date_to": date_to},
+        }
+
+
+@router.get("/appeal-trends")
+def get_appeal_trends(months: int = Query(6, ge=1, le=24), genre: Optional[str] = None):
+    """Get monthly appeal type trends."""
+    from app.models.brand_registry import AngleFact
+    from sqlalchemy import extract
+
+    with sync_session_scope() as session:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=months * 31)
+        query = session.query(AngleFact).filter(AngleFact.created_at >= cutoff)
+        if genre:
+            query = query.join(Ad, Ad.id == AngleFact.ad_id).filter(Ad.category == genre)
+        facts = query.limit(50000).all()
+
+        month_data: dict[str, list] = {}
+        for f in facts:
+            if not f.created_at:
+                continue
+            month_key = f.created_at.strftime("%Y-%m")
+            month_data.setdefault(month_key, []).append(f)
+
+        sorted_months = sorted(month_data.keys())
+        hook_trends: dict[str, list[int]] = {}
+        offer_trends: dict[str, list[int]] = {}
+        totals: list[int] = []
+
+        for m in sorted_months:
+            flist = month_data[m]
+            totals.append(len(flist))
+            h_counts: dict[str, int] = {}
+            o_counts: dict[str, int] = {}
+            for f in flist:
+                if f.hook_type:
+                    h_counts[f.hook_type] = h_counts.get(f.hook_type, 0) + 1
+                for ot in (f.offer_types or []):
+                    o_counts[ot] = o_counts.get(ot, 0) + 1
+            for ht, cnt in h_counts.items():
+                hook_trends.setdefault(ht, [0] * len(sorted_months))
+                hook_trends[ht][sorted_months.index(m)] = cnt
+            for ot, cnt in o_counts.items():
+                offer_trends.setdefault(ot, [0] * len(sorted_months))
+                offer_trends[ot][sorted_months.index(m)] = cnt
+
+        return {
+            "months": sorted_months,
+            "hook_type_trends": hook_trends,
+            "offer_type_trends": offer_trends,
+            "total_per_month": totals,
+        }
+
+
+# ==================== Brand Detail (Phase 7.2) ====================
+
+
+@router.get("/brand/{brand_id}")
+def get_brand_detail(brand_id: int):
+    """Get brand detail with ads, cards, and angle stats."""
+    from app.models.brand_registry import BrandRegistry, AdCard, AngleFact
+
+    with sync_session_scope() as session:
+        brand = session.query(BrandRegistry).filter(BrandRegistry.id == brand_id).first()
+        if not brand:
+            return JSONResponse(status_code=404, content={"error": "Brand not found"})
+
+        ads = session.query(Ad).filter(Ad.brand_id == brand_id).order_by(desc(Ad.first_seen_at)).limit(100).all()
+        cards = session.query(AdCard).filter(AdCard.brand_id == brand_id).limit(200).all()
+        angle_facts = (
+            session.query(AngleFact)
+            .filter(AngleFact.ad_id.in_([a.id for a in ads]))
+            .all()
+        ) if ads else []
+
+        # Aggregate angle stats
+        hook_dist: dict[str, int] = {}
+        for af in angle_facts:
+            if af.hook_type:
+                hook_dist[af.hook_type] = hook_dist.get(af.hook_type, 0) + 1
+
+        return {
+            "brand": {
+                "id": brand.id,
+                "canonical_name": brand.canonical_name,
+                "display_name": brand.display_name,
+                "vertical": brand.vertical,
+                "aliases": brand.aliases or [],
+                "domains": brand.domains or [],
+                "meta_page_ids": brand.meta_page_ids or [],
+                "total_ad_count": brand.total_ad_count,
+                "total_active_ads": brand.total_active_ads,
+                "avg_hit_proxy_score": brand.avg_hit_proxy_score,
+                "first_seen_at": str(brand.first_seen_at) if brand.first_seen_at else None,
+                "last_seen_at": str(brand.last_seen_at) if brand.last_seen_at else None,
+            },
+            "ads": [
+                {
+                    "id": a.id,
+                    "title": a.title,
+                    "advertiser_name": a.advertiser_name,
+                    "platform": a.platform.value if a.platform else None,
+                    "creative_type": a.creative_type,
+                    "hit_proxy_score": a.hit_proxy_score,
+                    "active_days": a.active_days,
+                    "first_seen_at": str(a.first_seen_at) if a.first_seen_at else None,
+                    "thumbnail_s3_key": a.thumbnail_s3_key,
+                }
+                for a in ads
+            ],
+            "cards_count": len(cards),
+            "angle_stats": {
+                "total": len(angle_facts),
+                "hook_distribution": hook_dist,
+            },
+        }
+
+
+# ==================== Creative Family (Phase 7.2) ====================
+
+
+@router.get("/creative-families")
+def list_creative_families(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    advertiser: Optional[str] = None,
+    genre: Optional[str] = None,
+    min_members: int = Query(1, ge=1),
+):
+    """List creative families with filtering."""
+    from app.models.creative_asset import CreativeFamily
+
+    with sync_session_scope() as session:
+        query = session.query(CreativeFamily).filter(CreativeFamily.member_count >= min_members)
+        if advertiser:
+            query = query.filter(CreativeFamily.canonical_advertiser_name.ilike(f"%{_escape_like(advertiser)}%"))
+        if genre:
+            query = query.filter(CreativeFamily.primary_genre_code == genre)
+        total = query.count()
+        families = query.order_by(desc(CreativeFamily.hit_proxy_score)).offset((page - 1) * page_size).limit(page_size).all()
+        return {
+            "families": [
+                {
+                    "id": f.id,
+                    "canonical_advertiser_name": f.canonical_advertiser_name,
+                    "family_title": f.family_title,
+                    "primary_genre_code": f.primary_genre_code,
+                    "member_count": f.member_count,
+                    "variant_count": f.variant_count,
+                    "platform_count": f.platform_count,
+                    "active_days": f.active_days,
+                    "hit_proxy_score": f.hit_proxy_score,
+                    "first_seen": str(f.first_seen) if f.first_seen else None,
+                    "last_seen": str(f.last_seen) if f.last_seen else None,
+                }
+                for f in families
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+
+@router.get("/creative-family/{family_id}")
+def get_creative_family_detail(family_id: int, limit: int = Query(200, ge=1, le=1000)):
+    """Get creative family detail with member assets."""
+    from app.models.creative_asset import CreativeFamily, CreativeAsset
+
+    with sync_session_scope() as session:
+        family = session.query(CreativeFamily).filter(CreativeFamily.id == family_id).first()
+        if not family:
+            return JSONResponse(status_code=404, content={"error": "Family not found"})
+
+        members = session.query(CreativeAsset).filter(CreativeAsset.family_id == family_id).limit(limit).all()
+        return {
+            "family": {
+                "id": family.id,
+                "canonical_advertiser_name": family.canonical_advertiser_name,
+                "family_title": family.family_title,
+                "primary_genre_code": family.primary_genre_code,
+                "member_count": family.member_count,
+                "variant_count": family.variant_count,
+                "platform_count": family.platform_count,
+                "active_days": family.active_days,
+                "hit_proxy_score": family.hit_proxy_score,
+                "review_status": family.review_status,
+            },
+            "members": [
+                {
+                    "id": m.id,
+                    "ad_id": m.ad_id,
+                    "asset_type": m.asset_type,
+                    "storage_uri": m.storage_uri,
+                    "sha256": m.sha256,
+                    "phash": m.phash,
+                    "width": m.width,
+                    "height": m.height,
+                    "ocr_text": (m.ocr_text or "")[:200],
+                    "quality_score": m.quality_score,
+                    "family_membership_score": m.family_membership_score,
+                }
+                for m in members
+            ],
+        }
+
+
+# ==================== LP Structure (Phase 7.2) ====================
+
+
+@router.get("/lp-snapshot/{card_id}")
+def get_lp_snapshots(card_id: int, limit: int = Query(50, ge=1, le=200)):
+    """Get LP snapshots for a card."""
+    from app.models.brand_registry import LPSnapshot
+
+    with sync_session_scope() as session:
+        snapshots = (
+            session.query(LPSnapshot)
+            .filter(LPSnapshot.card_id == card_id)
+            .order_by(desc(LPSnapshot.observed_at))
+            .limit(limit)
+            .all()
+        )
+        return {
+            "card_id": card_id,
+            "snapshots": [
+                {
+                    "id": s.id,
+                    "observed_at": str(s.observed_at),
+                    "initial_url": s.initial_url,
+                    "final_url": s.final_url,
+                    "final_domain": s.final_domain,
+                    "http_status": s.http_status,
+                    "primary_cta": s.primary_cta,
+                    "extracted_json": s.extracted_json,
+                    "form_fields": s.form_fields,
+                }
+                for s in snapshots
+            ],
+        }
+
+
+# ==================== Batch Processing Endpoints ====================
+
+
+@router.post("/batch/build-searchable-text")
+def batch_build_searchable_text(limit: int = Query(1000, ge=1, le=5000)):
+    """Build searchable_text for ads missing it."""
+    try:
+        from app.services.searchable_text_builder import build_searchable_text
+        with sync_session_scope() as session:
+            result = build_searchable_text(session, limit=limit)
+        return result
+    except ImportError:
+        return {"error": "searchable_text_builder not available", "updated": 0}
+
+
+@router.post("/batch/compute-consistency")
+def batch_compute_consistency(limit: int = Query(500, ge=1, le=2000)):
+    """Compute ad-to-LP consistency scores."""
+    try:
+        from app.services.ad_lp_consistency import batch_compute_consistency
+        with sync_session_scope() as session:
+            result = batch_compute_consistency(session, limit=limit)
+        return result
+    except ImportError:
+        return {"error": "ad_lp_consistency not available", "computed": 0}
+
+
+@router.post("/batch/build-families")
+def batch_build_creative_families():
+    """Build creative families from phash/text similarity."""
+    try:
+        from app.services.creative_family_builder import build_creative_families
+        with sync_session_scope() as session:
+            result = build_creative_families(session)
+        return result
+    except ImportError:
+        return {"error": "creative_family_builder not available"}
+
+
+@router.post("/batch/merge-brands")
+def batch_merge_brands(threshold: float = Query(0.7, ge=0.5, le=1.0)):
+    """Merge duplicate brands via fuzzy matching."""
+    try:
+        from app.services.brand_resolver import merge_duplicate_brands
+        with sync_session_scope() as session:
+            result = merge_duplicate_brands(session, threshold=threshold)
+        return result
+    except ImportError:
+        return {"error": "merge_duplicate_brands not available"}
+
+
+@router.post("/batch/extract-lp-structures")
+def batch_extract_lp_structures(limit: int = Query(100, ge=1, le=500)):
+    """Extract LP structures via LLM for snapshots missing extracted_json."""
+    try:
+        from app.services.lp_analysis.lp_structure_extractor import batch_extract_lp_structures
+        with sync_session_scope() as session:
+            result = batch_extract_lp_structures(session, limit=limit)
+        return result
+    except ImportError:
+        return {"error": "lp_structure_extractor not available"}
+
+
+@router.post("/batch/hit-proxy-refarch")
+def batch_hit_proxy_refarch():
+    """Recompute hit proxy scores using reference architecture formula."""
+    try:
+        from app.services.hit_proxy import batch_compute_hit_proxy
+        return batch_compute_hit_proxy()
+    except ImportError:
+        return {"error": "hit_proxy service not available"}
+    except Exception as e:
+        logger.exception("batch_hit_proxy_refarch failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @router.get("/genre-keyword-packs")
 def list_genre_keyword_packs():
     """List all genre keyword packs for crawl discovery."""

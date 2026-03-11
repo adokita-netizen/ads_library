@@ -731,6 +731,26 @@ def _inline_crawl(
                     except ValueError:
                         ad_category = AdCategoryEnum.OTHER
 
+                # Extract Meta-specific fields from metadata
+                _m = crawled_ad.metadata or {}
+                _ad_creation_time = None
+                if _m.get("ad_creation_time"):
+                    try:
+                        _ad_creation_time = datetime.fromisoformat(
+                            str(_m["ad_creation_time"]).replace("Z", "+00:00")
+                        )
+                    except (ValueError, TypeError):
+                        pass
+                _audience = _m.get("estimated_audience_size") or {}
+                _audience_min = None
+                _audience_max = None
+                if isinstance(_audience, dict):
+                    try:
+                        _audience_min = int(_audience["lower_bound"]) if _audience.get("lower_bound") else None
+                        _audience_max = int(_audience["upper_bound"]) if _audience.get("upper_bound") else None
+                    except (ValueError, TypeError):
+                        pass
+
                 ad = Ad(
                     external_id=crawled_ad.external_id,
                     title=title,
@@ -762,6 +782,15 @@ def _inline_crawl(
                     tags=crawled_ad.tags,
                     ad_metadata=meta,
                     status=AdStatusEnum.PENDING,
+                    # H1: Meta Ad Library dedicated fields
+                    ad_creation_time=_ad_creation_time,
+                    ad_delivery_start_time=crawled_ad.first_seen_at,
+                    ad_delivery_stop_time=crawled_ad.last_seen_at,
+                    publisher_platforms=_m.get("publisher_platforms") or None,
+                    estimated_audience_size_min=_audience_min,
+                    estimated_audience_size_max=_audience_max,
+                    country_context=None,  # Filled from search context
+                    demographic_distribution=_m.get("demographic_distribution") or None,
                 )
                 session.add(ad)
                 session.flush()

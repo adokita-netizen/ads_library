@@ -1015,3 +1015,74 @@ export interface LPFingerprintItem {
   changes_detected?: string[];
   change_magnitude?: number;
 }
+
+// Brand Registry
+export interface BrandDetail {
+  id: number;
+  canonical_name: string;
+  display_name: string | null;
+  vertical: string | null;
+  aliases: string[];
+  domains: string[];
+  meta_page_ids: string[];
+  total_ad_count: number;
+  total_active_ads: number;
+  avg_hit_proxy_score: number | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+}
+
+// Creative Family
+export interface CreativeFamily {
+  id: number;
+  canonical_advertiser_name: string | null;
+  family_title: string | null;
+  primary_genre_code: string | null;
+  member_count: number;
+  variant_count: number;
+  platform_count: number;
+  active_days: number;
+  hit_proxy_score: number;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+// Appeal Share Analytics
+export interface AppealDistribution {
+  type: string;
+  count: number;
+  share: number;
+}
+
+export interface AppealShareResponse {
+  hook_type_distribution: AppealDistribution[];
+  offer_type_distribution: AppealDistribution[];
+  proof_type_distribution: AppealDistribution[];
+  creative_style_distribution: AppealDistribution[];
+  lp_pattern_distribution: AppealDistribution[];
+  pain_point_distribution: AppealDistribution[];
+  urgency_type_distribution: AppealDistribution[];
+  cross_tab: Record<string, Record<string, Record<string, number>>>;
+  total_facts: number;
+}
+
+// LP Snapshot
+export interface LPSnapshot {
+  id: number;
+  observed_at: string;
+  initial_url: string | null;
+  final_url: string | null;
+  final_domain: string | null;
+  http_status: number | null;
+  primary_cta: string | null;
+  extracted_json: Record<string, unknown> | null;
+  form_fields: Array<{name: string; type: string}> | null;
+}
+
+// Appeal Trends
+export interface AppealTrendsResponse {
+  months: string[];
+  hook_type_trends: Record<string, number[]>;
+  offer_type_trends: Record<string, number[]>;
+  total_per_month: number[];
+}
