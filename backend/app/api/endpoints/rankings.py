@@ -16163,3 +16163,152 @@ def get_video_timeline(ad_id: int):
                 for t in timelines
             ],
         }
+
+
+# ==================== LP Mirror/Preview (Phase 8) ====================
+
+
+@router.get("/lp-mirror/{snapshot_id}")
+def get_lp_mirror(snapshot_id: int):
+    """Get LP mirror info with presigned URL for iframe."""
+    from app.models.brand_registry import LPMirror, LPSnapshot
+    from app.core.storage import get_storage_client
+
+    with sync_session_scope() as session:
+        mirror = (
+            session.query(LPMirror)
+            .filter(LPMirror.snapshot_id == snapshot_id)
+            .first()
+        )
+        if not mirror:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"No mirror found for snapshot {snapshot_id}"},
+            )
+
+        # Generate presigned URL for iframe embedding
+        presigned_url = None
+        if mirror.index_html_uri:
+            try:
+                storage = get_storage_client()
+                presigned_url = storage.get_presigned_url(mirror.index_html_uri, expires=3600)
+            except Exception as e:
+                logger.warning("presigned_url_failed", snapshot_id=snapshot_id, error=str(e))
+
+        return {
+            "snapshot_id": snapshot_id,
+            "mirror_id": mirror.id,
+            "mirror_status": mirror.mirror_status,
+            "presigned_url": presigned_url,
+            "mirror_root_uri": mirror.mirror_root_uri,
+            "index_html_uri": mirror.index_html_uri,
+            "fidelity_score": mirror.fidelity_score,
+            "fidelity_level": mirror.fidelity_level,
+            "asset_count": mirror.asset_count,
+            "total_byte_size": mirror.total_byte_size,
+            "build_log": mirror.build_log_json,
+            "created_at": str(mirror.created_at) if mirror.created_at else None,
+            "updated_at": str(mirror.updated_at) if mirror.updated_at else None,
+        }
+
+
+@router.post("/lp-mirror/{snapshot_id}/build")
+def build_lp_mirror(snapshot_id: int):
+    """Build/rebuild LP mirror from snapshot."""
+    try:
+        from app.services.lp_analysis.mirror_builder import build_mirror
+
+        with sync_session_scope() as session:
+            result = build_mirror(snapshot_id, session=session)
+        return result
+    except ImportError:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "mirror_builder service not available"},
+        )
+    except Exception as e:
+        logger.exception("build_lp_mirror_failed", snapshot_id=snapshot_id)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/lp-mirror/{snapshot_id}/assets")
+def get_lp_mirror_assets(snapshot_id: int):
+    """Get asset list for an LP mirror."""
+    from app.models.brand_registry import LPAsset
+
+    with sync_session_scope() as session:
+        assets = (
+            session.query(LPAsset)
+            .filter(LPAsset.snapshot_id == snapshot_id)
+            .order_by(LPAsset.id)
+            .all()
+        )
+        return {
+            "snapshot_id": snapshot_id,
+            "total": len(assets),
+            "assets": [
+                {
+                    "id": a.id,
+                    "original_url": a.original_url,
+                    "content_type": a.content_type,
+                    "status_code": a.status_code,
+                    "sha256": a.sha256,
+                    "byte_size": a.byte_size,
+                    "storage_uri_raw": a.storage_uri_raw,
+                    "storage_uri_mirror": a.storage_uri_mirror,
+                    "asset_kind": a.asset_kind,
+                    "used_in_mirror": a.used_in_mirror,
+                }
+                for a in assets
+            ],
+        }
+
+
+@router.get("/lp-mirror/{snapshot_id}/redirect-chain")
+def get_lp_redirect_chain(snapshot_id: int):
+    """Get URL redirect chain for a snapshot."""
+    from app.models.brand_registry import LPSnapshot
+
+    with sync_session_scope() as session:
+        snapshot = session.query(LPSnapshot).filter(LPSnapshot.id == snapshot_id).first()
+        if not snapshot:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Snapshot {snapshot_id} not found"},
+            )
+        return {
+            "snapshot_id": snapshot_id,
+            "initial_url": snapshot.initial_url,
+            "final_url": snapshot.final_url,
+            "final_domain": snapshot.final_domain,
+            "redirect_chain": snapshot.redirect_chain or [],
+            "http_status": snapshot.http_status,
+        }
+
+
+@router.get("/lp-mirror/{snapshot_id}/source")
+def get_lp_source(snapshot_id: int):
+    """Get sanitized HTML source for viewing."""
+    from app.models.brand_registry import LPSnapshot
+    from app.services.lp_analysis.mirror_builder import sanitize_html
+
+    with sync_session_scope() as session:
+        snapshot = session.query(LPSnapshot).filter(LPSnapshot.id == snapshot_id).first()
+        if not snapshot:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Snapshot {snapshot_id} not found"},
+            )
+        if not snapshot.dom_text:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Snapshot {snapshot_id} has no HTML content"},
+            )
+
+        sanitised_html, stats = sanitize_html(snapshot.dom_text, snapshot_id)
+        return {
+            "snapshot_id": snapshot_id,
+            "html_length": len(sanitised_html),
+            "sanitized_html": sanitised_html,
+            "sanitization_stats": stats,
+        }

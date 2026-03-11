@@ -25,6 +25,7 @@ const navSections = [
     title: "インサイト",
     items: [
       { id: "lp-analysis", label: "LP分析・USP設計", icon: "document" },
+      { id: "lp-detail", label: "LP詳細", icon: "document", badge: "新" },
       { id: "competitive", label: "競合インテリジェンス", icon: "shield" },
       { id: "hit-ads", label: "ヒット広告分析", icon: "fire" },
       { id: "appeal-map", label: "訴求マップ", icon: "chart", badge: "新" },

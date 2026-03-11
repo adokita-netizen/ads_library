@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy import JSON as JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -398,6 +399,114 @@ class VideoTimeline(Base):
     # Relationships
     ad: Mapped["Ad"] = relationship("Ad", backref="video_timelines")
     asset: Mapped["CreativeAsset | None"] = relationship("CreativeAsset", backref="video_timelines")
+
+
+# ==================== LP Asset (Mirror sub-resource storage) ====================
+
+
+class LPAsset(Base):
+    """Individual asset (CSS, image, font, etc.) captured during LP mirroring.
+
+    Each asset is tied to an LPSnapshot and tracks its download status,
+    content hash, and S3 storage location for offline mirror reconstruction.
+    """
+
+    __tablename__ = "lp_assets"
+    __table_args__ = (
+        Index("idx_lpa_snapshot", "snapshot_id"),
+        Index("idx_lpa_kind", "asset_kind"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("lp_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    original_url: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    byte_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    storage_uri_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    storage_uri_mirror: Mapped[str | None] = mapped_column(Text, nullable=True)
+    asset_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="document"
+    )  # document, stylesheet, image, font, media, xhr
+    used_in_mirror: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Relationships
+    snapshot: Mapped["LPSnapshot"] = relationship("LPSnapshot", backref="assets")
+
+
+# ==================== LP Mirror (Static offline mirror) ====================
+
+
+class LPMirror(Base):
+    """Static offline mirror of an LP snapshot.
+
+    Stores a sanitised, self-contained HTML copy of the landing page
+    with all scripts removed, links disabled, and assets re-pointed to S3.
+    """
+
+    __tablename__ = "lp_mirrors"
+    __table_args__ = (
+        Index("idx_lpm_snapshot", "snapshot_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("lp_snapshots.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True,
+    )
+    mirror_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending"
+    )  # pending, building, completed, failed
+    mirror_root_uri: Mapped[str | None] = mapped_column(Text, nullable=True)  # S3 prefix
+    index_html_uri: Mapped[str | None] = mapped_column(Text, nullable=True)  # S3 key for index.html
+    fidelity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fidelity_level: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )  # FULL_STATIC, PARTIAL_STATIC, SCREENSHOT_ONLY
+    build_log_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    asset_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_byte_size: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    snapshot: Mapped["LPSnapshot"] = relationship("LPSnapshot", backref="mirror", uselist=False)
+
+
+# ==================== LP Mirror Link Map ====================
+
+
+class LPMirrorLinkMap(Base):
+    """Mapping of original URLs to mirrored URLs within a snapshot.
+
+    Used to track how each external resource reference in the original HTML
+    was resolved and rewritten in the mirror version.
+    """
+
+    __tablename__ = "lp_mirror_link_maps"
+    __table_args__ = (
+        Index("idx_lpmlm_snapshot", "snapshot_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("lp_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    original_url: Mapped[str] = mapped_column(Text, nullable=False)
+    mirror_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    link_type: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )  # stylesheet, image, font, script, other
 
 
 # Avoid circular imports

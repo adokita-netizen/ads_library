@@ -64,8 +64,9 @@ const CreativeFamilyView = dynamic(() => import("@/components/dashboard/Creative
 const AngleFactDashboard = dynamic(() => import("@/components/dashboard/AngleFactDashboard"), { ssr: false, loading: ViewLoader });
 const NotificationListView = dynamic(() => import("@/components/dashboard/NotificationListView"), { ssr: false, loading: ViewLoader });
 const HeatmapView = dynamic(() => import("@/components/dashboard/HeatmapView"), { ssr: false, loading: ViewLoader });
+const LPDetailView = dynamic(() => import("@/components/lps/LPDetailView"), { ssr: false, loading: ViewLoader });
 
-type ViewType = "pro-database" | "search" | "trend" | "analysis" | "heatmap" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "media-management" | "admin" | "ai-chat" | "notifications" | "brand-detail" | "appeal-map" | "creative-families" | "angle-dashboard";
+type ViewType = "pro-database" | "search" | "trend" | "analysis" | "heatmap" | "lp-analysis" | "ai-expert" | "creative" | "competitive" | "hit-ads" | "meta-ads" | "team" | "campaign" | "mylist" | "scenario" | "reports" | "alerts" | "collections" | "settings" | "compare" | "advertiser-profile" | "calendar" | "creative-brief" | "media-management" | "admin" | "ai-chat" | "notifications" | "brand-detail" | "appeal-map" | "creative-families" | "angle-dashboard" | "lp-detail";
 
 const VIEW_LABELS: Record<ViewType, string> = {
   "pro-database": "広告DB",
@@ -99,6 +100,7 @@ const VIEW_LABELS: Record<ViewType, string> = {
   "appeal-map": "訴求マップ",
   "creative-families": "クリエイティブ系統",
   "angle-dashboard": "訴求分析",
+  "lp-detail": "LP詳細",
 };
 
 function ScreenReadyProbe({
@@ -478,6 +480,8 @@ export default function Home() {
         return <CreativeFamilyView onAdSelect={handleAdSelect} />;
       case "angle-dashboard":
         return <AngleFactDashboard onAdSelect={handleAdSelect} />;
+      case "lp-detail":
+        return <LPDetailView onBack={() => handleViewChange("lp-analysis")} />;
       case "advertiser-profile":
         return (
             <AdvertiserProfile

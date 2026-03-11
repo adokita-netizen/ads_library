@@ -1086,3 +1086,38 @@ export interface AppealTrendsResponse {
   offer_type_trends: Record<string, number[]>;
   total_per_month: number[];
 }
+
+// LP Mirror
+export interface LPMirrorInfo {
+  snapshot_id: number;
+  mirror_status: string;
+  mirror_url?: string;
+  index_html_url?: string;
+  fidelity_score?: number;
+  fidelity_level?: string;
+  asset_count: number;
+  total_byte_size: number;
+  original_url?: string;
+  final_url?: string;
+  domain?: string;
+  captured_at?: string;
+  screenshots?: { mobile?: string; desktop?: string; fullpage?: string };
+  source_html?: string;
+}
+
+export interface LPAssetInfo {
+  id: number;
+  original_url: string;
+  content_type?: string;
+  status_code?: number;
+  sha256?: string;
+  byte_size?: number;
+  asset_kind: string;
+  used_in_mirror: boolean;
+}
+
+export interface LPRedirectStep {
+  url: string;
+  status_code?: number;
+  domain?: string;
+}

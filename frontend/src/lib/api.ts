@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { AppealShareResponse, AppealTrendsResponse } from "../types";
+import type { AppealShareResponse, AppealTrendsResponse, LPMirrorInfo, LPAssetInfo, LPRedirectStep } from "../types";
 
 const isBrowser = typeof window !== "undefined";
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -553,6 +553,15 @@ export const settingsApi = {
     api.delete("/settings/api-keys", { data }),
   testKey: (data: { platform: string; key_name: string; key_value: string }) =>
     api.post("/settings/api-keys/test", data),
+};
+
+// LP Mirror API
+export const lpMirrorApi = {
+  getMirror: (snapshotId: number) => fetchApi<LPMirrorInfo>(`/rankings/lp-mirror/${snapshotId}`),
+  buildMirror: (snapshotId: number) => fetchApi<{ status: string }>(`/rankings/lp-mirror/${snapshotId}/build`, { method: "POST" }),
+  getAssets: (snapshotId: number) => fetchApi<{ assets: LPAssetInfo[] }>(`/rankings/lp-mirror/${snapshotId}/assets`),
+  getRedirectChain: (snapshotId: number) => fetchApi<{ chain: LPRedirectStep[] }>(`/rankings/lp-mirror/${snapshotId}/redirect-chain`),
+  getSource: (snapshotId: number) => fetchApi<{ html: string }>(`/rankings/lp-mirror/${snapshotId}/source`),
 };
 
 export default api;
