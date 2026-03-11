@@ -151,16 +151,16 @@ def handler(event, context):
                 ("ads", "searchable_text", "ALTER TABLE ads ADD COLUMN searchable_text TEXT"),
             ]
 
-            with sync_engine.begin() as conn:
-                for table, col, stmt in alter_statements:
-                    try:
+            for table, col, stmt in alter_statements:
+                try:
+                    with sync_engine.begin() as conn:
                         conn.execute(sa_text(stmt))
-                        results["columns_added"].append(f"{table}.{col}")
-                    except Exception as col_err:
-                        if "already exists" in str(col_err).lower() or "duplicate" in str(col_err).lower():
-                            pass  # Column already exists
-                        else:
-                            results["errors"].append(f"{table}.{col}: {str(col_err)}")
+                    results["columns_added"].append(f"{table}.{col}")
+                except Exception as col_err:
+                    if "already exists" in str(col_err).lower() or "duplicate" in str(col_err).lower():
+                        pass  # Column already exists
+                    else:
+                        results["errors"].append(f"{table}.{col}: {str(col_err)}")
 
             # Create any missing tables via metadata
             from sqlalchemy import inspect as sa_inspect
